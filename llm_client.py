@@ -80,11 +80,9 @@ class LLMClient:
             return True
 
         print(f"Switching from {self.current_model} to {new_model}...")
-        old_history = self.conversation_history.copy()
 
         try:
             self.setup_api_key(new_model)
-            self.conversation_history = old_history
             print(f"✓ Successfully switched to {new_model}. Conversation history preserved.")
             return True
         except Exception as e:
