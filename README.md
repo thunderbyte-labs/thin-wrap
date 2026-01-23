@@ -13,19 +13,46 @@ A thin cross-platform terminal-based chat application for wrapping your Large La
 - **Project Root Selection**: Interactive project root selection with history and Tab autocompletion
 - **Multi-line Input**: Natural multi-line message composition (**Alt+Enter** to send)
 - **Session Logging**: Automatic session log saving with timestamps
-- **Proxy Support**: SOCKS5 and HTTP proxy support for restricted networks
+- **Proxy Support**: SOCKS5 and HTTP proxy support for restricted networks. Get some proxies there: https://www.webshare.io/ (tested) https://iproyal.com/ (not tested0) https://proxy-seller.com/ (not tested0)
 - **Cross-Platform**: Works on Windows, macOS, and Linux
 
-## Installation
+## Installation (macOS, Linux, or Git Bash on Windows)
+
+Ensure that **Git** and **Python 3.8+** are installed on your system.
 
 ```bash
 # Clone the repository
 git clone <repository-url>
 cd thin-wrap
 
+# Create a virtual environment
+python -m venv .venv
+
+# Activate the virtual environment
+source .venv/bin/activate
+
 # Install dependencies
 pip install -r requirements.txt
 ```
+
+## Installation Instructions for Windows (Command Prompt)
+
+
+```cmd
+:: Clone the repository
+git clone <repository-url>
+cd thin-wrap
+
+:: Create a virtual environment
+python -m venv .venv
+
+:: Activate the virtual environment
+.venv\Scripts\activate.bat
+
+:: Install dependencies
+pip install -r requirements.txt
+```
+
 
 ### Dependencies
 
@@ -52,6 +79,7 @@ python chat.py --root-dir . --read main.py --edit config.py
 
 # With proxy support
 python chat.py --proxy socks5://127.0.0.1:1080
+python chat.py --proxy http://user:password@127.0.0.1:7030
 ```
 
 ## Configuration
@@ -227,10 +255,6 @@ Contributions are welcome! Please ensure:
 - All features work cross-platform
 - Documentation is updated
 - Error handling is robust
-
-## License
-
-[Add your license information here]
 
 ## Acknowledgments
 
