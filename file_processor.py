@@ -172,6 +172,7 @@ def _extract_files(section_content: str, file_tag: str) -> list[tuple[str, str]]
     for path, content in matches:
         cleaned_path = path.strip()
         if cleaned_path:
+            content = content.lstrip('\n')
             extracted.append((cleaned_path, content))
         else:
             logger.warning(f"Skipping {file_tag} entry with empty path")
