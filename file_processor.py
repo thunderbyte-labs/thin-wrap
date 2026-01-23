@@ -5,6 +5,7 @@ import re
 import subprocess
 import logging
 import shutil
+from xml import Xml
 
 logger = logging.getLogger(__name__)
 
@@ -50,120 +51,98 @@ def generate_query(root_dir: str, readable_files: list[str], writable_files: lis
     Generate the LLM query in the requested XML format using absolute paths.
     Minimal whitespace and no unnecessary blank lines.
     """
-    query = '<prompt_engineering_query_source_code_files guidance="USER\'S REQUEST SOURCE CODE FILES CONTEXT FOR THIS SOLE REQUEST (THIS CONTEXT SHALL PREVAIL ON ANY PAST CONTEXT)">\n'
+    query = Xml.o(Xml.SOURCE_CODE_FILES, 
+                         'guidance="USER\'S REQUEST SOURCE CODE FILES CONTEXT FOR THIS SOLE REQUEST (THIS CONTEXT SHALL PREVAIL ON ANY PAST CONTEXT)"') + "\n"
 
-    query += '<prompt_engineering_query_root_directory_of_project>' + root_dir + '</prompt_engineering_query_root_directory_of_project>\n'
+    query += Xml.o(Xml.ROOT_DIRECTORY_OF_PROJECT) + root_dir + Xml.c(Xml.ROOT_DIRECTORY_OF_PROJECT) + "\n"
 
     # Read-only files
-    query += '<prompt_engineering_query_read_only_files guidance="FILES TO BE READ ONLY (DO NOT EDIT)">\n'
+    query += Xml.o(Xml.READ_ONLY_FILES, 'guidance="FILES TO BE READ ONLY (DO NOT EDIT)"') + "\n"
     if readable_files:
         for path in readable_files:
             try:
                 content = _read_file_content(path, root_dir)
-                query += f'<prompt_engineering_query_read_only_file path="{path}">\n{content}\n</prompt_engineering_query_read_only_file>\n'
+                query += Xml.o(Xml.READ_ONLY_FILE, f'path="{path}"') + "\n" + content + "\n" + Xml.c(Xml.READ_ONLY_FILE) + "\n"
             except Exception as e:
                 logger.error(f"Failed to read readable file {path}: {e}")
-                query += f'<prompt_engineering_query_read_only_file path="{path}">\n[Error reading file: {str(e)}]\n</prompt_engineering_query_read_only_file>\n'
+                query += Xml.o(Xml.READ_ONLY_FILE, f'path="{path}"') + "\n[Error reading file: {str(e)}]\n" + Xml.c(Xml.READ_ONLY_FILE) + "\n"
     else:
-        query += 'No files inputted by the user to be read.\n'
-    query += '</prompt_engineering_query_read_only_files>\n'
+        query += "No files inputted by the user to be read.\n"
+    query += Xml.c(Xml.READ_ONLY_FILES) + "\n"
 
     # Editable files
-    query += '<prompt_engineering_query_editable_files guidance="FILES THAT ARE EDITABLE BY YOU, THE LLM">\n'
+    query += Xml.o(Xml.EDITABLE_FILES, 'guidance="FILES THAT ARE EDITABLE BY YOU, THE LLM"') + "\n"
     if writable_files:
         for path in writable_files:
             try:
                 content = _read_file_content(path, root_dir)
-                query += f'<prompt_engineering_query_editable_file path="{path}">\n{content}\n</prompt_engineering_query_editable_file>\n'
+                query += Xml.o(Xml.EDITABLE_FILE, f'path="{path}"') + "\n" + content + "\n" + Xml.c(Xml.EDITABLE_FILE) + "\n"
             except Exception as e:
                 logger.error(f"Failed to read editable file {path}: {e}")
-                query += f'<prompt_engineering_query_editable_file path="{path}">\n[Error reading file: {str(e)}]\n</prompt_engineering_query_editable_file>\n'
+                query += Xml.o(Xml.EDITABLE_FILE, f'path="{path}"') + "\n[Error reading file: {str(e)}]\n" + Xml.c(Xml.EDITABLE_FILE) + "\n"
     else:
-        query += 'No editable files inputted by the user.\n'
-    query += '</prompt_engineering_query_editable_files>\n'
+        query += "No editable files inputted by the user.\n"
+    query += Xml.c(Xml.EDITABLE_FILES) + "\n"
 
-    query += '</prompt_engineering_query_source_code_files>\n'
+    query += Xml.c(Xml.SOURCE_CODE_FILES) + "\n"
 
     # User request
-    query += '<prompt_engineering_query_user_request>\n'
-    query += user_request.strip() + '\n'
-    query += '</prompt_engineering_query_user_request>\n'
+    query += Xml.o(Xml.USER_REQUEST) + "\n"
+    query += user_request.strip() + "\n"
+    query += Xml.c(Xml.USER_REQUEST) + "\n"
 
     # Response formatting instructions
-    query += '<prompt_engineering_query_response_formatting guidance="STRICT RESPONSE FORMATTING INSTRUCTIONS">\n'
+    query += Xml.o(Xml.RESPONSE_FORMATTING, 'guidance="STRICT RESPONSE FORMATTING INSTRUCTIONS"') + "\n"
     query += f"""You, the LLM, must respond using ONLY the custom XML-style tags prefixed with "prompt_engineering_answer_".
 Instructions in square brackets [] are for you and should not appear in your response.
 
 Required format (in this exact order: edited files, then new files, then comments):
 
-<prompt_engineering_answer_edited_files>
+{Xml.o(Xml.EDITED_FILES)}
 [Leave empty if no files to edit]
-<prompt_engineering_answer_edited_file path="{root_dir}/absolute/path/to/existing_editable_file.py">
+{Xml.o(Xml.EDITED_FILE, f'path="{root_dir}/absolute/path/to/existing_editable_file.py"')}
 [Full new content of the file that YOU, THE LLM edited - insert here your edited version and make sure it adds value for a senior world class software engineer]
-</prompt_engineering_answer_edited_file>
+{Xml.c(Xml.EDITED_FILE)}
 [Additional edited files by YOU, THE LLM if needed]
-</prompt_engineering_answer_edited_files>
+{Xml.c(Xml.EDITED_FILES)}
 
-<prompt_engineering_answer_new_files>
+{Xml.o(Xml.NEW_FILES)}
 [Leave empty if no new files are required - create new files only when necessary for clarity or structure]
-<prompt_engineering_answer_new_file path="{root_dir}/absolute/path/to/new_file.py">
+{Xml.o(Xml.NEW_FILE, f'path="{root_dir}/absolute/path/to/new_file.py"')}
 [Full content of the new file]
-</prompt_engineering_answer_new_file>
+{Xml.c(Xml.NEW_FILE)}
 [Additional new files if needed]
-</prompt_engineering_answer_new_files>
+{Xml.c(Xml.NEW_FILES)}
 
-<prompt_engineering_answer_comments>
+{Xml.o(Xml.COMMENTS)}
 [Detailed comments, explanations, or reasoning. Optional but recommended for clarity.]
-</prompt_engineering_answer_comments>
+{Xml.c(Xml.COMMENTS)}
 
 CRITICAL RULES:
 - Your entire response must consist solely of the tags prefixed with "prompt_engineering_answer_" and their contents. No introductory text, summaries, or any content outside these tags.
-- You may edit ONLY files listed in the <prompt_engineering_query_editable_files> section.
+- You may edit ONLY files listed in the <{Xml.EDITABLE_FILES}> section.
 - Use the exact absolute paths provided in the query.
 - For new files, use absolute paths consistent with the project structure.
 - The root directory of the project is {root_dir}
 - Preserve exact code formatting: indentation, trailing newlines, and existing comments must remain unchanged.
 - Any new code comments you add must be professional and intended for future readers of the codebase.
-- If multiple viable approaches exist for the user's request, summarize the options in <prompt_engineering_answer_comments> without editing or creating files. Include brief code snippets if helpful, and provide clear pros and cons from a professional software engineering perspective. The user will then select the preferred approach.\n"""
-    query += '</prompt_engineering_query_response_formatting>'
+- If multiple viable approaches exist for the user's request, summarize the options in <{Xml.COMMENTS}> without editing or creating files. Include brief code snippets if helpful, and provide clear pros and cons from a professional software engineering perspective. The user will then select the preferred approach.\n"""
+    query += Xml.c(Xml.RESPONSE_FORMATTING)
 
     return query
 
 def _extract_section_content(response: str, section_tag: str) -> str:
     """Extract section content; tolerant to missing tags or whitespace."""
-    pattern = rf'<{section_tag}\b[^>]*>([\s\S]*?)</{section_tag}>'
+    pattern = Xml.section_pattern(section_tag)
     match = re.search(pattern, response, re.DOTALL | re.IGNORECASE)
     return match.group(1).strip() if match else ""
 
 def _extract_files(section_content: str, file_tag: str) -> list[tuple[str, str]]:
-    """
-    Extract (path, content) pairs; tolerant to malformed entries.
-
-    Example:
-        Given the following section_content:
-            <file path="src/main.py">
-            def hello():
-                print("Hello, world!")
-            </file>
-
-            <file path="src/utils.py">
-            def add(a, b):
-                return a + b
-            </file>
-
-        The function call:
-            _extract_files(section_content, "file")
-
-        Returns:
-            [
-                ("src/main.py", "def hello():\\n    print(\"Hello, world!\")\\n"),
-                ("src/utils.py", "def add(a, b):\\n    return a + b\\n")
-            ]
-    """
+    """Extract (path, content) pairs; tolerant to malformed entries."""
     if not section_content:
         return []
     
-    pattern = rf'<{file_tag}\b[^>]*\spath="([^"]+)">([\s\S]*?)</{file_tag}>'
+    pattern = Xml.file_pattern(file_tag)
     matches = re.findall(pattern, section_content, re.DOTALL | re.IGNORECASE)
     
     extracted = []
@@ -241,11 +220,11 @@ def parse_response(llm_response: str) -> tuple[str, str]:
     """
     logger.debug("Starting parse_response")
 
-    edited_section = _extract_section_content(llm_response, 'prompt_engineering_answer_edited_files')
-    new_section = _extract_section_content(llm_response, 'prompt_engineering_answer_new_files')
-    comments = _extract_section_content(llm_response, 'prompt_engineering_answer_comments')
+    edited_section = _extract_section_content(llm_response, Xml.EDITED_FILES)
+    new_section = _extract_section_content(llm_response, Xml.NEW_FILES)
+    comments = _extract_section_content(llm_response, Xml.COMMENTS)
     
-    for path_str, content in _extract_files(edited_section, 'prompt_engineering_answer_edited_file'):
+    for path_str, content in _extract_files(edited_section, Xml.EDITED_FILE):
         try:
             path = Path(path_str)
             _secure_path(path, should_exist=True)
@@ -261,7 +240,7 @@ def parse_response(llm_response: str) -> tuple[str, str]:
             logger.error(f"Failed to edit {path_str}: {e}")
             print(f"ERROR editing {path_str}: {e}")
     
-    for path_str, content in _extract_files(new_section, 'prompt_engineering_answer_new_file'):
+    for path_str, content in _extract_files(new_section, Xml.NEW_FILE):
         try:
             path = Path(path_str)
             _secure_path(path, should_exist=False)
@@ -274,16 +253,16 @@ def parse_response(llm_response: str) -> tuple[str, str]:
             print(f"ERROR creating {path_str}: {e}")
     
     clean = llm_response
-    for tag in ['prompt_engineering_answer_edited_files', 'prompt_engineering_answer_new_files', 'prompt_engineering_answer_comments']:
-        clean = re.sub(rf'<{tag}\b[^>]*>[\s\S]*?</{tag}>', '', clean, flags=re.DOTALL | re.IGNORECASE)
+    for tag in [Xml.EDITED_FILES, Xml.NEW_FILES, Xml.COMMENTS]:
+        clean = re.sub(Xml.removal_pattern(tag), '', clean, flags=re.DOTALL | re.IGNORECASE)
     
     extraneous = re.sub(r'\s+', ' ', clean).strip()
     if extraneous:
         logger.warning(f"Extraneous content in response: {extraneous[:500]}{'...' if len(extraneous) > 500 else ''}")
         print(f"Warning: LLM added extra text outside allowed tags (logged).")
     
-    logger.info(f"Parsing complete. Edited: {len(list(_extract_files(edited_section, 'prompt_engineering_answer_edited_file')))}, "
-                f"Created: {len(list(_extract_files(new_section, 'prompt_engineering_answer_new_file')))}")
+    logger.info(f"Parsing complete. Edited: {len(_extract_files(edited_section, Xml.EDITED_FILE))}, "
+                f"Created: {len(_extract_files(new_section, Xml.NEW_FILE))}")
    
     return comments.strip(), extraneous
 
