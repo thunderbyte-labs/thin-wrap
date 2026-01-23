@@ -17,7 +17,7 @@ import config
 config.setup_logging()
 
 from command_handler import CommandHandler
-from file_processor import generate_query, parse_response
+from file_processor import generate_query
 from input_handler import InputHandler
 from llm_client import LLMClient
 from proxy_wrapper import create_proxy_wrapper, validate_proxy_url
@@ -257,18 +257,27 @@ class LLMChat:
 
         print(f"{UI.colorize('-' * 65, 'GREEN')}")
 
-        query = generate_query(self.root_dir, self.readable_files, self.editable_files, message)
+        query, response_parser = generate_query(
+            self.root_dir, self.readable_files, self.editable_files, message
+        )
         query = clean_text(query)
 
         response = self.llm_client.send_message(query)
         self._report_token_usage(query, response)
-        parse_response(response)
+
+        comments = response_parser(response)
+
+        if comments:
+            print("\n" + UI.colorize("LLM Explanation / Reasoning:", "BRIGHT_CYAN"))
+            print(comments)
+        else:
+            print("\nNo explanation provided by the LLM.")
+
         self.session_logger.log_interaction(message, response, query)
-        print(response)
 
         print(f"{UI.colorize('=' * 65, 'BRIGHT_GREEN')}")
         print()
-        logger.debug("Message sent and response displayed successfully")
+        logger.debug("Message sent and response processed successfully")
 
     def _report_token_usage(self, query, response):
         """Report token usage"""

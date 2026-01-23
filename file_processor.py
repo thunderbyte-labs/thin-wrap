@@ -211,7 +211,16 @@ def _diff_report(old_path: str | None, new_path: str) -> None:
     else:
         print(f"{filename}: {insertions} insertions(+), {deletions} deletions(-)")
 
-def parse_response(llm_response: str) -> tuple[str, str]:
+def parse_plain_response(llm_response: str) -> tuple[str, str]:
+    """
+    Simple parser for plain text LLM responses.
+    No file operations are performed.
+    The entire response is treated as comments/explanation.
+    """
+    comments = llm_response.strip()
+    return comments
+
+def parse_xml_response(llm_response: str) -> str:
     """
     Parse LLM response with maximum tolerance:
     - Missing or empty sections are treated as no action.
@@ -258,13 +267,12 @@ def parse_response(llm_response: str) -> tuple[str, str]:
     
     extraneous = re.sub(r'\s+', ' ', clean).strip()
     if extraneous:
-        logger.warning(f"Extraneous content in response: {extraneous[:500]}{'...' if len(extraneous) > 500 else ''}")
-        print(f"Warning: LLM added extra text outside allowed tags (logged).")
+        logger.warning(f"Extraneous content in response:\n{extraneous[:500]}")
     
     logger.info(f"Parsing complete. Edited: {len(_extract_files(edited_section, Xml.EDITED_FILE))}, "
                 f"Created: {len(_extract_files(new_section, Xml.NEW_FILE))}")
    
-    return comments.strip(), extraneous
+    return comments.strip()
 
 
 def should_generate_plain_query(readable_files: list[str], writable_files: list[str]) -> bool:
@@ -317,20 +325,17 @@ def generate_query(
     readable_files: list[str], 
     writable_files: list[str], 
     user_request: str
-) -> str:
+) -> tuple[str, callable]:
     """
-    Generate query based on whether files exist and user preference.
+    Generate the query and return the appropriate parser function.
     
-    Args:
-        root_dir: Root directory of the project
-        readable_files: List of readable file paths
-        writable_files: List of writable file paths
-        user_request: The user's request text
-        
     Returns:
-        Either a plain text query or full XML-formatted query
+        (query_string, parser_function)
+        where parser_function is either parse_xml_response or parse_plain_response
     """
     if should_generate_plain_query(readable_files, writable_files):
-        return generate_plain_query(user_request)
+        query = generate_plain_query(user_request)
+        return query, parse_plain_response
     else:
-        return generate_file_query(root_dir, readable_files, writable_files, user_request)
+        query = generate_file_query(root_dir, readable_files, writable_files, user_request)
+        return query, parse_xml_response
