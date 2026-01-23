@@ -5,7 +5,7 @@ import re
 import subprocess
 import logging
 import shutil
-from xml import Xml
+from tags import Xml
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ def _read_file_content(full_path: str, root_dir: str) -> str:
     except Exception as e:
         raise Exception(f"Error reading file {full_path}: {str(e)}")
 
-def generate_query(root_dir: str, readable_files: list[str], writable_files: list[str], user_request: str) -> str:
+def generate_file_query(root_dir: str, readable_files: list[str], writable_files: list[str], user_request: str) -> str:
     """
     Generate the LLM query in the requested XML format using absolute paths.
     Minimal whitespace and no unnecessary blank lines.
@@ -279,7 +279,7 @@ def should_generate_plain_query(readable_files: list[str], writable_files: list[
         True if there are no readable or writable files and the user confirms
         they want to send a plain message, False otherwise
     """
-    if readable_files or writable_files:
+    if len(readable_files) + len(writable_files) > 0:
         return False
     
     print(
@@ -312,7 +312,7 @@ def generate_plain_query(user_request: str) -> str:
     return user_request.strip()
 
 
-def generate_conditional_query(
+def generate_query(
     root_dir: str, 
     readable_files: list[str], 
     writable_files: list[str], 
@@ -333,4 +333,4 @@ def generate_conditional_query(
     if should_generate_plain_query(readable_files, writable_files):
         return generate_plain_query(user_request)
     else:
-        return generate_query(root_dir, readable_files, writable_files, user_request)
+        return generate_file_query(root_dir, readable_files, writable_files, user_request)
