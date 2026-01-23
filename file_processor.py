@@ -1,5 +1,3 @@
-
-"""File processing functionality for including and editing code files"""
 import os
 from pathlib import Path
 import datetime
@@ -107,7 +105,7 @@ Required format (in this exact order: edited files, then new files, then comment
 </prompt_engineering_answer_edited_files>
 
 <prompt_engineering_answer_new_files>
-[Leave empty if no new files are required – create new files only when necessary for clarity or structure]
+[Leave empty if no new files are required - create new files only when necessary for clarity or structure]
 <prompt_engineering_answer_new_file path="{root_dir}/absolute/path/to/new_file.py">
 [Full content of the new file]
 </prompt_engineering_answer_new_file>
@@ -288,3 +286,72 @@ def parse_response(llm_response: str) -> tuple[str, str]:
                 f"Created: {len(list(_extract_files(new_section, 'prompt_engineering_answer_new_file')))}")
    
     return comments.strip(), extraneous
+
+
+def should_generate_plain_query(readable_files: list[str], writable_files: list[str]) -> bool:
+    """
+    Determine if a plain query (without XML formatting) should be generated.
+    
+    Args:
+        readable_files: List of readable file paths
+        writable_files: List of writable file paths
+        
+    Returns:
+        True if there are no readable or writable files and the user confirms
+        they want to send a plain message, False otherwise
+    """
+    if readable_files or writable_files:
+        return False
+    
+    print(
+        "No Editable or Readable files are included in the context.\n"
+        "Do you want to send purely your message? "
+        "(Select 'n' if you are expecting new files to be created)"
+    )
+    
+    while True:
+        response = input("(y/n): ").strip().lower()
+        
+        if response in {'y', 'yes'}:
+            return True
+        if response in {'n', 'no'}:
+            return False
+        
+        print("Invalid input. Please enter 'y' for yes or 'n' for no.")
+
+
+def generate_plain_query(user_request: str) -> str:
+    """
+    Generate a plain text query without XML formatting.
+    
+    Args:
+        user_request: The user's request text
+        
+    Returns:
+        Plain text query string
+    """
+    return user_request.strip()
+
+
+def generate_conditional_query(
+    root_dir: str, 
+    readable_files: list[str], 
+    writable_files: list[str], 
+    user_request: str
+) -> str:
+    """
+    Generate query based on whether files exist and user preference.
+    
+    Args:
+        root_dir: Root directory of the project
+        readable_files: List of readable file paths
+        writable_files: List of writable file paths
+        user_request: The user's request text
+        
+    Returns:
+        Either a plain text query or full XML-formatted query
+    """
+    if should_generate_plain_query(readable_files, writable_files):
+        return generate_plain_query(user_request)
+    else:
+        return generate_query(root_dir, readable_files, writable_files, user_request)
