@@ -1,4 +1,3 @@
-
 """Unified LLM client wrapper (using OpenAI library)"""
 import os
 from typing import Optional
@@ -8,17 +7,20 @@ import text_utils
 import logging
 from ui import UI
 from proxy_wrapper import ProxyWrapper
+from datetime import datetime
+import json
 
 logger = logging.getLogger(__name__)
 
 class LLMClient:
-    def __init__(self, proxy_wrapper: Optional[ProxyWrapper] = None) -> None:
+    def __init__(self, proxy_wrapper: Optional[ProxyWrapper] = None, session_logger = None) -> None:
         self.openai_client: Optional[OpenAI] = None
         self.conversation_history: list[dict[str, str]] = []
         self.proxy_wrapper: Optional[ProxyWrapper] = proxy_wrapper
         self._proxy_context = None
         self._http_client = None
         self.current_model = None
+        self.session_logger = session_logger
 
     def setup_api_key(self, model):
         """Get API key for specified model or let user choose"""
@@ -168,23 +170,56 @@ class LLMClient:
                 self._proxy_context = None
 
     def send_message(self, message):
-        """Send processed input to LLM with specified token limit"""
+        """Send processed input to LLM with automatic session saving before and after"""
         try:
-            self.conversation_history.append({"role": "user", "content": message})
+            # Add user message to history and save immediately
+            self.conversation_history.append({
+                "role": "user", 
+                "content": message,
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            # Save session with user message before API call
+            if self.session_logger:
+                self.session_logger.save_session(self.conversation_history)
+            
+            # Get response from LLM
             response = self._send_message_to_openai_client()
             response = text_utils.clean_text(response)
-            self.conversation_history.append({"role": "assistant", "content": response})
+            
+            # Add assistant response to history and save again
+            self.conversation_history.append({
+                "role": "assistant", 
+                "content": response,
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            # Save session with assistant response
+            if self.session_logger:
+                self.session_logger.save_session(self.conversation_history)
+                
             return response
         except KeyboardInterrupt:
             print(f"\n{UI.colorize('Request interrupted by user (Ctrl+C)', 'BRIGHT_YELLOW')}")
-            raise KeyboardInterrupt("API request interrupted")
+            # Request was interrupted - remove the user message that was interrupted
+            if self.conversation_history and self.conversation_history[-1]["role"] == "user":
+                self.conversation_history.pop()
+                # Save the updated session without the interrupted message
+                if self.session_logger:
+                    self.session_logger.save_session(self.conversation_history)
+            # Return empty string to indicate interruption was handled
+            return ""
         except Exception as e:
+            # Even on error, save the current state
+            if self.session_logger:
+                self.session_logger.save_session(self.conversation_history)
             return f"Error communicating with {self.current_model}: {e}"
 
     def _send_message_to_openai_client(self):
         """Send message to OpenAI API using OpenAI v1.0+ syntax"""
         print("⏳ Sending request to LLM client... (Press Ctrl+C to interrupt)")
         try:
+            # Prepare messages without timestamps for API
             messages = [{"role": msg["role"], "content": msg["content"]} for msg in self.conversation_history]
             response = self.openai_client.chat.completions.create(
                 model=self.current_model,
@@ -192,12 +227,14 @@ class LLMClient:
             )
             return response.choices[0].message.content
         except KeyboardInterrupt:
-            print(f"\n{UI.colorize('API request interrupted by user', 'BRIGHT_YELLOW')}")
-            raise KeyboardInterrupt("API request interrupted by user")
+            # Let the interruption propagate to send_message for proper handling
+            raise
 
     def clear_conversation(self):
-        """Clear conversation history"""
+        """Clear conversation history and save empty session"""
         self.conversation_history = []
+        if self.session_logger:
+            self.session_logger.save_session(self.conversation_history)
 
     def get_current_model(self):
         """Get current model information"""

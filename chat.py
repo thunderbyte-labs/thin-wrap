@@ -61,7 +61,7 @@ class LLMChat:
         # Initialize components
         self.session_logger = SessionLogger(self.script_directory)
         self.input_handler = InputHandler()
-        self.llm_client = LLMClient(self.proxy_wrapper)
+        self.llm_client = LLMClient(self.proxy_wrapper, self.session_logger)
         self.command_handler = CommandHandler(self.llm_client, self.session_logger, self.input_handler, self)
         logger.debug("Initialized all LLMChat components")
 
@@ -246,7 +246,9 @@ class LLMChat:
     def _save_and_exit(self):
         """Save session and exit cleanly"""
         logger.debug("Saving session and preparing to exit")
-        log_path = self.session_logger.save_session_log()
+        # Save final state before exit
+        self.session_logger.save_session(self.llm_client.conversation_history)
+        log_path = self.session_logger.get_session_path()
         UI.show_exit_message(log_path)
         logger.debug(f"Session saved to: {log_path}")
 
@@ -262,6 +264,7 @@ class LLMChat:
         )
         query = clean_text(query)
 
+        # Send message to LLM client (which handles automatic session saving)
         response = self.llm_client.send_message(query)
         self._report_token_usage(query, response)
 
@@ -272,8 +275,6 @@ class LLMChat:
             print(comments)
         else:
             print("\nNo explanation provided by the LLM.")
-
-        self.session_logger.log_interaction(message, response, query)
 
         print(f"{UI.colorize('=' * 65, 'BRIGHT_GREEN')}")
         print()
@@ -325,7 +326,7 @@ def main():
             error_msg = validate_proxy_url(proxy_url)
             if error_msg:
                 print(f"{UI.colorize('Error:', 'RED')} Invalid proxy URL: {error_msg}")
-                logger.error(f"Invalid proxy URL provided: {args.proxy} — {error_msg}")
+                logger.error(f"Invalid proxy URL provided: {args.proxy} -- {error_msg}")
                 sys.exit(1)
             logger.debug(f"Proxy enabled: {proxy_url}")
         
