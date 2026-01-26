@@ -236,6 +236,13 @@ class LLMClient:
         if self.session_logger:
             self.session_logger.save_session(self.conversation_history)
 
+    def load_conversation(self, conversation_history):
+        """Load a conversation history into the client"""
+        self.conversation_history = conversation_history
+        # Save the loaded conversation to ensure it's persisted
+        if self.session_logger:
+            self.session_logger.save_session(self.conversation_history)
+
     def get_current_model(self):
         """Get current model information"""
         return self.current_model

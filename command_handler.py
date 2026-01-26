@@ -1,147 +1,148 @@
-
-"""Command handling functionality"""
+"""Command handling for LLM Terminal Chat"""
 import os
+from pathlib import Path
+from ui import UI
 import config
-from menu import FileMenuApp
 
 class CommandHandler:
-    def __init__(self, llm_client, session_logger, input_handler, chat):
+    def __init__(self, llm_client, session_logger, input_handler, chat_app):
         self.llm_client = llm_client
         self.session_logger = session_logger
         self.input_handler = input_handler
-        self.chat = chat
+        self.chat_app = chat_app
 
-    def handle_command(self, user_input):
-        """Handle special commands"""
-        command_parts = user_input.strip().split(maxsplit=1)
-        command = command_parts[0].lower()
+    def handle_command(self, command):
+        """Handle user commands starting with '/'"""
+        command = command.strip()
+        parts = command.split()
+        cmd = parts[0].lower()
+        args = parts[1:]
 
-        try:
-            if command == '/bye':
-                return self._handle_bye_command()
-            elif command == '/clear':
-                return self._handle_clear_command()
-            elif command == '/save':
-                return self._handle_save_command()
-            elif command in ['/help', '/?']:
-                return self._handle_help_command()
-            elif command == '/model':
-                parts = user_input.lower().strip().split()
-                return self._handle_model_command(parts)
-            elif command == '/files':
-                return self.handle_files_command()
-            elif command == '/rootdir':
-                arg = command_parts[1] if len(command_parts) > 1 else None
-                return self._handle_rootdir_command(arg)
+        if cmd in ['/help', '/?']:
+            self._handle_help(args)
+        elif cmd == '/clear':
+            self._handle_clear()
+        elif cmd == '/bye':
+            return True  # Signal to quit
+        elif cmd == '/save':
+            self._handle_save()
+        elif cmd == '/model':
+            self._handle_model(args)
+        elif cmd == '/reload':
+            self._handle_reload()
+        elif cmd == '/files':
+            self.handle_files_command()
+        elif cmd == '/rootdir':
+            self._handle_rootdir(args)
+        else:
+            print(f"Unknown command: {cmd}. Type /help for available commands.")
+        
+        return False
+
+    def _handle_help(self, args):
+        """Show help for commands"""
+        if args:
+            cmd = args[0]
+            if cmd in config.COMMANDS:
+                print(f"{cmd}: {config.COMMANDS[cmd]}")
             else:
-                print(f"Unknown command: {user_input}")
-                print("Type /help for available commands.\n")
-                return False
-        except KeyboardInterrupt:
-            return True
-        except Exception as e:
-            print(f"Error handling command: {e}")
-            return False
+                print(f"No help available for '{cmd}'")
+        else:
+            print("Available commands:")
+            for cmd, desc in config.COMMANDS.items():
+                print(f"  {cmd:<15} - {desc}")
+            print("\nPress Ctrl+Space to open file context menu")
+            print("Use Alt+Enter to send message, Enter for new line")
+
+    def _handle_clear(self):
+        """Clear conversation history"""
+        self.llm_client.clear_conversation()
+        print("Conversation history cleared.")
+
+    def _handle_save(self):
+        """Manually save current session"""
+        if self.llm_client.conversation_history:
+            self.session_logger.save_session(self.llm_client.conversation_history)
+            log_path = self.session_logger.get_session_path()
+            print(f"Session saved to: {log_path}")
+        else:
+            print("No conversation to save.")
+
+    def _handle_model(self, args):
+        """Switch or show current model"""
+        if args:
+            new_model = args[0]
+            self.llm_client.switch_model(new_model)
+        else:
+            current = self.llm_client.get_current_model()
+            print(f"Current model: {current}")
+
+    def _handle_reload(self):
+        """Reload a previous conversation"""
+        sessions = self.session_logger.list_available_sessions()
+        if not sessions:
+            print("No previous conversations found for this project root.")
+            return
+        
+        # Format session names for display
+        def format_session(path):
+            filename = os.path.basename(path)
+            # Remove the .toml.zip extension and session_ prefix
+            name = filename.replace('session_', '').replace('.toml.zip', '')
+            # Format as YYYY-MM-DD HH:MM:SS
+            try:
+                date_part = name[:8]
+                time_part = name[8:14]
+                return f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]} {time_part[:2]}:{time_part[2:4]}:{time_part[4:6]}"
+            except:
+                return name
+        
+        try:
+            selected_path = UI.interactive_selection(
+                prompt_title="Available conversations:",
+                prompt_message="Enter a number to select:",
+                no_items_message="No conversations available",
+                items=sessions,
+                item_formatter=format_session,
+                allow_new=False
+            )
+            
+            if selected_path:
+                session_data = self.session_logger.load_session(selected_path)
+                if session_data:
+                    # Load the conversation history
+                    self.llm_client.load_conversation(session_data.get("conversation_history", []))
+                    print(f"Loaded conversation from {format_session(selected_path)}")
+                    print(f"Contains {len(session_data.get('conversation_history', []))} messages")
+                else:
+                    print("Failed to load conversation.")
+        except (KeyboardInterrupt, EOFError):
+            print("\nReload cancelled.")
 
     def handle_files_command(self):
-        """Handle /files command - launch the three-column menu"""
-        FileMenuApp(
-            editable_files=self.chat.editable_files,
-            readable_files=self.chat.readable_files,
-            root_dir=self.chat.root_dir
-        ).run()
-        return False
-
-    def _handle_rootdir_command(self, new_path):
-        """Handle /rootdir command - show current or set new project root"""
-        if new_path is None:
-            print(f"Current project root directory: {self.chat.root_dir}")
-            return False
-
-        expanded_path = os.path.expanduser(new_path.strip())
-        abs_path = os.path.abspath(expanded_path)
-
-        if not os.path.isdir(abs_path):
-            print(f"Invalid directory (does not exist or not a directory): {abs_path}")
-            return False
-
-        old_root = self.chat.root_dir
-        self.chat.root_dir = abs_path
-        print(f"Project root directory changed from:\n  {old_root}\n→ {abs_path}")
-        return False
-
-    def _handle_model_command(self, command_parts):
-        """Handle /model command to switch LLM models"""
-        if len(command_parts) < 2:
-            current_model = self.llm_client.get_current_model()
-            print(f"Current model: {current_model}")
-            print("Available models:")
-            for key in config.SUPPORTED_MODELS:
-                status = " (current)" if key == current_model else ""
-                print(f"  {key}")
-            print("Usage: /model <model>")
-            return False
-        
-        new_model = command_parts[1].lower()
-        
-        if new_model not in config.SUPPORTED_MODELS:
-            print(f"✗ Unknown model model: {new_model}")
-            print("Available models:")
-            for key in config.SUPPORTED_MODELS:
-                print(f"  {key}")
-            return False
-            
-        success = self.llm_client.switch_model(new_model)
-        
-        if success:
-            print(f"✓ Switched to {new_model}")
-        else:
-            print(f"✗ Failed to switch to {new_model}")
-            
-        return False
-
-    def _handle_bye_command(self):
-        """Handle /bye command"""
+        """Handle Ctrl+Space file context menu"""
+        from menu import FileMenuApp
         try:
-            self.session_logger.save_session_log()
-            return True
+            app = FileMenuApp(
+                editable_files=self.chat_app.editable_files,
+                readable_files=self.chat_app.readable_files,
+                root_dir=self.chat_app.root_dir
+            )
+            app.run()
+            # Update the files lists after menu closes
+            self.chat_app.editable_files = app.editable_files
+            self.chat_app.readable_files = app.readable_files
         except Exception as e:
-            print(f"Error saving session log: {e}")
-            return True
+            print(f"Error opening file menu: {e}")
 
-    def _handle_clear_command(self):
-        """Handle /clear command"""
-        try:
-            self.llm_client.clear_conversation()
-            print("Conversation history cleared.\n")
-            return False
-        except Exception as e:
-            print(f"Error clearing conversation: {e}")
-            return False
-
-    def _handle_save_command(self):
-        """Handle /save command"""
-        try:
-            log_path = self.session_logger.save_session_log()
-            if log_path:
-                print(f"Session log saved to: {log_path}")
+    def _handle_rootdir(self, args):
+        """Show or set project root directory"""
+        if args:
+            new_root = Path(args[0]).expanduser().resolve()
+            if new_root.is_dir():
+                self.chat_app.root_dir = str(new_root)
+                print(f"Project root set to: {self.chat_app.root_dir}")
             else:
-                print("⚠️  No interactions to save yet.")
-            return False
-        except Exception as e:
-            print(f"Error saving session log: {e}")
-            return False
-
-    def _handle_help_command(self):
-        """Handle /help command"""
-        try:
-            print("Commands:")
-            for command, description in config.COMMANDS.items():
-                print(f"  {command:<15} {description}")
-            print("\nAdditional commands:")
-            print("  /files          Open file context menu (editable/readable/navigator)")
-            print("  /rootdir [path] Show current project root or set a new one")
-            return False
-        except Exception as e:
-            print(f"Error displaying help: {e}")
-            return False
+                print(f"Error: {new_root} is not a valid directory")
+        else:
+            print(f"Current project root: {self.chat_app.root_dir}")

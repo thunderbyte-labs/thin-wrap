@@ -1,4 +1,3 @@
-
 """
 CROSS-PLATFORM COMPATIBILITY NOTES:
 - This configuration is designed to work on Windows, macOS, and Linux
@@ -13,6 +12,14 @@ import os
 import logging
 from rich.logging import RichHandler
 import platform
+from platformdirs import user_data_dir
+
+# Application Configuration
+APP_NAME = "thin-wrap"
+
+# Session Storage
+SESSION_BASE_DIR = user_data_dir(APP_NAME, appauthor=False, ensure_exists=True)
+CONVERSATIONS_DIR = os.path.join(SESSION_BASE_DIR, "conversations")
 
 # Logging Configuration
 LOG_LEVEL = logging.INFO
@@ -109,5 +116,9 @@ COMMANDS = {
     '/?': 'Help for a command', 
     '/help': 'Help for a command',
     '/save': 'Save current session log manually',
-    '/model': 'Switch AI model (claude/deepseek)'
+    '/model': 'Switch AI model (claude/deepseek)',
+    '/reload': 'Reload a previous conversation',
+    '/rootdir': 'Show or set project root directory',
+    'files': 'Handle Ctrl+Space file context menu'
 }
+

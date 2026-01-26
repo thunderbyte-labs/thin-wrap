@@ -32,11 +32,10 @@ class LLMChat:
         logger.debug("Initializing LLMChat")
         self.script_directory = os.path.dirname(os.path.abspath(__file__))
 
-        app_name = "llm_chat"
-        config_dir = Path(platformdirs.user_config_dir(app_name))
+        config_dir = Path(platformdirs.user_config_dir(config.APP_NAME))
         config_dir.mkdir(parents=True, exist_ok=True)
-        self.history_file = config_dir / "history.json"
-        self.recent_roots = self._load_recent_roots()
+        history_file = config_dir / "history.json"
+        self.recent_roots = self._load_recent_roots(history_file)
 
         # Process root directory
         if root_dir is not None:
@@ -44,10 +43,11 @@ class LLMChat:
             if not root_path.is_dir():
                 raise ValueError(f"Specified root_dir is not a valid directory: {root_path}")
             self.root_dir = str(root_path)
-            self._add_to_recent_roots(self.root_dir)
+            self._add_to_recent_roots(history_file, self.root_dir)
             print(f"{UI.colorize('Info:', 'BRIGHT_CYAN')} Using specified project root: {self.root_dir}")
         else:
             self.root_dir = self._interactive_root_selection()
+            self._add_to_recent_roots(history_file, self.root_dir)
 
         # Resolve file paths
         root_path = Path(self.root_dir)
@@ -59,89 +59,51 @@ class LLMChat:
         self.proxy_wrapper = create_proxy_wrapper(proxy_url) if proxy_url else None
 
         # Initialize components
-        self.session_logger = SessionLogger(self.script_directory)
+        self.session_logger = SessionLogger(self.script_directory, self.root_dir)
         self.input_handler = InputHandler()
         self.llm_client = LLMClient(self.proxy_wrapper, self.session_logger)
         self.command_handler = CommandHandler(self.llm_client, self.session_logger, self.input_handler, self)
         logger.debug("Initialized all LLMChat components")
 
-    def _load_recent_roots(self) -> list[str]:
+    def _load_recent_roots(self, history_file: Path) -> list[str]:
         """Load recent root_dirs from history file."""
         try:
-            if self.history_file.exists():
-                data = json.loads(self.history_file.read_text(encoding='utf-8'))
+            if history_file.exists():
+                data = json.loads(history_file.read_text(encoding='utf-8'))
                 return [r for r in data.get("recent_root_dirs", []) if Path(r).is_dir()]
         except Exception as e:
             logger.debug(f"Failed to load root history: {e}")
         return []
 
-    def _save_recent_roots(self) -> None:
+    def _save_recent_roots(self, history_file: Path) -> None:
         """Save current recent_roots list."""
         try:
             data = {"recent_root_dirs": self.recent_roots[:10]}
-            self.history_file.write_text(json.dumps(data, indent=2), encoding='utf-8')
+            history_file.write_text(json.dumps(data, indent=2), encoding='utf-8')
         except Exception as e:
             logger.debug(f"Failed to save root history: {e}")
 
-    def _add_to_recent_roots(self, root: str) -> None:
+    def _add_to_recent_roots(self, history_file: Path, root: str) -> None:
         """Add root to history: move to front if already present, limit to 10."""
         root = str(Path(root).resolve())
         if root in self.recent_roots:
             self.recent_roots.remove(root)
         self.recent_roots.insert(0, root)
         self.recent_roots = self.recent_roots[:10]
-        self._save_recent_roots()
+        self._save_recent_roots(history_file)
 
     def _interactive_root_selection(self) -> str:
         """Interactive prompt for root selection with history and Tab autocompletion."""
-        recent = self.recent_roots
-        completer = PathCompleter(expanduser=True)
-        session = PromptSession(completer=completer)
-
-        while True:
-            if recent:
-                print(f"{UI.colorize('Previous project roots:', 'BRIGHT_CYAN')}")
-                for i, r in enumerate(recent, 1):
-                    print(f"  {i}. {r}")
-                print("Enter a number to select, or type a new path (Tab for completion, ~ for home):")
-            else:
-                print(f"{UI.colorize('No previous roots found.', 'BRIGHT_CYAN')}")
-                print("Enter project root path (Tab for completion, ~ for home on Linux/macOS):")
-
-            try:
-                user_input = session.prompt("> ").strip()
-            except (KeyboardInterrupt, EOFError):
-                print("\nRoot directory selection cancelled.")
-                sys.exit(1)
-
-            if not user_input:
-                print(f"{UI.colorize('Error:', 'RED')} Empty input - please try again.")
-                continue
-
-            # Numeric selection from history
-            if recent and user_input.isdigit():
-                idx = int(user_input) - 1
-                if 0 <= idx < len(recent):
-                    chosen = str(Path(recent[idx]).resolve())
-                    self._add_to_recent_roots(chosen)
-                    print(f"{UI.colorize('Selected:', 'BRIGHT_CYAN')} {chosen}")
-                    return chosen
-                else:
-                    print(f"{UI.colorize('Error:', 'RED')} Number out of range.")
-                    continue
-
-            # Manual path entry
-            try:
-                new_path = Path(user_input).expanduser()
-                if new_path.is_dir():
-                    resolved = str(new_path.resolve())
-                    self._add_to_recent_roots(resolved)
-                    print(f"{UI.colorize('Using:', 'BRIGHT_CYAN')} {resolved}")
-                    return resolved
-                else:
-                    print(f"{UI.colorize('Error:', 'RED')} Not a valid directory: {new_path}")
-            except Exception as e:
-                print(f"{UI.colorize('Error:', 'RED')} Invalid path: {e}")
+        return UI.interactive_selection(
+            prompt_title="Previous project roots:",
+            prompt_message="Enter a number to select, or type a new path (Tab for completion, ~ for home):",
+            no_items_message="No previous roots found.",
+            items=self.recent_roots,
+            item_formatter=lambda x: x,
+            allow_new=True,
+            new_item_validator=lambda p: p.is_dir(),
+            new_item_error="Not a valid directory"
+        )
 
     def _print_files_summary(self):
         """Print a compact summary of editable and readable files."""
