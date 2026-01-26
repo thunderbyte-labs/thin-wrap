@@ -82,6 +82,8 @@ class CommandHandler:
         sessions = self.session_logger.list_available_sessions()
         if not sessions:
             print("No previous conversations found for this project root.")
+            print(f"Project root: {self.chat_app.root_dir}")
+            print(f"Conversation directory: {self.session_logger.conversation_dir}")
             return
         
         # Format session names for display
@@ -91,11 +93,19 @@ class CommandHandler:
             name = filename.replace('session_', '').replace('.toml.zip', '')
             # Format as YYYY-MM-DD HH:MM:SS
             try:
-                date_part = name[:8]
-                time_part = name[8:14]
-                return f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]} {time_part[:2]}:{time_part[2:4]}:{time_part[4:6]}"
+                # Parse the timestamp format: YYYYMMDD_HHMMSS
+                if '_' in name:
+                    date_part, time_part = name.split('_', 1)
+                    if len(date_part) == 8 and len(time_part) == 6:
+                        # Format: YYYY-MM-DD HH:MM:SS
+                        return f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]} {time_part[:2]}:{time_part[2:4]}:{time_part[4:6]}"
             except:
-                return name
+                pass
+            return name  # Return original if parsing fails
+        
+        print(f"Project root: {UI.colorize(self.chat_app.root_dir, 'BRIGHT_CYAN')}")
+        print(f"Conversation directory: {UI.colorize(self.session_logger.conversation_dir, 'BRIGHT_CYAN')}")
+        print()
         
         try:
             selected_path = UI.interactive_selection(
@@ -146,3 +156,4 @@ class CommandHandler:
                 print(f"Error: {new_root} is not a valid directory")
         else:
             print(f"Current project root: {self.chat_app.root_dir}")
+

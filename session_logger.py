@@ -115,3 +115,4 @@ class SessionLogger:
         if session_data and "metadata" in session_data:
             return session_data["metadata"].get("interaction_count", 0)
         return 0
+
