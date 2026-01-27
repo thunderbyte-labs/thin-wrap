@@ -44,15 +44,15 @@ class CommandHandler:
         if args:
             cmd = args[0]
             if cmd in config.COMMANDS:
-                print(f"{cmd}: {config.COMMANDS[cmd]}")
+                print(f"{UI.colorize(cmd, 'BRIGHT_YELLOW')}: {config.COMMANDS[cmd]}")
             else:
                 print(f"No help available for '{cmd}'")
         else:
             print("Available commands:")
             for cmd, desc in config.COMMANDS.items():
-                print(f"  {cmd:<15} - {desc}")
-            print("\nPress Ctrl+Space to open file context menu")
-            print("Use Alt+Enter to send message, Enter for new line")
+                print(f"  {UI.colorize(cmd, 'BRIGHT_YELLOW')} - {desc}")
+            print(f"\nPress {UI.colorize('Ctrl+Space', 'BRIGHT_YELLOW')} to open file context menu.")
+            print(f"Use {UI.colorize('Alt+Enter', 'BRIGHT_YELLOW')} to send message, {UI.colorize('Enter', 'BRIGHT_YELLOW')} for new line.")
 
     def _handle_clear(self):
         """Clear conversation history"""
