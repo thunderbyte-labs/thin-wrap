@@ -37,13 +37,13 @@ class InputHandler:
             """Submit on Alt+Enter."""
             event.current_buffer.validate_and_handle()
 
-        @kb.add('c-space')
-        def handle_ctrl_f(event: KeyPressEvent) -> None:
-            """Handle Ctrl+Space to launch menu."""
-            event.app.exit(result=("CTRL_SPACE_PRESSED", event.current_buffer.text))
+        @kb.add('c-b')
+        def handle_ctrl_b(event: KeyPressEvent) -> None:
+            """Handle Ctrl+B to launch menu."""
+            event.app.exit(result=("Ctrl+B", event.current_buffer.text))
 
         prompt_message = FormattedText([
-            ('bold fg:ansidefault', "Alt+Enter to send. Ctrl+Space for file context management:\n"),
+            ('bold fg:ansidefault', "Alt+Enter to send. Ctrl+B for file context management:\n"),
         ])
 
         style = Style.from_dict({

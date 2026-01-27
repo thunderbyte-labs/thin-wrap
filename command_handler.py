@@ -49,7 +49,7 @@ class CommandHandler:
             print("Available commands:")
             for cmd, desc in config.COMMANDS.items():
                 print(f"  {UI.colorize(cmd, 'BRIGHT_YELLOW')} - {desc}")
-            print(f"\nPress {UI.colorize('Ctrl+Space', 'BRIGHT_YELLOW')} to open file context menu.")
+            print(f"\nPress {UI.colorize('Ctrl+B', 'BRIGHT_YELLOW')} to open file context menu.")
             print(f"Use {UI.colorize('Alt+Enter', 'BRIGHT_YELLOW')} to send message, {UI.colorize('Enter', 'BRIGHT_YELLOW')} for new line.")
 
     def _handle_clear(self):
@@ -120,7 +120,7 @@ class CommandHandler:
             print("\nReload cancelled.")
 
     def handle_files_command(self):
-        """Handle Ctrl+Space file context menu"""
+        """Handle Ctrl+B file context menu"""
         from menu import FileMenuApp
         try:
             app = FileMenuApp(

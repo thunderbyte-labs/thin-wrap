@@ -5,7 +5,7 @@ A thin cross-platform terminal-based chat application for wrapping your Large La
 ## Features
 
 - **Multi-LLM Support**: Seamlessly switch between different LLM providers (Claude, DeepSeek, Grok, etc.)
-- **File Context Management**: Interactive three-column file browser (**Ctrl+Space**) for managing editable and readable files
+- **File Context Management**: Interactive three-column file browser (**Ctrl+B**) for managing editable and readable files
 - **Proxy Support**: To bypass restricted networks (for instance Anthropic or Gemini are banned in China). Get some proxies there (lighter than a VPN solution): https://www.webshare.io/ (tested) https://iproyal.com/ (not tested) https://proxy-seller.com/ (not tested).
 - **Intelligent Code Editing**: 
   - Automatic file versioning with timestamped backups
@@ -113,13 +113,13 @@ Configure models in `config.py`:
 - `/model [name]` - Switch LLM model or show current model
 - `/clear` - Clear conversation history
 - `/save` - Manually save session log
-- `/files` - Open file context menu (or press Ctrl+Space)
+- `/files` - Open file context menu (or press Ctrl+B)
 - `/rootdir [path]` - Show or set project root directory
 - `/bye` - Exit and save session (then Alt+Enter)
 
 ### File Context Management
 
-Press **Ctrl+Space** to open the three-column file browser:
+Press **Ctrl+B** to open the three-column file browser:
 
 - **Left Column**: Editable files (LLM can modify these)
 - **Middle Column**: Readable files (LLM can read but not modify)
@@ -130,13 +130,13 @@ Press **Ctrl+Space** to open the three-column file browser:
 - `e` - Mark file as editable
 - `r` - Mark file as readable
 - `d` - Remove file from context
-- `Ctrl+Space` or `Escape` - Close menu
+- `Ctrl+B` or `Escape` - Close menu
 
 ### Message Input
 
 - `Enter` - New line
 - `Alt+Enter` - Send message
-- `Ctrl+Space` - Open file context menu
+- `Ctrl+B` - Open file context menu
 
 ## Architecture
 

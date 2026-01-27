@@ -8,7 +8,7 @@ class FileMenuApp(App):
     """Three-column file context menu."""
     ENABLE_COMMAND_PALETTE = False
     BINDINGS = [
-        Binding("ctrl+@", "quit", "Quit", key_display="Ctrl+Space", show=True),
+        Binding("ctrl+b", "quit", "Quit", key_display="Ctrl+B", show=True),
         Binding("escape", "quit", "Quit"),
         Binding("d", "delete_selected", "Delete"),
         Binding("r", "to_readable", "Readable"),

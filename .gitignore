@@ -1,5 +1,5 @@
 *.pyc
 
 .venv
-
-*.old.*.py
+.idea
+*.thin-wrap.*.py
