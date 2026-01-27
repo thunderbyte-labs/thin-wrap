@@ -115,10 +115,10 @@ COMMANDS = {
     '/bye': 'Exit (auto-saves session log)',
     '/?': 'Help for a command', 
     '/help': 'Help for a command',
-    '/save': 'Save current session log manually',
     '/model': 'Switch AI model (claude/deepseek)',
     '/reload': 'Reload a previous conversation',
     '/rootdir': 'Show or set project root directory',
     '/files': 'Handle Ctrl+Space file context menu'
 }
+
 

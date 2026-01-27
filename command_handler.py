@@ -24,8 +24,6 @@ class CommandHandler:
             self._handle_clear()
         elif cmd == '/bye':
             return True  # Signal to quit
-        elif cmd == '/save':
-            self._handle_save()
         elif cmd == '/model':
             self._handle_model(args)
         elif cmd == '/reload':
@@ -59,15 +57,6 @@ class CommandHandler:
         self.llm_client.clear_conversation()
         print("Conversation history cleared.")
 
-    def _handle_save(self):
-        """Manually save current session"""
-        if self.llm_client.conversation_history:
-            self.session_logger.save_session(self.llm_client.conversation_history)
-            log_path = self.session_logger.get_session_path()
-            print(f"Session saved to: {log_path}")
-        else:
-            print("No conversation to save.")
-
     def _handle_model(self, args):
         """Switch or show current model"""
         if args:
@@ -78,12 +67,12 @@ class CommandHandler:
             print(f"Current model: {current}")
 
     def _handle_reload(self):
-        """Reload a previous conversation"""
+        """Reload a previous conversation from the current project root"""
         sessions = self.session_logger.list_available_sessions()
         if not sessions:
-            print("No previous conversations found for this project root.")
-            print(f"Project root: {self.chat_app.root_dir}")
-            print(f"Conversation directory: {self.session_logger.conversation_dir}")
+            print(f"{UI.colorize('No previous conversations found for this project root.', 'BRIGHT_YELLOW')}")
+            print(f"Project root: {UI.colorize(self.chat_app.root_dir, 'BRIGHT_CYAN')}")
+            print(f"Conversation directory: {UI.colorize(self.session_logger.conversation_dir, 'BRIGHT_CYAN')}")
             return
         
         # Format session names for display
@@ -147,14 +136,34 @@ class CommandHandler:
             print(f"Error opening file menu: {e}")
 
     def _handle_rootdir(self, args):
-        """Show or set project root directory"""
+        """Show or set project root directory using interactive selection"""
         if args:
+            # Direct path argument provided
             new_root = Path(args[0]).expanduser().resolve()
             if new_root.is_dir():
-                self.chat_app.root_dir = str(new_root)
-                print(f"Project root set to: {self.chat_app.root_dir}")
+                try:
+                    self.chat_app.set_root_dir(str(new_root))
+                except ValueError as e:
+                    print(f"{UI.colorize('Error:', 'RED')} {e}")
             else:
-                print(f"Error: {new_root} is not a valid directory")
+                print(f"{UI.colorize('Error:', 'RED')} {new_root} is not a valid directory")
         else:
-            print(f"Current project root: {self.chat_app.root_dir}")
+            # Interactive selection mode
+            try:
+                selected_root = UI.interactive_selection(
+                    prompt_title="Previous project roots:",
+                    prompt_message="Enter a number to select, or type a new path (Tab for completion, ~ for home):",
+                    no_items_message="No previous roots found.",
+                    items=self.chat_app.recent_roots,
+                    item_formatter=lambda x: x,
+                    allow_new=True,
+                    new_item_validator=lambda p: p.is_dir(),
+                    new_item_error="Not a valid directory"
+                )
+                
+                if selected_root:
+                    self.chat_app.set_root_dir(selected_root)
+            except (KeyboardInterrupt, EOFError):
+                print("\nRoot directory change cancelled.")
+
 

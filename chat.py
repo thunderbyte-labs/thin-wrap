@@ -36,6 +36,7 @@ class LLMChat:
         config_dir.mkdir(parents=True, exist_ok=True)
         history_file = config_dir / "history.json"
         self.recent_roots = self._load_recent_roots(history_file)
+        self.history_file = history_file
 
         # Process root directory
         if root_dir is not None:
@@ -104,6 +105,39 @@ class LLMChat:
             new_item_validator=lambda p: p.is_dir(),
             new_item_error="Not a valid directory"
         )
+
+    def set_root_dir(self, new_root: str, ask_to_reload: bool = True) -> None:
+        """
+        Change the current project root directory and update all dependent components.
+        
+        Args:
+            new_root: New root directory path
+            ask_to_reload: Whether to prompt user to reload a conversation from the new root
+        """
+        root_path = Path(new_root).expanduser().resolve()
+        if not root_path.is_dir():
+            raise ValueError(f"Specified root_dir is not a valid directory: {root_path}")
+        
+        old_root = self.root_dir
+        self.root_dir = str(root_path)
+        
+        # Update history
+        self._add_to_recent_roots(self.history_file, self.root_dir)
+        
+        # Update session logger with new root
+        self.session_logger = SessionLogger(self.script_directory, self.root_dir)
+        
+        # Update LLM client's session logger reference
+        self.llm_client.session_logger = self.session_logger
+        
+        print(f"{UI.colorize('Success:', 'BRIGHT_GREEN')} Project root changed from '{old_root}' to '{self.root_dir}'")
+        
+        # If there are sessions available in the new root, ask if user wants to reload
+        if ask_to_reload:
+            sessions = self.session_logger.list_available_sessions()
+            if sessions:
+                print(f"\n{UI.colorize('Note:', 'BRIGHT_CYAN')} Found {len(sessions)} conversation(s) in the new project root.")
+                print(f"Use {UI.colorize('/reload', 'BRIGHT_YELLOW')} to load one of these conversations.")
 
     def _print_files_summary(self):
         """Print a compact summary of editable and readable files."""
@@ -309,3 +343,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
