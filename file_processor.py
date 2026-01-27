@@ -1,11 +1,12 @@
 import os
-from pathlib import Path
+import config
 import datetime
-import re
-import subprocess
 import logging
+import re
 import shutil
+import subprocess
 from tags import Xml
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +156,7 @@ def _extract_files(section_content: str, file_tag: str) -> list[tuple[str, str]]
             logger.warning(f"Skipping {file_tag} entry with empty path")
     
     if not extracted and section_content.strip():
-        logger.warning(f"Section <{section_tag}> present but no valid files extracted")
+        logger.warning(f"Section <{file_tag}> present but no valid files extracted")
     
     return extracted
 
@@ -211,7 +212,7 @@ def _diff_report(old_path: str | None, new_path: str) -> None:
     else:
         print(f"{filename}: {insertions} insertions(+), {deletions} deletions(-)")
 
-def parse_plain_response(llm_response: str) -> tuple[str, str]:
+def parse_plain_response(llm_response: str) -> str:
     """
     Simple parser for plain text LLM responses.
     No file operations are performed.
@@ -239,7 +240,7 @@ def parse_xml_response(llm_response: str) -> str:
             _secure_path(path, should_exist=True)
             
             timestamp = datetime.datetime.now(datetime.UTC).strftime('%Y%m%d%H%M%S')
-            backup = path.with_name(f"{path.stem}.{timestamp}{path.suffix}")
+            backup = path.with_name(f"{path.stem}.{config.APP_NAME}.{timestamp}{path.suffix}")
             os.replace(path, backup)
             
             _write_file(path, content, src_for_perms=backup)

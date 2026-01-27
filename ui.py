@@ -57,7 +57,7 @@ class UI:
               UI.colorize("Alt+Enter", 'BRIGHT_YELLOW') + 
               UI.colorize(" to send.", 'BRIGHT_WHITE'))
         print(UI.colorize("Press ", 'BRIGHT_WHITE') + 
-              UI.colorize("Ctrl+Space", 'BRIGHT_YELLOW') + 
+              UI.colorize("Ctrl+B", 'BRIGHT_YELLOW') + 
               UI.colorize(" to manage file context.", 'BRIGHT_WHITE'))
         print(UI.colorize("Type ", 'BRIGHT_WHITE') + 
               UI.colorize("/help", 'BRIGHT_YELLOW') + 

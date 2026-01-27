@@ -212,7 +212,7 @@ class LLMChat:
             user_input = self.input_handler.get_input_with_editing(default=next_default)
             next_default = ""
             
-            if isinstance(user_input, tuple) and user_input[0] == "CTRL_SPACE_PRESSED":
+            if isinstance(user_input, tuple) and user_input[0] == "Ctrl+B":
                 next_default = user_input[1]
                 self.command_handler.handle_files_command()
                 self._print_files_summary()

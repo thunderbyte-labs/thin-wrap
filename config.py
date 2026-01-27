@@ -98,9 +98,6 @@ UNICODE_REPLACEMENTS = {
     '\u00a0': ' ',
 }
 
-# Editor Configuration
-EDITORS = ['notepad', 'code', 'notepad++', 'vim', 'nano'] if platform.system() == 'Windows' else ['vim', 'vi', 'nano', 'code', 'gedit', 'notepad']
-
 # Terminal Configuration
 TERMINAL_WIDTH_FALLBACK = 120
 
@@ -118,7 +115,7 @@ COMMANDS = {
     '/model': 'Switch AI model (claude/deepseek)',
     '/reload': 'Reload a previous conversation',
     '/rootdir': 'Show or set project root directory',
-    '/files': 'Handle Ctrl+Space file context menu'
+    '/files': 'Handle Ctrl+B file context menu'
 }
 
 
