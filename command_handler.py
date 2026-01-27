@@ -87,6 +87,7 @@ class CommandHandler:
             return
         
         # Format session names for display
+        # Here we might wrap inside a light LLM call that would be able to read and give a 10 words summary of the conversation
         def format_session(path):
             filename = os.path.basename(path)
             # Remove the .toml.zip extension and session_ prefix

@@ -119,6 +119,6 @@ COMMANDS = {
     '/model': 'Switch AI model (claude/deepseek)',
     '/reload': 'Reload a previous conversation',
     '/rootdir': 'Show or set project root directory',
-    'files': 'Handle Ctrl+Space file context menu'
+    '/files': 'Handle Ctrl+Space file context menu'
 }
 
