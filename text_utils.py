@@ -1,4 +1,3 @@
-
 """Text processing and encoding utilities"""
 import config
 
