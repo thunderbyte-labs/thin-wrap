@@ -6,6 +6,7 @@ A thin cross-platform terminal-based chat application for wrapping your Large La
 
 - **Multi-LLM Support**: Seamlessly switch between different LLM providers (Claude, DeepSeek, Grok, etc.)
 - **File Context Management**: Interactive three-column file browser (**Ctrl+Space**) for managing editable and readable files
+- **Proxy Support**: To bypass restricted networks (for instance Anthropic or Gemini are banned in China). Get some proxies there (lighter than a VPN solution): https://www.webshare.io/ (tested) https://iproyal.com/ (not tested) https://proxy-seller.com/ (not tested).
 - **Intelligent Code Editing**: 
   - Automatic file versioning with timestamped backups
   - Git-style diff reporting for changes
@@ -13,7 +14,6 @@ A thin cross-platform terminal-based chat application for wrapping your Large La
 - **Project Root Selection**: Interactive project root selection with history and Tab autocompletion
 - **Multi-line Input**: Natural multi-line message composition (**Alt+Enter** to send)
 - **Session Logging**: Automatic session log saving with timestamps
-- **Proxy Support**: SOCKS5 and HTTP proxy support for restricted networks. Get some proxies there: https://www.webshare.io/ (tested) https://iproyal.com/ (not tested0) https://proxy-seller.com/ (not tested0)
 - **Cross-Platform**: Works on Windows, macOS, and Linux
 
 ## Installation (macOS, Linux, or Git Bash on Windows)
