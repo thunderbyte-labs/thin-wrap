@@ -66,6 +66,10 @@ SUPPORTED_MODELS = {
         "api_key": "OPENROUTER_API_KEY", 
         "api_base_url": "https://openrouter.ai/api/v1"
     },
+    "hera/qwen": {
+        "api_key": "HERA_API_KEY", 
+        "api_base_url": "https://hera-llm.thunderbyte.ovh/v1"
+    },
     "baidu/ernie-4.5-300b-a47b": {
         "api_key": "OPENROUTER_API_KEY",
         "api_base_url": "https://openrouter.ai/api/v1",

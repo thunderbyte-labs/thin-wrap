@@ -10,9 +10,10 @@ class FileMenuApp(App):
     BINDINGS = [
         Binding("ctrl+b", "quit", "Quit", key_display="Ctrl+B", show=True),
         Binding("escape", "quit", "Quit"),
-        Binding("d", "delete_selected", "Delete"),
         Binding("r", "to_readable", "Readable"),
         Binding("e", "to_editable", "Editable"),
+        Binding("d", "delete_selected", "Delete"),
+        Binding("ctrl+d", "clear_lists", "Clear All", key_display="Ctrl+D", show=True),
     ]
     CSS = """
     Horizontal { height: 100%; }
@@ -138,3 +139,11 @@ class FileMenuApp(App):
                     self.editable_files.append(rel_path)
                     self.editable_set.add(rel_path)
                     self.refresh_lists()
+
+    def action_clear_lists(self) -> None:
+        """Clear all editable and readable lists."""
+        self.editable_files.clear()
+        self.readable_files.clear()
+        self.editable_set.clear()
+        self.readable_set.clear()
+        self.refresh_lists()
