@@ -98,7 +98,7 @@ class LLMClient:
             self._proxy_context.__enter__()
             proxy_info = self.proxy_wrapper.get_connection_info()
             logger.debug(f"Proxy info: {proxy_info}")
-            self._setup_openai_client(api_key, proxy_info, model)
+            self._setup_openai_client_with_proxy(api_key, model)
             self._test_connection()
         except Exception as e:
             self._cleanup_proxy_context()
@@ -117,7 +117,7 @@ class LLMClient:
             print(f"Error: Invalid API key or connection failed: {e}")
             raise
 
-    def _setup_openai_client(self, api_key, proxy_info, model):
+    def _setup_openai_client_with_proxy(self, api_key, model):
         """Setup OpenAI client with proxy using OpenAI v1.0+ syntax"""
         try:
             client_kwargs = {"api_key": api_key, "timeout": 300.0}
@@ -138,7 +138,7 @@ class LLMClient:
 
             self.openai_client = OpenAI(**client_kwargs)
         except Exception as e:
-            logger.error(f"Failed to setup DeepSeek client with proxy: {e}")
+            logger.error(f"Failed to setup client with proxy: {e}")
             client_kwargs = {"api_key": api_key, "timeout": 300.0}
             if "api_base" in config.SUPPORTED_MODELS[model]:
                 client_kwargs["base_url"] = config.SUPPORTED_MODELS[model]["api_base"]

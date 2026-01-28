@@ -46,6 +46,10 @@ def setup_logging():
 
 # LLM Configuration
 SUPPORTED_MODELS = {
+    "gemini-2.5-flash": {
+        "api_key_env": "GOOGLE_API_KEY",
+        "api_base": "https://generativelanguage.googleapis.com/v1beta/openai/"
+    },
     "claude-sonnet-4-20250514": {
         "api_key_env": "ANTHROPIC_API_KEY",
         "base_url": "https://api.anthropic.com/v1/"
