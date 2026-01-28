@@ -1,4 +1,5 @@
 """Unified LLM client wrapper (using OpenAI library)"""
+
 import os
 from typing import Optional
 from openai import OpenAI
@@ -12,8 +13,9 @@ import json
 
 logger = logging.getLogger(__name__)
 
+
 class LLMClient:
-    def __init__(self, proxy_wrapper: Optional[ProxyWrapper] = None, session_logger = None) -> None:
+    def __init__(self, proxy_wrapper: Optional[ProxyWrapper] = None, session_logger=None) -> None:
         self.openai_client: Optional[OpenAI] = None
         self.conversation_history: list[dict[str, str]] = []
         self.proxy_wrapper: Optional[ProxyWrapper] = proxy_wrapper
@@ -29,10 +31,11 @@ class LLMClient:
 
         self.current_model = model
         model_config = config.SUPPORTED_MODELS[model]
-        api_key = os.getenv(model_config["api_key_env"])
+        api_key = os.getenv(model_config["api_key"]) or model_config["api_key"]
+        api_base_url = model_config["api_base_url"]
 
         if not api_key:
-            print(f"{model_config['api_key_env']} not found in environment variables.")
+            print(f"{model_config['api_key']} not found.")
             api_key = input(f"Please enter your {model} API key: ").strip()
             if not api_key:
                 raise ValueError("No API key provided")
@@ -41,26 +44,27 @@ class LLMClient:
         if self.proxy_wrapper:
             logger.info(f"Setting up {model} API connection through proxy...")
             try:
-                self._initialize_client_with_proxy(model, api_key, model_config)
+                self._initialize_client_with_proxy(api_key, api_base_url)
                 logger.info("Proxy-enabled API connection established successfully!")
             except Exception as e:
                 logger.error(f"Proxy configuration failed: {e}")
                 print("Attempting direct connection without proxy...")
                 try:
-                    self._initialize_client_direct(model, api_key, model_config)
+                    self._initialize_client_direct(api_key, api_base_url)
                     print("✓ Direct connection established successfully!")
                 except Exception as e2:
                     print(f"Direct connection also failed: {e2}")
                     raise ConnectionError("Failed to establish API connection")
         else:
-            self._initialize_client_direct(model, api_key, model_config)
+            self._initialize_client_direct(api_key, api_base_url)
 
     def choose_model(self):
         """Let user choose which LLM model to use"""
         print("Available LLM Models:")
-        for i, key in enumerate(config.SUPPORTED_MODELS, 1):
-            print(f"  {i}. {key}")
-
+        for i, (model, details) in enumerate(config.SUPPORTED_MODELS.items(), 1):
+            endpoint = details.get('api_base_url')
+            endpoint = endpoint.removeprefix("https://").removeprefix("http://").rstrip('/')
+            print(f"{i}. {UI.colorize(model,'BRIGHT_GREEN')}@{endpoint}")
         while True:
             choice = input(f"Choose model (1-{len(config.SUPPORTED_MODELS)}): ").strip()
             try:
@@ -91,46 +95,40 @@ class LLMClient:
             print(f"✗ Failed to switch to {new_model}: {e}")
             return False
 
-    def _initialize_client_with_proxy(self, model, api_key, model_config):
+    def _initialize_client_with_proxy(self, api_key, api_base_url):
         """Initialize client with proxy configuration"""
         try:
             self._proxy_context = self.proxy_wrapper.proxy_connection()
             self._proxy_context.__enter__()
             proxy_info = self.proxy_wrapper.get_connection_info()
             logger.debug(f"Proxy info: {proxy_info}")
-            self._setup_openai_client_with_proxy(api_key, model)
+            self._setup_openai_client_with_proxy(api_key, api_base_url)
             self._test_connection()
         except Exception as e:
             self._cleanup_proxy_context()
             raise
 
-    def _initialize_client_direct(self, model, api_key, model_config):
+    def _initialize_client_direct(self, api_key, api_base_url):
         """Initialize client without proxy"""
         try:
-            client_kwargs = {"api_key": api_key, "timeout": 300.0}
-            if "api_base" in model_config:
-                client_kwargs["base_url"] = model_config["api_base"]
+            client_kwargs = {"api_key": api_key, "base_url": api_base_url, "timeout": 300.0}
             self.openai_client = OpenAI(**client_kwargs)
             self._test_connection()
-            print(f"{model} API key validated successfully!\n")
         except Exception as e:
             print(f"Error: Invalid API key or connection failed: {e}")
             raise
 
-    def _setup_openai_client_with_proxy(self, api_key, model):
+    def _setup_openai_client_with_proxy(self, api_key, api_base_url):
         """Setup OpenAI client with proxy using OpenAI v1.0+ syntax"""
+        client_kwargs = {"api_key": api_key, "base_url": api_base_url, "timeout": 300.0}
         try:
-            client_kwargs = {"api_key": api_key, "timeout": 300.0}
-            model_config = config.SUPPORTED_MODELS[model]
-            if "api_base" in model_config:
-                client_kwargs["base_url"] = model_config["api_base"]
-
             proxy_config = self.proxy_wrapper.proxy_config
             proxy_url = proxy_config.get_proxy_url()
 
             if proxy_url:
                 try:
                     import httpx
+
                     proxy_transport = httpx.HTTPTransport(proxy=proxy_url)
                     client_kwargs["http_client"] = httpx.Client(transport=proxy_transport)
                 except ImportError:
@@ -139,9 +137,6 @@ class LLMClient:
             self.openai_client = OpenAI(**client_kwargs)
         except Exception as e:
             logger.error(f"Failed to setup client with proxy: {e}")
-            client_kwargs = {"api_key": api_key, "timeout": 300.0}
-            if "api_base" in config.SUPPORTED_MODELS[model]:
-                client_kwargs["base_url"] = config.SUPPORTED_MODELS[model]["api_base"]
             self.openai_client = OpenAI(**client_kwargs)
 
     def _test_connection(self):
@@ -151,6 +146,7 @@ class LLMClient:
             max_tokens=10,
             messages=[{"role": "user", "content": "Hi"}],
         )
+        print(f"{self.current_model} API key validated successfully!\n")
 
     def _cleanup_proxy_context(self):
         """Clean up proxy context and related resources"""
@@ -173,31 +169,27 @@ class LLMClient:
         """Send processed input to LLM with automatic session saving before and after"""
         try:
             # Add user message to history and save immediately
-            self.conversation_history.append({
-                "role": "user", 
-                "content": message,
-                "timestamp": datetime.now().isoformat()
-            })
-            
+            self.conversation_history.append(
+                {"role": "user", "content": message, "timestamp": datetime.now().isoformat()}
+            )
+
             # Save session with user message before API call
             if self.session_logger:
                 self.session_logger.save_session(self.conversation_history)
-            
+
             # Get response from LLM
             response = self._send_message_to_openai_client()
             response = text_utils.clean_text(response)
-            
+
             # Add assistant response to history and save again
-            self.conversation_history.append({
-                "role": "assistant", 
-                "content": response,
-                "timestamp": datetime.now().isoformat()
-            })
-            
+            self.conversation_history.append(
+                {"role": "assistant", "content": response, "timestamp": datetime.now().isoformat()}
+            )
+
             # Save session with assistant response
             if self.session_logger:
                 self.session_logger.save_session(self.conversation_history)
-                
+
             return response
         except KeyboardInterrupt:
             print(f"\n{UI.colorize('Request interrupted by user (Ctrl+C)', 'BRIGHT_YELLOW')}")

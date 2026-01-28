@@ -47,32 +47,28 @@ def setup_logging():
 # LLM Configuration
 SUPPORTED_MODELS = {
     "gemini-2.5-flash": {
-        "api_key_env": "GOOGLE_API_KEY",
-        "api_base": "https://generativelanguage.googleapis.com/v1beta/openai/"
+        "api_key": "GOOGLE_API_KEY",
+        "api_base_url": "https://generativelanguage.googleapis.com/v1beta/openai/"
     },
     "claude-sonnet-4-20250514": {
-        "api_key_env": "ANTHROPIC_API_KEY",
-        "base_url": "https://api.anthropic.com/v1/"
+        "api_key": "ANTHROPIC_API_KEY",
+        "api_base_url": "https://api.anthropic.com/v1/"
     },
     "deepseek-reasoner": {
-        "api_key_env": "DEEPSEEK_API_KEY", 
-        "api_base": "https://api.deepseek.com/v1"
+        "api_key": "DEEPSEEK_API_KEY", 
+        "api_base_url": "https://api.deepseek.com/v1"
     },
     "x-ai/grok-4.1-fast": {
-        "api_key_env": "OPENROUTER_API_KEY", 
-        "api_base": "https://openrouter.ai/api/v1"
+        "api_key": "OPENROUTER_API_KEY", 
+        "api_base_url": "https://openrouter.ai/api/v1"
     },
     "anthropic/claude-sonnet-4.5": {
-        "api_key_env": "OPENROUTER_API_KEY", 
-        "api_base": "https://openrouter.ai/api/v1"
-    },
-    "hera/qwen": {
-        "api_key_env": "HERA_API_KEY", 
-        "api_base": "https://hera-llm.thunderbyte.ovh/v1"
+        "api_key": "OPENROUTER_API_KEY", 
+        "api_base_url": "https://openrouter.ai/api/v1"
     },
     "baidu/ernie-4.5-300b-a47b": {
-        "api_key_env": "OPENROUTER_API_KEY",
-        "api_base": "https://openrouter.ai/api/v1",
+        "api_key": "OPENROUTER_API_KEY",
+        "api_base_url": "https://openrouter.ai/api/v1",
     }
 }
 
