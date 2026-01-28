@@ -6,7 +6,7 @@ A thin cross-platform terminal-based chat application for wrapping your Large La
 
 - **Multi-LLM Support**: Seamlessly switch between different LLM providers (Claude, DeepSeek, Grok, etc.)
 - **File Context Management**: Interactive three-column file browser (**Ctrl+B**) for managing editable and readable files
-- **Proxy Support**: To bypass restricted networks (for instance Anthropic or Gemini are banned in China). Get some proxies there (lighter than a VPN solution): https://www.webshare.io/ (tested) https://iproyal.com/ (not tested) https://proxy-seller.com/ (not tested).
+- **Proxy Support**: Bypass restricted geographies (for instance Anthropic or Gemini are not shared in China). Get some proxies there (lighter than a VPN solution): https://www.webshare.io/ (tested) https://iproyal.com/ (not tested) https://proxy-seller.com/ (not tested).
 - **Intelligent Code Editing**: 
   - Automatic file versioning with timestamped backups
   - Git-style diff reporting for changes

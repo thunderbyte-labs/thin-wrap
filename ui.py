@@ -45,13 +45,13 @@ class UI:
             print(UI.colorize(banner_content, 'BRIGHT_GREEN'))
         else:
             print(UI.colorize("=" * 70, 'BRIGHT_GREEN'))
-            print(UI.colorize("LLM Terminal Chat", 'BRIGHT_GREEN'))
+            print(UI.colorize("Thin Wrap - LLM Terminal Chat", 'BRIGHT_GREEN'))
             print(UI.colorize("=" * 70, 'BRIGHT_GREEN'))
 
     @staticmethod
     def show_startup_message():
         """Show startup help message"""
-        print("\n" + UI.colorize("Welcome to LLM Terminal Chat!", 'BRIGHT_CYAN'))
+        print("\n" + UI.colorize("Welcome to Thin Wrap - LLM Terminal Chat!", 'BRIGHT_CYAN'))
         print(UI.colorize("-" * 50, 'GREEN'))
         print(UI.colorize("Type your message and press ", 'BRIGHT_WHITE') + 
               UI.colorize("Alt+Enter", 'BRIGHT_YELLOW') + 
