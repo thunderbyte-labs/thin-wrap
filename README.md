@@ -1,4 +1,3 @@
-
 # Thin Wrap - LLM Terminal Chat
 A thin cross-platform terminal-based chat application for wrapping your Large Language Model APIs, featuring file context management, code editing capabilities, and session logging.
 
@@ -35,8 +34,9 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Installation Instructions for Windows (Command Prompt)
+## Installation Instructions for Windows
 
+### Option 1: Using Python venv (Command Prompt)
 
 ```cmd
 :: Clone the repository
@@ -52,6 +52,27 @@ python -m venv .venv
 :: Install dependencies
 pip install -r requirements.txt
 ```
+
+### Option 2: Using Conda (Anaconda/Miniconda)
+
+If you have Anaconda or Miniconda installed, you can use the following commands in the Anaconda Prompt:
+
+```cmd
+:: Clone the repository
+git clone <repository-url>
+cd thin-wrap
+
+:: Create a conda environment with Python 3.11+
+conda create -n thin-wrap python=3.11
+
+:: Activate the conda environment
+conda activate thin-wrap
+
+:: Install dependencies
+pip install -r requirements.txt
+```
+
+**Note for conda users**: After installation, you can run `python chat.py` from the Anaconda Prompt. Make sure you're in the `thin-wrap` directory and the `thin-wrap` conda environment is active (`conda activate thin-wrap`).
 
 
 ### Dependencies
