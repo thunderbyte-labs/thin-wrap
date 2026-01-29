@@ -5,6 +5,7 @@ import logging
 import re
 import shutil
 import subprocess
+import difflib
 from tags import Xml
 from pathlib import Path
 
@@ -176,41 +177,69 @@ def _write_file(full_path: Path, content: str, src_for_perms: Path | None = None
     else:
         full_path.chmod(0o644)
 
+def _compute_git_stat_diff(old_content: str, new_content: str) -> tuple[int, int]:
+    """
+    Compute insertions and deletions between two file contents.
+    
+    Args:
+        old_content: Content of old file
+        new_content: Content of new file
+        
+    Returns:
+        Tuple of (insertions, deletions) similar to git diff --stat
+    """
+    old_lines = old_content.splitlines(keepends=True)
+    new_lines = new_content.splitlines(keepends=True)
+    
+    # Use difflib's unified_diff to get changes
+    diff_gen = difflib.unified_diff(old_lines, new_lines, n=0, lineterm='')
+    
+    insertions = 0
+    deletions = 0
+    
+    for line in diff_gen:
+        # Skip header lines (---, +++, @@)
+        if line.startswith('---') or line.startswith('+++') or line.startswith('@@'):
+            continue
+        
+        if line.startswith('+'):
+            insertions += 1
+        elif line.startswith('-'):
+            deletions += 1
+    
+    return insertions, deletions
+
 def _diff_report(old_path: str | None, new_path: str) -> None:
-    """Display concise git-style diff summary."""
-    if old_path is None:
-        old_path = '/dev/null'
+    """Display concise git-style diff summary without relying on git subprocess."""
+    filename = Path(new_path).name
     
-    result = subprocess.run(
-        ['git', 'diff', '--no-index', '--stat', old_path, new_path],
-        capture_output=True, text=True
-    )
-    
-    output = result.stdout.strip()
-    if not output:
-        print("No differences.")
-        return
-    
-    lines = output.splitlines()
-    summary = lines[-1]
-    
-    ins_match = re.search(r'(\d+) insertion\(s?\)\(\+\)', summary)
-    del_match = re.search(r'(\d+) deletion\(s?\)\(\-\)', summary)
-    
-    insertions = int(ins_match.group(1)) if ins_match else 0
-    deletions = int(del_match.group(1)) if del_match else 0
-    
-    file_line = lines[0].split('|')[0].strip()
-    filename = Path(new_path if ' => ' not in file_line else file_line.split(' => ')[-1].strip('{}')).name
-    
-    if insertions == deletions == 0:
-        print(f"{filename}: no changes")
-    elif deletions == 0:
-        print(f"{filename}: {insertions} insertions(+)")
-    elif insertions == 0:
-        print(f"{filename}: {deletions} deletions(-)")
-    else:
-        print(f"{filename}: {insertions} insertions(+), {deletions} deletions(-)")
+    try:
+        if old_path is None or old_path == '/dev/null':
+            # New file
+            insertions = sum(1 for _ in open(new_path, 'r', encoding='utf-8'))
+            deletions = 0
+        else:
+            # Read both files and compute diff
+            with open(old_path, 'r', encoding='utf-8') as f:
+                old_content = f.read()
+            with open(new_path, 'r', encoding='utf-8') as f:
+                new_content = f.read()
+            
+            insertions, deletions = _compute_git_stat_diff(old_content, new_content)
+        
+        # Format output similar to git diff --stat
+        if insertions == 0 and deletions == 0:
+            print(f"{filename}: no changes")
+        elif deletions == 0:
+            print(f"{filename}: {insertions} insertions(+)")
+        elif insertions == 0:
+            print(f"{filename}: {deletions} deletions(-)")
+        else:
+            print(f"{filename}: {insertions} insertions(+), {deletions} deletions(-)")
+            
+    except Exception as e:
+        logger.error(f"Error computing diff for {filename}: {e}")
+        print(f"{filename}: error computing diff")
 
 def parse_plain_response(llm_response: str) -> str:
     """
