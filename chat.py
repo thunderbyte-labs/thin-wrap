@@ -282,8 +282,8 @@ class LLMChat:
             input_tokens = estimate_tokens(query)
             output_tokens = estimate_tokens(response)
 
-            print(f"\n📊 Response's tokens statistics (estimated):")
-            print(f"   Input      | Actual Output")
+            print(f"\n📊 Response's tokens statistics:")
+            print(f"   Input      | Output")
             print(f"   {input_tokens:<10} | {output_tokens:<10}")
             print(f"{UI.colorize('-' * 65, 'GREEN')}")
 
@@ -343,4 +343,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
