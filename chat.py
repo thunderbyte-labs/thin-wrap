@@ -234,7 +234,12 @@ class LLMChat:
                 continue
 
             logger.debug("Handling non-command user message")
-            self._send_message(user_input)
+            send_result = self._send_message(user_input)
+            
+            # If user chose to insert files, return to editor with the message
+            if send_result == 'insert_files':
+                next_default = user_input
+                continue
             
         logger.debug("Exiting main chat loop")
         self._save_and_exit()
@@ -249,7 +254,13 @@ class LLMChat:
         logger.debug(f"Session saved to: {log_path}")
 
     def _send_message(self, message):
-        """Send message to LLM with specified token limit"""
+        """
+        Send message to LLM with specified token limit.
+        
+        Returns:
+            'insert_files' if user chose to insert files (abort send),
+            None otherwise
+        """
         model = self.llm_client.get_current_model()
         logger.debug(f"Using model: {model}")
 
@@ -258,6 +269,11 @@ class LLMChat:
         query, response_parser = generate_query(
             self.root_dir, self.readable_files, self.editable_files, message
         )
+        
+        # Check if user chose to insert files (abort send)
+        if query is None and response_parser is None:
+            return 'insert_files'
+        
         query = clean_text(query)
 
         # Send message to LLM client (which handles automatic session saving)
@@ -282,13 +298,13 @@ class LLMChat:
             input_tokens = estimate_tokens(query)
             output_tokens = estimate_tokens(response)
 
-            print(f"\n📊 Response's tokens statistics:")
+            print(f"\n? Response's tokens statistics:")
             print(f"   Input      | Output")
             print(f"   {input_tokens:<10} | {output_tokens:<10}")
             print(f"{UI.colorize('-' * 65, 'GREEN')}")
 
         except Exception as e:
-            print(f"   ⚠️ Could not estimate token usage: {e}")
+            print(f"   ?? Could not estimate token usage: {e}")
 
 def parse_arguments():
     """Parse command line arguments"""
