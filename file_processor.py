@@ -330,14 +330,18 @@ def should_generate_plain_query(readable_files: list[str], writable_files: list[
     )
     
     while True:
-        response = input("[Y/n/i]: ").strip().lower()
+        try:
+            response = input("[Y/n/i]: ").strip().lower()
+        except KeyboardInterrupt:
+            # Ctrl+C should behave like choosing 'i' to insert files
+            print()  # Add a newline after ^C
+            return ('insert_files', False)
         
         if response == '' or response in {'y', 'yes'}:
             return ('send_plain', True)
         if response in {'n', 'no'}:
             return ('send_with_files', False)
         if response in {'i', 'insert'}:
-            # Signal to caller to abort send and return to text editor
             return ('insert_files', False)
         
         print("Invalid input. Please enter 'y', 'n', or 'i' (or press Enter for default 'y').")
@@ -381,4 +385,5 @@ def generate_query(
     else:
         query = generate_file_query(root_dir, readable_files, writable_files, user_request)
         return query, parse_xml_response
+
 
