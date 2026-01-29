@@ -116,7 +116,7 @@ COMMANDS = {
     '/bye': 'Exit (auto-saves session log)',
     '/?': 'Help for a command', 
     '/help': 'Help for a command',
-    '/model': 'Switch AI model (claude/deepseek)',
+    '/model': 'Switch AI model',
     '/reload': 'Reload a previous conversation',
     '/rootdir': 'Show or set project root directory',
     '/files': 'Handle Ctrl+B file context menu'

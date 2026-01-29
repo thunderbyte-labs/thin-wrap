@@ -60,6 +60,10 @@ class LLMClient:
 
     def choose_model(self):
         """Let user choose which LLM model to use"""
+        return self.interactive_model_selection()
+
+    def interactive_model_selection(self):
+        """Display interactive model selection menu and return selected model"""
         print("Available LLM Models:")
         for i, (model, details) in enumerate(config.SUPPORTED_MODELS.items(), 1):
             endpoint = details.get('api_base_url')
@@ -258,4 +262,5 @@ class LLMClient:
             text_utils.clear_tokenizer_cache()
         except Exception:
             pass  # Ignore errors during cleanup
+
 

@@ -59,12 +59,17 @@ class CommandHandler:
 
     def _handle_model(self, args):
         """Switch or show current model"""
-        if args:
+        print(f"Current model: {self.llm_client.get_current_model()}")
+        if not args:
+            # No arguments provided - show interactive model selection menu
+            print("Interactive model selection:")
+            selected_model = self.llm_client.interactive_model_selection()
+            if selected_model:
+                self.llm_client.switch_model(selected_model)
+        else:
+            # Arguments provided - use the old behavior
             new_model = args[0]
             self.llm_client.switch_model(new_model)
-        else:
-            current = self.llm_client.get_current_model()
-            print(f"Current model: {current}")
 
     def _handle_reload(self):
         """Reload a previous conversation from the current project root"""
@@ -165,5 +170,6 @@ class CommandHandler:
                     self.chat_app.set_root_dir(selected_root)
             except (KeyboardInterrupt, EOFError):
                 print("\nRoot directory change cancelled.")
+
 
 
