@@ -305,7 +305,7 @@ def parse_xml_response(llm_response: str) -> str:
     return comments.strip()
 
 
-def should_generate_plain_query(readable_files: list[str], writable_files: list[str]) -> bool:
+def should_generate_plain_query(readable_files: list[str], writable_files: list[str]) -> tuple[str, bool]:
     """
     Determine if a plain query (without XML formatting) should be generated.
     
@@ -314,27 +314,33 @@ def should_generate_plain_query(readable_files: list[str], writable_files: list[
         writable_files: List of writable file paths
         
     Returns:
-        True if there are no readable or writable files and the user confirms
-        they want to send a plain message, False otherwise
+        Tuple of (action, should_generate_plain) where:
+        - action: 'send_plain', 'send_with_files', or 'insert_files'
+        - should_generate_plain: True for plain message, False for file context
     """
     if len(readable_files) + len(writable_files) > 0:
-        return False
+        return ('send_with_files', False)
     
     print(
-        "No Editable or Readable files are included in the context.\n"
-        "Do you want to send purely your message? "
-        "(Select 'n' if you are expecting new files to be created)"
+        "No files are currently included in the context. "
+        "What would you like to do?\n"
+        "  [Y] - Send a plain message (without file context and file creation)\n"
+        "  [n] - Send with file context (allow thin-wrap to create files)\n"
+        "  [i] - Insert a file into the context (returns to text editor)\n"
     )
     
     while True:
-        response = input("(y/n): ").strip().lower()
+        response = input("[Y/n/i]: ").strip().lower()
         
-        if response in {'y', 'yes'}:
-            return True
+        if response == '' or response in {'y', 'yes'}:
+            return ('send_plain', True)
         if response in {'n', 'no'}:
-            return False
+            return ('send_with_files', False)
+        if response in {'i', 'insert'}:
+            # Signal to caller to abort send and return to text editor
+            return ('insert_files', False)
         
-        print("Invalid input. Please enter 'y' for yes or 'n' for no.")
+        print("Invalid input. Please enter 'y', 'n', or 'i' (or press Enter for default 'y').")
 
 
 def generate_plain_query(user_request: str) -> str:
@@ -360,12 +366,19 @@ def generate_query(
     Generate the query and return the appropriate parser function.
     
     Returns:
-        (query_string, parser_function)
+        (query_string, parser_function) or (None, None) if user chose to insert files
         where parser_function is either parse_xml_response or parse_plain_response
     """
-    if should_generate_plain_query(readable_files, writable_files):
+    action, should_generate_plain = should_generate_plain_query(readable_files, writable_files)
+    
+    if action == 'insert_files':
+        # User chose to insert files - abort send and return to text editor
+        print("Returning to text editor. Use Ctrl+B to add files before sending.")
+        return None, None
+    elif should_generate_plain:
         query = generate_plain_query(user_request)
         return query, parse_plain_response
     else:
         query = generate_file_query(root_dir, readable_files, writable_files, user_request)
         return query, parse_xml_response
+
