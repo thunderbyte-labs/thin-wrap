@@ -35,6 +35,7 @@ jobs:
           # Default is --onedir bundle; produces dist/thin-wrap/ directory
 
       - name: Package asset as zip
+        shell: bash
         run: |
           cd dist
           if [[ ${{ runner.os }} == 'Linux' ]]; then

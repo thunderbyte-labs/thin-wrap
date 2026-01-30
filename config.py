@@ -13,6 +13,8 @@ import logging
 from rich.logging import RichHandler
 import platform
 from platformdirs import user_data_dir
+import json
+from pathlib import Path
 
 # Application Configuration
 APP_NAME = "thin-wrap"
@@ -44,37 +46,64 @@ def setup_logging():
             ]
     )
 
-# LLM Configuration
-SUPPORTED_MODELS = {
-    "gemini-2.5-flash": {
-        "api_key": "GOOGLE_API_KEY",
-        "api_base_url": "https://generativelanguage.googleapis.com/v1beta/openai/"
-    },
-    "claude-sonnet-4-20250514": {
-        "api_key": "ANTHROPIC_API_KEY",
-        "api_base_url": "https://api.anthropic.com/v1/"
-    },
-    "deepseek-reasoner": {
-        "api_key": "DEEPSEEK_API_KEY", 
-        "api_base_url": "https://api.deepseek.com/v1"
-    },
-    "x-ai/grok-4.1-fast": {
-        "api_key": "OPENROUTER_API_KEY", 
-        "api_base_url": "https://openrouter.ai/api/v1"
-    },
-    "anthropic/claude-sonnet-4.5": {
-        "api_key": "OPENROUTER_API_KEY", 
-        "api_base_url": "https://openrouter.ai/api/v1"
-    },
-    "hera/qwen": {
-        "api_key": "HERA_API_KEY", 
-        "api_base_url": "https://hera-llm.thunderbyte.ovh/v1"
-    },
-    "baidu/ernie-4.5-300b-a47b": {
-        "api_key": "OPENROUTER_API_KEY",
-        "api_base_url": "https://openrouter.ai/api/v1",
-    }
-}
+# LLM Configuration - will be loaded from models.json
+SUPPORTED_MODELS = {}
+
+def load_models_config(config_path=None):
+    """
+    Load models configuration from models.json file.
+    
+    Args:
+        config_path: Optional path to models.json. If None, will search in:
+                    1. Same directory as the executable/script
+                    2. Current working directory
+    
+    Returns:
+        dict: Models configuration
+    
+    Raises:
+        FileNotFoundError: If models.json cannot be found
+        json.JSONDecodeError: If models.json is invalid
+    """
+    global SUPPORTED_MODELS
+    
+    if config_path:
+        config_file = Path(config_path)
+    else:
+        # Try to find models.json in the script/executable directory
+        script_dir = Path(__file__).parent.resolve()
+        config_file = script_dir / "models.json"
+        
+        # If not found, try current working directory
+        if not config_file.exists():
+            config_file = Path.cwd() / "models.json"
+    
+    if not config_file.exists():
+        raise FileNotFoundError(
+            f"models.json not found. Searched in:\n"
+            f"  - {Path(__file__).parent.resolve() / 'models.json'}\n"
+            f"  - {Path.cwd() / 'models.json'}\n"
+            f"Please create models.json or specify path with --config"
+        )
+    
+    try:
+        with open(config_file, 'r', encoding='utf-8') as f:
+            SUPPORTED_MODELS = json.load(f)
+        
+        # Validate that each model has required fields
+        for model_name, model_config in SUPPORTED_MODELS.items():
+            if 'api_key' not in model_config:
+                raise ValueError(f"Model '{model_name}' missing 'api_key' field")
+            if 'api_base_url' not in model_config:
+                raise ValueError(f"Model '{model_name}' missing 'api_base_url' field")
+        
+        return SUPPORTED_MODELS
+    except json.JSONDecodeError as e:
+        raise json.JSONDecodeError(
+            f"Invalid JSON in {config_file}: {e.msg}",
+            e.doc,
+            e.pos
+        )
 
 # Token Configuration
 MIN_TOKENS = 100
@@ -121,5 +150,3 @@ COMMANDS = {
     '/rootdir': 'Show or set project root directory',
     '/files': 'Handle Ctrl+B file context menu'
 }
-
-

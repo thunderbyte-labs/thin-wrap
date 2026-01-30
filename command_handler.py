@@ -58,7 +58,14 @@ class CommandHandler:
         print("Conversation history cleared.")
 
     def _handle_model(self, args):
-        """Switch or show current model"""
+        """Switch or show current model - reloads models.json on each call"""
+        # Reload models configuration to pick up any changes
+        try:
+            config.load_models_config(self.chat_app.config_path)
+            print(f"{UI.colorize('✓', 'BRIGHT_GREEN')} Reloaded models configuration")
+        except Exception as e:
+            print(f"{UI.colorize('Warning:', 'BRIGHT_YELLOW')} Failed to reload models configuration: {e}")
+        
         print(f"Current model: {self.llm_client.get_current_model()}")
         if not args:
             # No arguments provided - show interactive model selection menu
@@ -170,6 +177,3 @@ class CommandHandler:
                     self.chat_app.set_root_dir(selected_root)
             except (KeyboardInterrupt, EOFError):
                 print("\nRoot directory change cancelled.")
-
-
-

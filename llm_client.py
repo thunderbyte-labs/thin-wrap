@@ -60,6 +60,13 @@ class LLMClient:
 
     def choose_model(self):
         """Let user choose which LLM model to use"""
+        # Reload models configuration to pick up any changes
+        try:
+            config.load_models_config()
+            logger.debug(f"Reloaded {len(config.SUPPORTED_MODELS)} models from configuration")
+        except Exception as e:
+            logger.warning(f"Failed to reload models configuration: {e}")
+        
         return self.interactive_model_selection()
 
     def interactive_model_selection(self):
@@ -81,6 +88,13 @@ class LLMClient:
 
     def switch_model(self, new_model):
         """Switch to a different LLM model/model"""
+        # Reload models configuration to pick up any changes
+        try:
+            config.load_models_config()
+            logger.debug(f"Reloaded {len(config.SUPPORTED_MODELS)} models from configuration")
+        except Exception as e:
+            logger.warning(f"Failed to reload models configuration: {e}")
+        
         if new_model not in config.SUPPORTED_MODELS:
             print(f"Error: Unknown model '{new_model}'. Available: {', '.join(config.SUPPORTED_MODELS.keys())}")
             return False
@@ -262,5 +276,3 @@ class LLMClient:
             text_utils.clear_tokenizer_cache()
         except Exception:
             pass  # Ignore errors during cleanup
-
-
