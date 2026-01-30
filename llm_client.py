@@ -30,7 +30,8 @@ class LLMClient:
             raise TypeError("model cannot be None")
 
         self.current_model = model
-        model_config = config.SUPPORTED_MODELS[model]
+        models = config.get_models()
+        model_config = models[model]
         api_key = os.getenv(model_config["api_key"]) or model_config["api_key"]
         api_base_url = model_config["api_base_url"]
 
@@ -60,43 +61,31 @@ class LLMClient:
 
     def choose_model(self):
         """Let user choose which LLM model to use"""
-        # Reload models configuration to pick up any changes
-        try:
-            config.load_models_config()
-            logger.debug(f"Reloaded {len(config.SUPPORTED_MODELS)} models from configuration")
-        except Exception as e:
-            logger.warning(f"Failed to reload models configuration: {e}")
-        
         return self.interactive_model_selection()
 
     def interactive_model_selection(self):
         """Display interactive model selection menu and return selected model"""
+        models = config.get_models()
         print("Available LLM Models:")
-        for i, (model, details) in enumerate(config.SUPPORTED_MODELS.items(), 1):
+        for i, (model, details) in enumerate(models.items(), 1):
             endpoint = details.get('api_base_url')
             endpoint = endpoint.removeprefix("https://").removeprefix("http://").rstrip('/')
             print(f"{i}. {UI.colorize(model,'BRIGHT_GREEN')}@{endpoint}")
         while True:
-            choice = input(f"Choose model (1-{len(config.SUPPORTED_MODELS)}): ").strip()
+            choice = input(f"Choose model (1-{len(models)}): ").strip()
             try:
                 choice_idx = int(choice) - 1
-                if 0 <= choice_idx < len(config.SUPPORTED_MODELS):
-                    return list(config.SUPPORTED_MODELS.keys())[choice_idx]
+                if 0 <= choice_idx < len(models):
+                    return list(models.keys())[choice_idx]
             except ValueError:
                 pass
-            print(f"Please enter a number between 1 and {len(config.SUPPORTED_MODELS)}")
+            print(f"Please enter a number between 1 and {len(models)}")
 
     def switch_model(self, new_model):
         """Switch to a different LLM model/model"""
-        # Reload models configuration to pick up any changes
-        try:
-            config.load_models_config()
-            logger.debug(f"Reloaded {len(config.SUPPORTED_MODELS)} models from configuration")
-        except Exception as e:
-            logger.warning(f"Failed to reload models configuration: {e}")
-        
-        if new_model not in config.SUPPORTED_MODELS:
-            print(f"Error: Unknown model '{new_model}'. Available: {', '.join(config.SUPPORTED_MODELS.keys())}")
+        models = config.get_models()
+        if new_model not in models:
+            print(f"Error: Unknown model '{new_model}'. Available: {', '.join(models.keys())}")
             return False
 
         if new_model == self.current_model:
@@ -276,3 +265,4 @@ class LLMClient:
             text_utils.clear_tokenizer_cache()
         except Exception:
             pass  # Ignore errors during cleanup
+

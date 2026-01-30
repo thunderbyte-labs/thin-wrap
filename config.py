@@ -15,6 +15,7 @@ import platform
 from platformdirs import user_data_dir
 import json
 from pathlib import Path
+import sys
 
 # Application Configuration
 APP_NAME = "thin-wrap"
@@ -46,64 +47,141 @@ def setup_logging():
             ]
     )
 
-# LLM Configuration - will be loaded from models.json
-SUPPORTED_MODELS = {}
+# LLM Configuration - will be loaded from config.json
+# Use get_models() instead of accessing SUPPORTED_MODELS directly
 
-def load_models_config(config_path=None):
+# Global variable to store config file path once determined
+_CONFIG_PATH = None
+
+def set_config_path(config_path: str | None = None) -> None:
     """
-    Load models configuration from models.json file.
+    Set the configuration file path.
     
     Args:
-        config_path: Optional path to models.json. If None, will search in:
+        config_path: Path to config.json file. If None, will be determined automatically
+    """
+    global _CONFIG_PATH
+    _CONFIG_PATH = config_path
+
+def _get_script_dir() -> Path:
+    """Get directory where script/executable is located (supports pyinstaller)."""
+    if getattr(sys, 'frozen', False):
+        # Running as compiled executable (pyinstaller)
+        return Path(sys.executable).parent.resolve()
+    else:
+        # Running as script
+        return Path(__file__).parent.resolve()
+
+def _load_config_internal(config_path: str | None = None) -> dict:
+    """
+    Internal method to load configuration from config.json file.
+    
+    Args:
+        config_path: Optional path to config.json. If None, will search in:
                     1. Same directory as the executable/script
                     2. Current working directory
+                    3. Interactive selection if not found
     
     Returns:
-        dict: Models configuration
+        dict: Complete configuration dictionary
     
     Raises:
-        FileNotFoundError: If models.json cannot be found
-        json.JSONDecodeError: If models.json is invalid
+        FileNotFoundError: If config.json cannot be found
+        json.JSONDecodeError: If config.json is invalid
+        ValueError: If config.json is missing required sections
     """
-    global SUPPORTED_MODELS
+    global _CONFIG_PATH
     
-    if config_path:
-        config_file = Path(config_path)
+    # Determine which path to use
+    search_path = config_path or _CONFIG_PATH
+    
+    if search_path:
+        config_file = Path(search_path).expanduser().resolve()
+        if not config_file.exists():
+            raise FileNotFoundError(f"Config file not found: {config_file}")
     else:
-        # Try to find models.json in the script/executable directory
-        script_dir = Path(__file__).parent.resolve()
-        config_file = script_dir / "models.json"
+        # Try to find config.json in the script/executable directory
+        script_dir = _get_script_dir()
+        config_file = script_dir / "config.json"
         
         # If not found, try current working directory
         if not config_file.exists():
-            config_file = Path.cwd() / "models.json"
+            config_file = Path.cwd() / "config.json"
+        
+        # If still not found, prompt user for interactive selection
+        if not config_file.exists():
+            try:
+                from ui import UI
+                print(f"{UI.colorize('Config file not found.', 'BRIGHT_YELLOW')}")
+                print(f"Searched in:")
+                print(f"  - {script_dir / 'config.json'}")
+                print(f"  - {Path.cwd() / 'config.json'}")
+                
+                config_file_path = UI.interactive_selection(
+                    prompt_title="Config file selection:",
+                    prompt_message="Enter path to config.json file (Tab for completion, ~ for home):",
+                    no_items_message="No config file found.",
+                    items=[],  # No history items
+                    item_formatter=lambda x: x,
+                    allow_new=True,
+                    new_item_validator=lambda p: p.is_file() and p.name == "config.json",
+                    new_item_error="Not a valid config.json file"
+                )
+                
+                if not config_file_path:
+                    raise FileNotFoundError("No config file selected.")
+                
+                config_file = Path(config_file_path).expanduser().resolve()
+            except ImportError:
+                # UI module might not be available in some contexts
+                raise FileNotFoundError(
+                    f"config.json not found. Searched in:\n"
+                    f"  - {script_dir / 'config.json'}\n"
+                    f"  - {Path.cwd() / 'config.json'}\n"
+                    f"Please create config.json or specify path with --config"
+                )
     
-    if not config_file.exists():
-        raise FileNotFoundError(
-            f"models.json not found. Searched in:\n"
-            f"  - {Path(__file__).parent.resolve() / 'models.json'}\n"
-            f"  - {Path.cwd() / 'models.json'}\n"
-            f"Please create models.json or specify path with --config"
-        )
+    # Store the resolved path for future calls
+    _CONFIG_PATH = str(config_file)
     
     try:
         with open(config_file, 'r', encoding='utf-8') as f:
-            SUPPORTED_MODELS = json.load(f)
-        
-        # Validate that each model has required fields
-        for model_name, model_config in SUPPORTED_MODELS.items():
-            if 'api_key' not in model_config:
-                raise ValueError(f"Model '{model_name}' missing 'api_key' field")
-            if 'api_base_url' not in model_config:
-                raise ValueError(f"Model '{model_name}' missing 'api_base_url' field")
-        
-        return SUPPORTED_MODELS
+            config_data = json.load(f)
     except json.JSONDecodeError as e:
         raise json.JSONDecodeError(
             f"Invalid JSON in {config_file}: {e.msg}",
             e.doc,
             e.pos
         )
+    
+    # Validate that config has required sections
+    if 'models' not in config_data:
+        raise ValueError(f"Config file {config_file} must have 'models' section")
+    
+    # Validate each model has required fields
+    for model_name, model_config in config_data['models'].items():
+        if 'api_key' not in model_config:
+            raise ValueError(f"Model '{model_name}' missing 'api_key' field")
+        if 'api_base_url' not in model_config:
+            raise ValueError(f"Model '{model_name}' missing 'api_base_url' field")
+    
+    return config_data
+
+def get_models() -> dict:
+    """
+    Get the models configuration from config.json.
+    Re-reads the file every time it's called to pick up changes.
+    
+    Returns:
+        dict: Models configuration dictionary
+    
+    Raises:
+        FileNotFoundError: If config.json cannot be found
+        json.JSONDecodeError: If config.json is invalid
+        ValueError: If config.json is missing required sections
+    """
+    config_data = _load_config_internal()
+    return config_data.get('models', {})
 
 # Token Configuration
 MIN_TOKENS = 100
@@ -150,3 +228,4 @@ COMMANDS = {
     '/rootdir': 'Show or set project root directory',
     '/files': 'Handle Ctrl+B file context menu'
 }
+
