@@ -1,5 +1,8 @@
 *.pyc
+*.thin-wrap.*.py
+thin-wrap.spec
 
 .venv
 .idea
-*.thin-wrap.*.py
+build
+dist
