@@ -67,6 +67,9 @@ class CommandHandler:
             selected_model = self.llm_client.interactive_model_selection()
             if selected_model:
                 self.llm_client.switch_model(selected_model)
+            elif selected_model is None:
+                # User cancelled with Ctrl+C while already having a model
+                print(f"{UI.colorize('Returning to conversation...', 'BRIGHT_CYAN')}")
         else:
             # Arguments provided - use the old behavior
             new_model = args[0]
@@ -171,4 +174,5 @@ class CommandHandler:
                     self.chat_app.set_root_dir(selected_root)
             except (KeyboardInterrupt, EOFError):
                 print("\nRoot directory change cancelled.")
+
 

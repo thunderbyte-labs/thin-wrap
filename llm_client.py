@@ -72,7 +72,19 @@ class LLMClient:
             endpoint = endpoint.removeprefix("https://").removeprefix("http://").rstrip('/')
             print(f"{i}. {UI.colorize(model,'BRIGHT_GREEN')}@{endpoint}")
         while True:
-            choice = input(f"Choose model (1-{len(models)}): ").strip()
+            try:
+                choice = input(f"Choose model (1-{len(models)}): ").strip()
+            except KeyboardInterrupt:
+                # If we have an active model, return to conversation
+                if self.current_model is not None:
+                    print()  # Add a newline after ^C
+                    print(f"{UI.colorize('Model selection cancelled.', 'BRIGHT_YELLOW')}")
+                    print(f"{UI.colorize('Keeping current model:', 'BRIGHT_CYAN')} {self.current_model}")
+                    return None  # Signal cancellation
+                else:
+                    # No active model - this is during initialization, re-raise to exit
+                    raise
+
             try:
                 choice_idx = int(choice) - 1
                 if 0 <= choice_idx < len(models):
@@ -265,4 +277,5 @@ class LLMClient:
             text_utils.clear_tokenizer_cache()
         except Exception:
             pass  # Ignore errors during cleanup
+
 
