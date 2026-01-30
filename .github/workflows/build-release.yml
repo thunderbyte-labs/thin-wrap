@@ -34,15 +34,25 @@ jobs:
           pyinstaller --console --name thin-wrap chat.py
           # Default is --onedir bundle; produces dist/thin-wrap/ directory
 
+      - name: Include sample config.json
+        shell: bash {0}
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            powershell -Command "New-Item -ItemType Directory -Path dist\thin-wrap -Force | Out-Null; Copy-Item -Path config.json -Destination dist\thin-wrap\config.json -Force"
+          else
+            mkdir -p dist/thin-wrap
+            cp config.json dist/thin-wrap/config.json
+          fi
+
       - name: Package asset as zip
-        shell: bash
+        shell: bash {0}
         run: |
           cd dist
-          if [[ ${{ runner.os }} == 'Linux' ]]; then
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
             zip -r ../thin-wrap-linux.zip thin-wrap
-          elif [[ ${{ runner.os }} == 'macOS' ]]; then
+          elif [[ "${{ runner.os }}" == "macOS" ]]; then
             zip -r ../thin-wrap-macos.zip thin-wrap
-          elif [[ ${{ runner.os }} == 'Windows' ]]; then
+          elif [[ "${{ runner.os }}" == "Windows" ]]; then
             powershell Compress-Archive -Path thin-wrap -DestinationPath ../thin-wrap-windows.zip
           fi
 
