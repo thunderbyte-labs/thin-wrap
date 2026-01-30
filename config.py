@@ -11,7 +11,6 @@ CROSS-PLATFORM COMPATIBILITY NOTES:
 import os
 import logging
 from rich.logging import RichHandler
-import platform
 from platformdirs import user_data_dir
 import json
 from pathlib import Path
@@ -165,6 +164,15 @@ def _load_config_internal(config_path: str | None = None) -> dict:
         if 'api_base_url' not in model_config:
             raise ValueError(f"Model '{model_name}' missing 'api_base_url' field")
     
+    # Set defaults for backup section if not present
+    if 'backup' not in config_data:
+        config_data['backup'] = {}
+    
+    backup_config = config_data['backup']
+    backup_config.setdefault('timestamp_format', '%Y%m%d%H%M%S')
+    backup_config.setdefault('extra_string', 'thin-wrap')
+    backup_config.setdefault('backup_old_file', True)
+    
     return config_data
 
 def get_models() -> dict:
@@ -182,6 +190,25 @@ def get_models() -> dict:
     """
     config_data = _load_config_internal()
     return config_data.get('models', {})
+
+def backup() -> dict:
+    """
+    Get the backup configuration from config.json.
+    Re-reads the file every time it's called to pick up changes.
+    
+    Returns:
+        dict: Backup configuration dictionary with keys:
+            - timestamp_format: str, format for datetime timestamp
+            - extra_string: str or None, extra string to include in backup filename
+            - backup_old_file: bool, whether to backup old file before editing
+    
+    Raises:
+        FileNotFoundError: If config.json cannot be found
+        json.JSONDecodeError: If config.json is invalid
+        ValueError: If config.json is missing required sections
+    """
+    config_data = _load_config_internal()
+    return config_data.get('backup', {})
 
 # Token Configuration
 MIN_TOKENS = 100
@@ -228,4 +255,5 @@ COMMANDS = {
     '/rootdir': 'Show or set project root directory',
     '/files': 'Handle Ctrl+B file context menu'
 }
+
 

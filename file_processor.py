@@ -263,18 +263,37 @@ def parse_xml_response(llm_response: str) -> str:
     new_section = _extract_section_content(llm_response, Xml.NEW_FILES)
     comments = _extract_section_content(llm_response, Xml.COMMENTS)
     
+    # Get backup configuration (reloads config each time)
+    backup_config = config.backup()
+    timestamp_format = backup_config.get('timestamp_format', '%Y%m%d%H%M%S')
+    extra_string = backup_config.get('extra_string', 'thin-wrap')
+    backup_old_file = backup_config.get('backup_old_file', True)
+    
     for path_str, content in _extract_files(edited_section, Xml.EDITED_FILE):
         try:
             path = Path(path_str)
             _secure_path(path, should_exist=True)
             
-            timestamp = datetime.datetime.now(datetime.UTC).strftime('%Y%m%d%H%M%S')
-            backup = path.with_name(f"{path.stem}.{config.APP_NAME}.{timestamp}{path.suffix}")
-            os.replace(path, backup)
+            timestamp = datetime.datetime.now(datetime.UTC).strftime(timestamp_format)
             
-            _write_file(path, content, src_for_perms=backup)
-            print(f"Edited: {path}")
-            _diff_report(str(backup), str(path))
+            # Build backup filename
+            if extra_string:
+                backup = path.with_name(f"{path.stem}.{extra_string}.{timestamp}{path.suffix}")
+            else:
+                backup = path.with_name(f"{path.stem}.{timestamp}{path.suffix}")
+            
+            if backup_old_file:
+                # Original behavior: backup old file, then write new content to original path
+                os.replace(path, backup)
+                _write_file(path, content, src_for_perms=backup)
+                print(f"Edited: {path}")
+                _diff_report(str(backup), str(path))
+            else:
+                # New behavior: write new content to timestamped file, leave original unchanged
+                _write_file(backup, content, src_for_perms=path)
+                print(f"Created timestamped version: {backup}")
+                _diff_report(str(path), str(backup))
+                
         except Exception as e:
             logger.error(f"Failed to edit {path_str}: {e}")
             print(f"ERROR editing {path_str}: {e}")
@@ -385,5 +404,6 @@ def generate_query(
     else:
         query = generate_file_query(root_dir, readable_files, writable_files, user_request)
         return query, parse_xml_response
+
 
 

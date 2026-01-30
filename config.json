@@ -40,5 +40,10 @@
       "api_key": "HERA_API_KEY",
       "api_base_url": "https://hera-llm.thunderbyte.ovh/v1"
     }
+  },
+  "backup": {
+    "timestamp_format": "%Y%m%d%H%M%S",
+    "extra_string": "thin-wrap",
+    "backup_old_file": true
   }
 }
