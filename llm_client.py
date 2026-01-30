@@ -109,8 +109,6 @@ class LLMClient:
         try:
             self.setup_api_key(new_model)
             print(f"✓ Successfully switched to {new_model}. Conversation history preserved.")
-            # Clear tokenizer cache when switching models
-            text_utils.clear_tokenizer_cache()
             return True
         except Exception as e:
             print(f"✗ Failed to switch to {new_model}: {e}")
@@ -211,9 +209,6 @@ class LLMClient:
             if self.session_logger:
                 self.session_logger.save_session(self.conversation_history)
 
-            # Clear tokenizer cache after each successful response to prevent memory buildup
-            text_utils.clear_tokenizer_cache()
-
             return response
         except KeyboardInterrupt:
             print(f"\n{UI.colorize('Request interrupted by user (Ctrl+C)', 'BRIGHT_YELLOW')}")
@@ -229,8 +224,6 @@ class LLMClient:
             # Even on error, save the current state
             if self.session_logger:
                 self.session_logger.save_session(self.conversation_history)
-            # Clear tokenizer cache on error as well
-            text_utils.clear_tokenizer_cache()
             return f"Error communicating with {self.current_model}: {e}"
 
     def _send_message_to_openai_client(self):
@@ -253,8 +246,6 @@ class LLMClient:
         self.conversation_history = []
         if self.session_logger:
             self.session_logger.save_session(self.conversation_history)
-        # Clear tokenizer cache when clearing conversation
-        text_utils.clear_tokenizer_cache()
 
     def load_conversation(self, conversation_history):
         """Load a conversation history into the client"""
@@ -262,8 +253,6 @@ class LLMClient:
         # Save the loaded conversation to ensure it's persisted
         if self.session_logger:
             self.session_logger.save_session(self.conversation_history)
-        # Clear tokenizer cache when loading a new conversation
-        text_utils.clear_tokenizer_cache()
 
     def get_current_model(self):
         """Get current model information"""
@@ -272,10 +261,5 @@ class LLMClient:
     def __del__(self):
         """Cleanup when object is destroyed"""
         self._cleanup_proxy_context()
-        # Clear tokenizer cache on destruction to prevent memory leaks
-        try:
-            text_utils.clear_tokenizer_cache()
-        except Exception:
-            pass  # Ignore errors during cleanup
 
 
