@@ -30,7 +30,8 @@ class LLMClient:
             raise TypeError("model cannot be None")
 
         self.current_model = model
-        model_config = config.SUPPORTED_MODELS[model]
+        models = config.get_models()
+        model_config = models[model]
         api_key = os.getenv(model_config["api_key"]) or model_config["api_key"]
         api_base_url = model_config["api_base_url"]
 
@@ -60,43 +61,43 @@ class LLMClient:
 
     def choose_model(self):
         """Let user choose which LLM model to use"""
-        # Reload models configuration to pick up any changes
-        try:
-            config.load_models_config()
-            logger.debug(f"Reloaded {len(config.SUPPORTED_MODELS)} models from configuration")
-        except Exception as e:
-            logger.warning(f"Failed to reload models configuration: {e}")
-        
         return self.interactive_model_selection()
 
     def interactive_model_selection(self):
         """Display interactive model selection menu and return selected model"""
+        models = config.get_models()
         print("Available LLM Models:")
-        for i, (model, details) in enumerate(config.SUPPORTED_MODELS.items(), 1):
+        for i, (model, details) in enumerate(models.items(), 1):
             endpoint = details.get('api_base_url')
             endpoint = endpoint.removeprefix("https://").removeprefix("http://").rstrip('/')
             print(f"{i}. {UI.colorize(model,'BRIGHT_GREEN')}@{endpoint}")
         while True:
-            choice = input(f"Choose model (1-{len(config.SUPPORTED_MODELS)}): ").strip()
+            try:
+                choice = input(f"Choose model (1-{len(models)}): ").strip()
+            except KeyboardInterrupt:
+                # If we have an active model, return to conversation
+                if self.current_model is not None:
+                    print()  # Add a newline after ^C
+                    print(f"{UI.colorize('Model selection cancelled.', 'BRIGHT_YELLOW')}")
+                    print(f"{UI.colorize('Keeping current model:', 'BRIGHT_CYAN')} {self.current_model}")
+                    return None  # Signal cancellation
+                else:
+                    # No active model - this is during initialization, re-raise to exit
+                    raise
+
             try:
                 choice_idx = int(choice) - 1
-                if 0 <= choice_idx < len(config.SUPPORTED_MODELS):
-                    return list(config.SUPPORTED_MODELS.keys())[choice_idx]
+                if 0 <= choice_idx < len(models):
+                    return list(models.keys())[choice_idx]
             except ValueError:
                 pass
-            print(f"Please enter a number between 1 and {len(config.SUPPORTED_MODELS)}")
+            print(f"Please enter a number between 1 and {len(models)}")
 
     def switch_model(self, new_model):
         """Switch to a different LLM model/model"""
-        # Reload models configuration to pick up any changes
-        try:
-            config.load_models_config()
-            logger.debug(f"Reloaded {len(config.SUPPORTED_MODELS)} models from configuration")
-        except Exception as e:
-            logger.warning(f"Failed to reload models configuration: {e}")
-        
-        if new_model not in config.SUPPORTED_MODELS:
-            print(f"Error: Unknown model '{new_model}'. Available: {', '.join(config.SUPPORTED_MODELS.keys())}")
+        models = config.get_models()
+        if new_model not in models:
+            print(f"Error: Unknown model '{new_model}'. Available: {', '.join(models.keys())}")
             return False
 
         if new_model == self.current_model:
@@ -108,8 +109,6 @@ class LLMClient:
         try:
             self.setup_api_key(new_model)
             print(f"✓ Successfully switched to {new_model}. Conversation history preserved.")
-            # Clear tokenizer cache when switching models
-            text_utils.clear_tokenizer_cache()
             return True
         except Exception as e:
             print(f"✗ Failed to switch to {new_model}: {e}")
@@ -210,9 +209,6 @@ class LLMClient:
             if self.session_logger:
                 self.session_logger.save_session(self.conversation_history)
 
-            # Clear tokenizer cache after each successful response to prevent memory buildup
-            text_utils.clear_tokenizer_cache()
-
             return response
         except KeyboardInterrupt:
             print(f"\n{UI.colorize('Request interrupted by user (Ctrl+C)', 'BRIGHT_YELLOW')}")
@@ -228,8 +224,6 @@ class LLMClient:
             # Even on error, save the current state
             if self.session_logger:
                 self.session_logger.save_session(self.conversation_history)
-            # Clear tokenizer cache on error as well
-            text_utils.clear_tokenizer_cache()
             return f"Error communicating with {self.current_model}: {e}"
 
     def _send_message_to_openai_client(self):
@@ -252,8 +246,6 @@ class LLMClient:
         self.conversation_history = []
         if self.session_logger:
             self.session_logger.save_session(self.conversation_history)
-        # Clear tokenizer cache when clearing conversation
-        text_utils.clear_tokenizer_cache()
 
     def load_conversation(self, conversation_history):
         """Load a conversation history into the client"""
@@ -261,8 +253,6 @@ class LLMClient:
         # Save the loaded conversation to ensure it's persisted
         if self.session_logger:
             self.session_logger.save_session(self.conversation_history)
-        # Clear tokenizer cache when loading a new conversation
-        text_utils.clear_tokenizer_cache()
 
     def get_current_model(self):
         """Get current model information"""
@@ -271,8 +261,5 @@ class LLMClient:
     def __del__(self):
         """Cleanup when object is destroyed"""
         self._cleanup_proxy_context()
-        # Clear tokenizer cache on destruction to prevent memory leaks
-        try:
-            text_utils.clear_tokenizer_cache()
-        except Exception:
-            pass  # Ignore errors during cleanup
+
+

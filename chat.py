@@ -33,10 +33,13 @@ class LLMChat:
         self.script_directory = os.path.dirname(os.path.abspath(__file__))
         self.config_path = config_path
 
+        # Set config path first
+        config.set_config_path(config_path)
+
         # Load models configuration
         try:
-            config.load_models_config(config_path)
-            logger.debug(f"Loaded {len(config.SUPPORTED_MODELS)} models from configuration")
+            models = config.get_models()
+            logger.debug(f"Loaded {len(models)} models from configuration")
         except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
             print(f"{UI.colorize('Error loading models configuration:', 'RED')} {e}")
             sys.exit(1)
@@ -325,7 +328,7 @@ def parse_arguments():
 Examples:
   python chat.py
   python chat.py --proxy socks5://127.0.0.1:1080
-  python chat.py --config /path/to/models.json
+  python chat.py --config /path/to/config.json
         """
     )
 
@@ -334,7 +337,7 @@ Examples:
     parser.add_argument("-e", "--edit", nargs="+", help="List of editable files")
     parser.add_argument("-m", "--message", help="First message ready to send to the assistant")
     parser.add_argument("-p", "--proxy", metavar="PROXY_URL", help="Proxy URL (e.g., socks5://127.0.0.1:1080)")
-    parser.add_argument("-c", "--config", metavar="CONFIG_PATH", help="Path to models.json configuration file")
+    parser.add_argument("-c", "--config", metavar="CONFIG_PATH", help="Path to config.json configuration file")
 
     return parser.parse_args()
 
@@ -371,3 +374,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
