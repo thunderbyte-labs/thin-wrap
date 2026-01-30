@@ -28,9 +28,18 @@ from ui import UI
 logger = logging.getLogger(__name__)
 
 class LLMChat:
-    def __init__(self, root_dir=None, readable_files=None, editable_files=None, first_message=None, proxy_url=None):
+    def __init__(self, root_dir=None, readable_files=None, editable_files=None, first_message=None, proxy_url=None, config_path=None):
         logger.debug("Initializing LLMChat")
         self.script_directory = os.path.dirname(os.path.abspath(__file__))
+        self.config_path = config_path
+
+        # Load models configuration
+        try:
+            config.load_models_config(config_path)
+            logger.debug(f"Loaded {len(config.SUPPORTED_MODELS)} models from configuration")
+        except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
+            print(f"{UI.colorize('Error loading models configuration:', 'RED')} {e}")
+            sys.exit(1)
 
         config_dir = Path(platformdirs.user_config_dir(config.APP_NAME))
         config_dir.mkdir(parents=True, exist_ok=True)
@@ -316,6 +325,7 @@ def parse_arguments():
 Examples:
   python chat.py
   python chat.py --proxy socks5://127.0.0.1:1080
+  python chat.py --config /path/to/models.json
         """
     )
 
@@ -324,6 +334,7 @@ Examples:
     parser.add_argument("-e", "--edit", nargs="+", help="List of editable files")
     parser.add_argument("-m", "--message", help="First message ready to send to the assistant")
     parser.add_argument("-p", "--proxy", metavar="PROXY_URL", help="Proxy URL (e.g., socks5://127.0.0.1:1080)")
+    parser.add_argument("-c", "--config", metavar="CONFIG_PATH", help="Path to models.json configuration file")
 
     return parser.parse_args()
 
@@ -347,7 +358,8 @@ def main():
             readable_files=args.read,
             editable_files=args.edit,
             first_message=args.message,
-            proxy_url=args.proxy
+            proxy_url=args.proxy,
+            config_path=args.config
         )
         chat.run()
 
