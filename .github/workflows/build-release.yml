@@ -31,7 +31,7 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller --console --name thin-wrap chat.py
+          pyinstaller --console --name thin-wrap --collect-submodules rich._unicode_data chat.py
           # Default is --onedir bundle; produces dist/thin-wrap/ directory
 
       - name: Include sample config.json
