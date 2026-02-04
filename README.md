@@ -71,6 +71,7 @@ If `config.json` is missing or invalid, the application will raise an error with
   - Preservation of file permissions and formatting.
 - **Project Root Selection**: Interactive selection of project root directory with history, Tab autocompletion, and support for `~` (home directory). Change via `/rootdir` command.
 - **Multi-line Input**: Compose messages across multiple lines; send with **Alt+Enter**.
+- **Message History Navigation**: Navigate through previously sent messages with **Alt+Up/Down** keys.
 - **Session Logging**: Automatic saving of chat sessions as timestamped text files (e.g., `llm_session_20260130_151145.txt`) in the project root or user data directory.
 - **Token Estimation**: Built-in token estimator for input and output messages to monitor usage.
 - **Colorized UI Elements**: Enhanced help menu and outputs with colorization for better readability.
