@@ -38,6 +38,10 @@ class InputHandler:
         # Get commands from config
         command_list = list(config.COMMANDS.keys())
         self.command_completer = CommandCompleter(command_list)
+        # Message history for navigation
+        self.history = []
+        self.history_index = -1
+        self.current_draft = ""
 
     def _get_terminal_width(self):
         """Get terminal width with cross-platform fallbacks"""
@@ -48,6 +52,16 @@ class InputHandler:
                 return int(os.environ.get("COLUMNS", config.TERMINAL_WIDTH_FALLBACK))
             except (ValueError, TypeError):
                 return config.TERMINAL_WIDTH_FALLBACK
+
+    def add_to_history(self, text: str):
+        """Add a message to history."""
+        if text.strip():
+            self.history.append(text)
+            self.history_index = -1
+            self.current_draft = ""
+            # Keep history size limited
+            if len(self.history) > 100:
+                self.history.pop(0)
 
     def get_input_with_editing(self, default: str = ""):
         """Get input with editing capabilities, replicating original behavior."""
@@ -68,8 +82,35 @@ class InputHandler:
             """Handle Ctrl+B to launch menu."""
             event.app.exit(result=("Ctrl+B", event.current_buffer.text))
 
+        @kb.add('escape', 'up')
+        def navigate_history_up(event: KeyPressEvent) -> None:
+            """Navigate to previous message in history."""
+            if not self.history:
+                return
+            if self.history_index == -1:
+                self.current_draft = event.current_buffer.text
+            self.history_index = max(0, self.history_index - 1)
+            event.current_buffer.text = self.history[self.history_index]
+            event.current_buffer.cursor_position = len(event.current_buffer.text)
+
+        @kb.add('escape', 'down')
+        def navigate_history_down(event: KeyPressEvent) -> None:
+            """Navigate to next message in history."""
+            if not self.history:
+                return
+            if self.history_index == -1:
+                return
+            self.history_index += 1
+            if self.history_index >= len(self.history):
+                event.current_buffer.text = self.current_draft
+                self.history_index = -1
+                self.current_draft = ""
+            else:
+                event.current_buffer.text = self.history[self.history_index]
+            event.current_buffer.cursor_position = len(event.current_buffer.text)
+
         prompt_message = FormattedText([
-            ('bold fg:ansidefault', "Alt+Enter to send. Ctrl+B for file context management:\n"),
+            ('bold fg:ansidefault', "Alt+Enter to send. Ctrl+B for file context management. Alt+Up/Down for history:\n"),
         ])
 
         style = Style.from_dict({

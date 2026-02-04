@@ -252,6 +252,8 @@ class LLMChat:
             if send_result == 'insert_files':
                 next_default = user_input
                 continue
+            else:
+                self.input_handler.add_to_history(user_input)
             
         logger.debug("Exiting main chat loop")
         self._save_and_exit()
