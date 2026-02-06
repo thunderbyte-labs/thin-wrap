@@ -39,9 +39,9 @@ class InputHandler:
         command_list = list(config.COMMANDS.keys())
         self.command_completer = CommandCompleter(command_list)
         # Message history for navigation
-        self.history = []
-        self.history_index = -1
-        self.current_draft = ""
+        self.history = []  # Messages envoyés
+        self.draft_stack = []  # Messages temporaires non envoyés (brouillons)
+        self.history_index = -1  # -1 means not currently navigating
 
     def _get_terminal_width(self):
         """Get terminal width with cross-platform fallbacks"""
@@ -54,14 +54,56 @@ class InputHandler:
                 return config.TERMINAL_WIDTH_FALLBACK
 
     def add_to_history(self, text: str):
-        """Add a message to history."""
+        """Add a message to history and clear temporary drafts."""
         if text.strip():
             self.history.append(text)
+            # Clear draft stack when a message is sent
+            self.draft_stack = []
             self.history_index = -1
-            self.current_draft = ""
             # Keep history size limited
             if len(self.history) > 100:
                 self.history.pop(0)
+    
+    def clear_history(self):
+        """Clear message history."""
+        self.history = []
+        self.draft_stack = []
+        self.history_index = -1
+    
+    def load_history(self, messages: list[str]):
+        """Load messages into history."""
+        self.history = [msg for msg in messages if msg.strip()]
+        self.draft_stack = []
+        self.history_index = -1
+    
+    def clear_draft_stack(self):
+        """Clear temporary draft stack."""
+        self.draft_stack = []
+        self.history_index = -1
+    
+    def load_from_conversation_history(self, conversation_history: list[dict]):
+        """Load user messages from conversation history."""
+        user_messages = []
+        for msg in conversation_history:
+            if msg.get("role") == "user" and msg.get("content"):
+                user_messages.append(msg["content"])
+        self.load_history(user_messages)
+    
+    def _get_combined_item(self, index: int) -> str:
+        """Get item from combined navigation (draft_stack + history).
+        draft_stack[0] is most recent draft, history[-1] is most recent sent message.
+        """
+        if index < len(self.draft_stack):
+            return self.draft_stack[index]
+        else:
+            hist_index = index - len(self.draft_stack)
+            # history[-1] is most recent, history[0] is oldest
+            # So we need to access from the end: history[-(hist_index + 1)]
+            return self.history[-(hist_index + 1)]
+    
+    def _get_combined_count(self) -> int:
+        """Get total count of items in combined navigation."""
+        return len(self.draft_stack) + len(self.history)
 
     def get_input_with_editing(self, default: str = ""):
         """Get input with editing capabilities, replicating original behavior."""
@@ -82,35 +124,70 @@ class InputHandler:
             """Handle Ctrl+B to launch menu."""
             event.app.exit(result=("Ctrl+B", event.current_buffer.text))
 
-        @kb.add('escape', 'up')
+        @kb.add('pageup')
         def navigate_history_up(event: KeyPressEvent) -> None:
-            """Navigate to previous message in history."""
-            if not self.history:
-                return
+            """Navigate to previous message in combined history (drafts + sent)."""
+            total_items = self._get_combined_count()
+            current_text = event.current_buffer.text
+            
             if self.history_index == -1:
-                self.current_draft = event.current_buffer.text
-            self.history_index = max(0, self.history_index - 1)
-            event.current_buffer.text = self.history[self.history_index]
+                # At bottom - not currently navigating
+                if current_text.strip():
+                    # Save current text as temporary draft before navigating
+                    self.draft_stack.insert(0, current_text)  # Add to beginning (most recent)
+                    # Keep draft stack size limited
+                    if len(self.draft_stack) > 20:
+                        self.draft_stack.pop()
+                
+                # Start navigation from the most recent item if we have any
+                if total_items > 0:
+                    self.history_index = 0
+                    event.current_buffer.text = self._get_combined_item(self.history_index)
+                else:
+                    # No items to navigate to
+                    return
+            else:
+                # Already navigating - move to older item
+                if self.history_index < total_items - 1:
+                    self.history_index += 1
+                    event.current_buffer.text = self._get_combined_item(self.history_index)
+                # else: already at oldest item, stay there
+            
             event.current_buffer.cursor_position = len(event.current_buffer.text)
 
-        @kb.add('escape', 'down')
+        @kb.add('pagedown')
         def navigate_history_down(event: KeyPressEvent) -> None:
-            """Navigate to next message in history."""
-            if not self.history:
-                return
+            """Navigate to next message or save current text as temporary draft."""
+            total_items = self._get_combined_count()
+            current_text = event.current_buffer.text
+            
             if self.history_index == -1:
-                return
-            self.history_index += 1
-            if self.history_index >= len(self.history):
-                event.current_buffer.text = self.current_draft
-                self.history_index = -1
-                self.current_draft = ""
+                # Not currently navigating
+                if current_text.strip():
+                    # Save current text as temporary draft and clear buffer
+                    self.draft_stack.insert(0, current_text)  # Add to beginning (most recent)
+                    event.current_buffer.text = ""
+                    # Keep draft stack size limited
+                    if len(self.draft_stack) > 20:
+                        self.draft_stack.pop()
+                # If buffer is empty and there are items, don't start navigation automatically
+                # User can use Page Up to start navigation
             else:
-                event.current_buffer.text = self.history[self.history_index]
+                # Currently navigating - move to newer item (toward bottom/current)
+                if self.history_index > 0:
+                    self.history_index -= 1
+                    event.current_buffer.text = self._get_combined_item(self.history_index)
+                else:
+                    # At newest item (index 0) - exit navigation
+                    self.history_index = -1
+                    event.current_buffer.text = ""
+            
             event.current_buffer.cursor_position = len(event.current_buffer.text)
+
+
 
         prompt_message = FormattedText([
-            ('bold fg:ansidefault', "Alt+Enter to send. Ctrl+B for file context management. Alt+Up/Down for history:\n"),
+            ('bold fg:ansidefault', "Alt+Enter to send. Ctrl+B for files. Page Up/Down: history:\n"),
         ])
 
         style = Style.from_dict({

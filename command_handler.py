@@ -51,10 +51,12 @@ class CommandHandler:
                 print(f"  {UI.colorize(cmd, 'BRIGHT_YELLOW')} - {desc}")
             print(f"\nPress {UI.colorize('Ctrl+B', 'BRIGHT_YELLOW')} to open file context menu.")
             print(f"Use {UI.colorize('Alt+Enter', 'BRIGHT_YELLOW')} to send message, {UI.colorize('Enter', 'BRIGHT_YELLOW')} for new line.")
+            print(f"{UI.colorize('Page Up/Down', 'BRIGHT_YELLOW')} for message history (sent messages and temporary drafts).")
 
     def _handle_clear(self):
         """Clear conversation history"""
         self.llm_client.clear_conversation()
+        self.input_handler.clear_history()
         print("Conversation history cleared.")
 
     def _handle_model(self, args):
@@ -66,14 +68,24 @@ class CommandHandler:
             print("Interactive model selection:")
             selected_model = self.llm_client.interactive_model_selection()
             if selected_model:
-                self.llm_client.switch_model(selected_model)
+                success = self.llm_client.switch_model(selected_model)
+                if success:
+                    # Clear conversation and input history when switching models
+                    self.llm_client.clear_conversation()
+                    self.input_handler.clear_history()
+                    print(f"{UI.colorize('Model switched and history cleared.', 'BRIGHT_GREEN')}")
             elif selected_model is None:
                 # User cancelled with Ctrl+C while already having a model
                 print(f"{UI.colorize('Returning to conversation...', 'BRIGHT_CYAN')}")
         else:
             # Arguments provided - use the old behavior
             new_model = args[0]
-            self.llm_client.switch_model(new_model)
+            success = self.llm_client.switch_model(new_model)
+            if success:
+                # Clear conversation and input history when switching models
+                self.llm_client.clear_conversation()
+                self.input_handler.clear_history()
+                print(f"{UI.colorize('Model switched and history cleared.', 'BRIGHT_GREEN')}")
 
     def _handle_reload(self):
         """Reload a previous conversation from the current project root"""
@@ -120,9 +132,13 @@ class CommandHandler:
                 session_data = self.session_logger.load_session(selected_path)
                 if session_data:
                     # Load the conversation history
-                    self.llm_client.load_conversation(session_data.get("conversation_history", []))
+                    conversation_history = session_data.get("conversation_history", [])
+                    self.llm_client.load_conversation(conversation_history)
+                    # Load user messages into input history
+                    self.input_handler.load_from_conversation_history(conversation_history)
                     print(f"Loaded conversation from {format_session(selected_path)}")
-                    print(f"Contains {len(session_data.get('conversation_history', []))} messages")
+                    print(f"Contains {len(conversation_history)} messages")
+                    print(f"Loaded {len(self.input_handler.history)} user messages into history")
                 else:
                     print("Failed to load conversation.")
         except (KeyboardInterrupt, EOFError):
