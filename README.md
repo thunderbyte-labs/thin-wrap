@@ -109,6 +109,7 @@ Available in-chat commands:
 - `/reload`: Load a previous conversation from available sessions in the project root.
 - `/rootdir`: Show or change the current project root directory.
 - `/files`: Open the file context management menu (equivalent to Ctrl+B).
+- `/proxy`: Manage proxy (off to disable, number for previous, or new URL like socks5://127.0.0.1:1080).
 
 ## Architecture
 

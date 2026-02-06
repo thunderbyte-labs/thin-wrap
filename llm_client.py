@@ -114,6 +114,24 @@ class LLMClient:
             print(f"✗ Failed to switch to {new_model}: {e}")
             return False
 
+    def update_proxy(self, proxy_wrapper):
+        """Update proxy configuration."""
+        # Clean up existing proxy context
+        self._cleanup_proxy_context()
+        
+        # Update proxy wrapper
+        self.proxy_wrapper = proxy_wrapper
+        
+        # If we have a current model, reinitialize with new proxy
+        if self.current_model:
+            try:
+                self.setup_api_key(self.current_model)
+                return True
+            except Exception as e:
+                print(f"✗ Failed to update proxy: {e}")
+                return False
+        return True
+
     def _initialize_client_with_proxy(self, api_key, api_base_url):
         """Initialize client with proxy configuration"""
         try:

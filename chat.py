@@ -51,6 +51,7 @@ class LLMChat:
         config_dir.mkdir(parents=True, exist_ok=True)
         history_file = config_dir / "history.json"
         self.recent_roots = self._load_recent_roots(history_file)
+        self.recent_proxies = self._load_recent_proxies(history_file)
         self.history_file = history_file
 
         # Process root directory
@@ -87,6 +88,10 @@ class LLMChat:
                                   for p in (readable_files or [])]
         self.first_message = "" if not first_message else first_message
         self.proxy_wrapper = create_proxy_wrapper(proxy_url) if proxy_url else None
+        
+        # Add to proxy history if valid
+        if proxy_url and validate_proxy_url(proxy_url) is None:
+            self._add_to_recent_proxies(self.history_file, proxy_url)
 
         # Initialize components
         self.session_logger = SessionLogger(self.script_directory, self.root_dir)
@@ -106,10 +111,17 @@ class LLMChat:
         return []
 
     def _save_recent_roots(self, history_file: Path) -> None:
-        """Save current recent_roots list."""
+        """Save current recent_roots list along with existing proxies."""
         try:
-            data = {"recent_root_dirs": self.recent_roots[:10]}
-            history_file.write_text(json.dumps(data, indent=2), encoding='utf-8')
+            # Load existing data to preserve proxies
+            existing_data = {}
+            if history_file.exists():
+                existing_data = json.loads(history_file.read_text(encoding='utf-8'))
+            
+            # Update roots, keep proxies and any other fields
+            existing_data["recent_root_dirs"] = self.recent_roots[:10]
+            
+            history_file.write_text(json.dumps(existing_data, indent=2), encoding='utf-8')
         except Exception as e:
             logger.debug(f"Failed to save root history: {e}")
 
@@ -121,6 +133,45 @@ class LLMChat:
         self.recent_roots.insert(0, root)
         self.recent_roots = self.recent_roots[:10]
         self._save_recent_roots(history_file)
+
+    def _load_recent_proxies(self, history_file: Path) -> list[str]:
+        """Load recent proxy URLs from history file."""
+        try:
+            if history_file.exists():
+                data = json.loads(history_file.read_text(encoding='utf-8'))
+                # Only return proxies that are valid (format-wise)
+                valid_proxies = []
+                for proxy in data.get("recent_proxies", []):
+                    error_msg = validate_proxy_url(proxy)
+                    if error_msg is None:
+                        valid_proxies.append(proxy)
+                return valid_proxies
+        except Exception as e:
+            logger.debug(f"Failed to load proxy history: {e}")
+        return []
+
+    def _save_recent_proxies(self, history_file: Path) -> None:
+        """Save current recent_proxies list along with existing roots."""
+        try:
+            # Load existing data to preserve roots
+            existing_data = {}
+            if history_file.exists():
+                existing_data = json.loads(history_file.read_text(encoding='utf-8'))
+            
+            # Update proxies, keep roots and any other fields
+            existing_data["recent_proxies"] = self.recent_proxies[:10]
+            
+            history_file.write_text(json.dumps(existing_data, indent=2), encoding='utf-8')
+        except Exception as e:
+            logger.debug(f"Failed to save proxy history: {e}")
+
+    def _add_to_recent_proxies(self, history_file: Path, proxy_url: str) -> None:
+        """Add proxy URL to history: move to front if already present, limit to 10."""
+        if proxy_url in self.recent_proxies:
+            self.recent_proxies.remove(proxy_url)
+        self.recent_proxies.insert(0, proxy_url)
+        self.recent_proxies = self.recent_proxies[:10]
+        self._save_recent_proxies(history_file)
 
     def _interactive_root_selection(self) -> str:
         """Interactive prompt for root selection with history, Tab autocompletion, and free chat option."""
@@ -237,6 +288,74 @@ class LLMChat:
             if sessions:
                 print(f"\n{UI.colorize('Note:', 'BRIGHT_CYAN')} Found {len(sessions)} conversation(s) in the new project root.")
                 print(f"Use {UI.colorize('/reload', 'BRIGHT_YELLOW')} to load one of these conversations.")
+
+    def set_proxy(self, proxy_url: str | None, ask_to_reload: bool = True) -> bool:
+        """
+        Set proxy URL or disable proxy.
+        
+        Args:
+            proxy_url: Proxy URL string, None or 'off' to disable
+            ask_to_reload: Whether to ask about reloading sessions (not used for proxy)
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        from proxy_wrapper import create_proxy_wrapper, validate_proxy_url
+        
+        # Handle disable proxy
+        if proxy_url is None or proxy_url.lower() == 'off':
+            print(f"{UI.colorize('Disabling proxy...', 'BRIGHT_CYAN')}")
+            # Clean up existing proxy wrapper
+            old_proxy = self.proxy_wrapper
+            self.proxy_wrapper = None
+            
+            # Update LLM client
+            if self.llm_client.update_proxy(None):
+                print(f"{UI.colorize('Success:', 'BRIGHT_GREEN')} Proxy disabled")
+                return True
+            else:
+                # Restore old proxy on failure
+                self.proxy_wrapper = old_proxy
+                print(f"{UI.colorize('Error:', 'RED')} Failed to disable proxy")
+                return False
+        
+        # Validate proxy URL format
+        error_msg = validate_proxy_url(proxy_url)
+        if error_msg:
+            print(f"{UI.colorize('Error:', 'RED')} Invalid proxy URL: {error_msg}")
+            return False
+        
+        # Test proxy connection
+        print(f"{UI.colorize('Testing proxy connection...', 'BRIGHT_CYAN')}")
+        try:
+            # Create temporary proxy wrapper to test
+            test_wrapper = create_proxy_wrapper(proxy_url)
+            if test_wrapper is None:
+                print(f"{UI.colorize('Error:', 'RED')} Failed to create proxy wrapper")
+                return False
+            
+            # Try to enter proxy context (which tests connection)
+            with test_wrapper.proxy_connection():
+                print(f"{UI.colorize('Proxy connection test successful!', 'BRIGHT_GREEN')}")
+            
+            # Connection test passed, now switch
+            old_proxy = self.proxy_wrapper
+            self.proxy_wrapper = test_wrapper
+            
+            if self.llm_client.update_proxy(test_wrapper):
+                # Add to recent proxies history
+                self._add_to_recent_proxies(self.history_file, proxy_url)
+                print(f"{UI.colorize('Success:', 'BRIGHT_GREEN')} Proxy switched to: {proxy_url}")
+                return True
+            else:
+                # Restore old proxy on failure
+                self.proxy_wrapper = old_proxy
+                print(f"{UI.colorize('Error:', 'RED')} Failed to update LLM client with new proxy")
+                return False
+                
+        except Exception as e:
+            print(f"{UI.colorize('Error:', 'RED')} Proxy connection test failed: {e}")
+            return False
 
     def _print_files_summary(self):
         """Print a compact summary of editable and readable files."""

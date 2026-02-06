@@ -253,7 +253,8 @@ COMMANDS = {
     '/model': 'Switch AI model',
     '/reload': 'Reload a previous conversation',
     '/rootdir': 'Show or set project root directory (option 0 for free chat mode)',
-    '/files': 'Handle Ctrl+B file context menu'
+    '/files': 'Handle Ctrl+B file context menu',
+    '/proxy': 'Manage proxy (off to disable, number for previous, or new URL like socks5://127.0.0.1:1080)'
 }
 
 
