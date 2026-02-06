@@ -81,13 +81,15 @@ If `config.json` is missing or invalid, the application will raise an error with
 ## Usage
 
 1. Launch the application as described in the Installation section.
-2. Select a project root directory (if not specified via `--root-dir`).
+2. Select a project root directory (if not specified via `--root-dir`). You can choose "No root directory - Free chatting without file context" to enable free chat mode without file context.
 3. Choose an LLM model from the available options.
 4. Enter your message and press **Alt+Enter** to send.
 5. Use commands starting with `/` for additional functionality (see Commands below).
-6. Manage file contexts with **Ctrl+B** to open the file browser menu.
+6. Manage file contexts with **Ctrl+B** to open the file browser menu. In free chat mode, Ctrl+B allows you to select a root directory and switch to file context mode.
 
 Sessions are automatically saved upon exit or after each exchange.
+
+**Navigation**: Use **Page Up** and **Page Down** to navigate through message history (sent messages and temporary drafts).
 
 ### Command-Line Arguments
 

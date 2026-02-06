@@ -7,6 +7,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import cast
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import PathCompleter
@@ -17,7 +18,7 @@ import config
 config.setup_logging()
 
 from command_handler import CommandHandler
-from file_processor import generate_query
+from file_processor import generate_query, generate_plain_query, parse_plain_response
 from input_handler import InputHandler
 from llm_client import LLMClient
 from proxy_wrapper import create_proxy_wrapper, validate_proxy_url
@@ -28,6 +29,8 @@ from ui import UI
 logger = logging.getLogger(__name__)
 
 class LLMChat:
+    FREE_CHAT_MODE = "FREE_CHAT_MODE"
+    
     def __init__(self, root_dir=None, readable_files=None, editable_files=None, first_message=None, proxy_url=None, config_path=None):
         logger.debug("Initializing LLMChat")
         self.script_directory = os.path.dirname(os.path.abspath(__file__))
@@ -56,18 +59,32 @@ class LLMChat:
             if not root_path.is_dir():
                 raise ValueError(f"Specified root_dir is not a valid directory: {root_path}")
             self.root_dir = str(root_path)
+            self.free_chat_mode = False
             self._add_to_recent_roots(history_file, self.root_dir)
             print(f"{UI.colorize('Info:', 'BRIGHT_CYAN')} Using specified project root: {self.root_dir}")
         else:
             self.root_dir = self._interactive_root_selection()
-            self._add_to_recent_roots(history_file, self.root_dir)
+            # Check if free chat mode was selected
+            if self.root_dir == self.FREE_CHAT_MODE:
+                self.free_chat_mode = True
+                self.root_dir = None
+                print(f"{UI.colorize('Info:', 'BRIGHT_CYAN')} Free chat mode enabled (no file context)")
+            else:
+                self.free_chat_mode = False
+                self._add_to_recent_roots(history_file, self.root_dir)
 
         # Resolve file paths
-        root_path = Path(self.root_dir)
-        self.editable_files = [str((Path(p).resolve() if Path(p).is_absolute() else (root_path / p)).resolve()) 
-                              for p in (editable_files or [])]
-        self.readable_files = [str((Path(p).resolve() if Path(p).is_absolute() else (root_path / p)).resolve())
-                              for p in (readable_files or [])]
+        if self.free_chat_mode:
+            # In free chat mode, no file context
+            self.editable_files = []
+            self.readable_files = []
+        else:
+            assert self.root_dir is not None, "root_dir must be set when free_chat_mode is False"
+            root_path = Path(self.root_dir)
+            self.editable_files = [str((Path(p).resolve() if Path(p).is_absolute() else (root_path / p)).resolve()) 
+                                  for p in (editable_files or [])]
+            self.readable_files = [str((Path(p).resolve() if Path(p).is_absolute() else (root_path / p)).resolve())
+                                  for p in (readable_files or [])]
         self.first_message = "" if not first_message else first_message
         self.proxy_wrapper = create_proxy_wrapper(proxy_url) if proxy_url else None
 
@@ -106,32 +123,89 @@ class LLMChat:
         self._save_recent_roots(history_file)
 
     def _interactive_root_selection(self) -> str:
-        """Interactive prompt for root selection with history and Tab autocompletion."""
-        return UI.interactive_selection(
-            prompt_title="Previous project roots:",
-            prompt_message="Enter a number to select, or type a new path (Tab for completion, ~ for home):",
-            no_items_message="No previous roots found.",
-            items=self.recent_roots,
-            item_formatter=lambda x: x,
-            allow_new=True,
-            new_item_validator=lambda p: p.is_dir(),
-            new_item_error="Not a valid directory"
-        )
+        """Interactive prompt for root selection with history, Tab autocompletion, and free chat option."""
+        from prompt_toolkit import PromptSession
+        from prompt_toolkit.completion import PathCompleter
+        
+        completer = PathCompleter(expanduser=True)
+        session = PromptSession(completer=completer)
+        
+        free_chat_label = "No root directory - Free chatting without file context"
+        
+        while True:
+            print(f"{UI.colorize('Previous project roots:', 'BRIGHT_CYAN')}")
+            print(f"  0. {free_chat_label}")
+            for i, item in enumerate(self.recent_roots, 1):
+                print(f"  {i}. {item}")
+            print("Enter a number to select, or type a new path (Tab for completion, ~ for home):")
+            
+            try:
+                user_input = session.prompt("> ").strip()
+            except (KeyboardInterrupt, EOFError):
+                print("\nSelection cancelled.")
+                raise
+            
+            if not user_input:
+                print(f"{UI.colorize('Error:', 'RED')} Empty input - please try again.")
+                continue
+            
+            # Numeric selection
+            if user_input.isdigit():
+                idx = int(user_input)
+                if idx == 0:
+                    print(f"{UI.colorize('Selected:', 'BRIGHT_CYAN')} {free_chat_label}")
+                    return self.FREE_CHAT_MODE
+                elif 1 <= idx <= len(self.recent_roots):
+                    chosen = self.recent_roots[idx - 1]
+                    print(f"{UI.colorize('Selected:', 'BRIGHT_CYAN')} {chosen}")
+                    return chosen
+                else:
+                    print(f"{UI.colorize('Error:', 'RED')} Number out of range.")
+                    continue
+            
+            # Manual path entry
+            try:
+                new_item = Path(user_input).expanduser().resolve(strict=False)
+                if new_item.is_dir():
+                    resolved_str = str(new_item)
+                    print(f"{UI.colorize('Using:', 'BRIGHT_CYAN')} {resolved_str}")
+                    return resolved_str
+                else:
+                    print(f"{UI.colorize('Error:', 'RED')} Not a valid directory: {user_input}")
+            except Exception as e:
+                print(f"{UI.colorize('Error:', 'RED')} Invalid input: {e}")
 
     def set_root_dir(self, new_root: str, ask_to_reload: bool = True) -> None:
         """
-        Change the current project root directory and update all dependent components.
+        Change the current project root directory or switch to free chat mode.
         
         Args:
-            new_root: New root directory path
+            new_root: New root directory path, or FREE_CHAT_MODE for free chat
             ask_to_reload: Whether to prompt user to reload a conversation from the new root
         """
+        if new_root == self.FREE_CHAT_MODE:
+            # Switch to free chat mode
+            old_root = self.root_dir
+            self.root_dir = None
+            self.free_chat_mode = True
+            self.editable_files = []
+            self.readable_files = []
+            
+            # Update session logger with None root (free chat mode)
+            self.session_logger = SessionLogger(self.script_directory, self.root_dir)
+            self.llm_client.session_logger = self.session_logger
+            
+            print(f"{UI.colorize('Success:', 'BRIGHT_GREEN')} Switched to free chat mode (no file context)")
+            return
+        
+        # Otherwise, it's a directory path
         root_path = Path(new_root).expanduser().resolve()
         if not root_path.is_dir():
             raise ValueError(f"Specified root_dir is not a valid directory: {root_path}")
         
         old_root = self.root_dir
         self.root_dir = str(root_path)
+        self.free_chat_mode = False
         
         # Update history
         self._add_to_recent_roots(self.history_file, self.root_dir)
@@ -214,6 +288,8 @@ class LLMChat:
             return
 
         UI.show_startup_message()
+        if self.free_chat_mode:
+            print(f"{UI.colorize('Free chat mode enabled - no file context.', 'BRIGHT_CYAN')}")
         self._print_files_summary()
         logger.debug("Showed startup message")
 
@@ -280,20 +356,28 @@ class LLMChat:
 
         print(f"{UI.colorize('-' * 65, 'GREEN')}")
 
-        query, response_parser = generate_query(
-            self.root_dir, self.readable_files, self.editable_files, message
-        )
+        if self.free_chat_mode:
+            # Free chat mode: plain message without file context
+            query = generate_plain_query(message)
+            response_parser = parse_plain_response
+        else:
+            # In non-free chat mode, root_dir must be a string
+            root_dir_str = cast(str, self.root_dir)
+            query, response_parser = generate_query(
+                root_dir_str, self.readable_files, self.editable_files, message
+            )
+            # Check if user chose to insert files (abort send)
+            if query is None and response_parser is None:
+                return 'insert_files'
         
-        # Check if user chose to insert files (abort send)
-        if query is None and response_parser is None:
-            return 'insert_files'
-        
+        assert query is not None
         query = clean_text(query)
 
         # Send message to LLM client (which handles automatic session saving)
         response = self.llm_client.send_message(query)
         self._report_token_usage(query, response)
 
+        assert response is not None
         comments = response_parser(response)
 
         if comments:
