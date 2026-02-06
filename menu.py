@@ -49,7 +49,6 @@ class FileMenuApp(App):
     def on_mount(self) -> None:
         self.refresh_lists()
         self.query_one("#navigator", DirectoryTree).focus()
-        self.notify("Use Tab/Shift+Tab to switch columns", title="Navigation Tip", severity="information")
 
     def refresh_lists(self) -> None:
         """Refresh left and middle columns with sorted relative paths."""
