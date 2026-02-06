@@ -207,6 +207,19 @@ class LLMChat:
         self.root_dir = str(root_path)
         self.free_chat_mode = False
         
+        # Clear file lists when switching to a different project root
+        # Only clear if actually changing to a different directory (not same directory via different path)
+        should_clear_files = True
+        if old_root is not None:
+            # Compare resolved paths to see if it's the same directory
+            old_resolved = Path(old_root).resolve()
+            if old_resolved == root_path:
+                should_clear_files = False
+        
+        if should_clear_files:
+            self.editable_files = []
+            self.readable_files = []
+        
         # Update history
         self._add_to_recent_roots(self.history_file, self.root_dir)
         
