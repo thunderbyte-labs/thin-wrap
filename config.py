@@ -252,7 +252,7 @@ COMMANDS = {
     '/help': 'Help for a command',
     '/model': 'Switch AI model',
     '/reload': 'Reload a previous conversation',
-    '/rootdir': 'Show or set project root directory',
+    '/rootdir': 'Show or set project root directory (option 0 for free chat mode)',
     '/files': 'Handle Ctrl+B file context menu'
 }
 

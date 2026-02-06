@@ -22,6 +22,10 @@ class SessionLogger:
 
     def _get_conversation_dir(self):
         """Get the conversation directory for the current root_dir"""
+        if self.root_dir is None:
+            # Free chat mode - store in special directory
+            return os.path.join(config.CONVERSATIONS_DIR, "free_chat")
+        
         # Normalize the root_dir path to create a safe directory name
         root_path = Path(self.root_dir).resolve()
         # Create a hash or use the absolute path (we'll use a safe version of the path)
@@ -46,7 +50,7 @@ class SessionLogger:
             metadata.add("session_start_time", self.session_start_time.isoformat())
             metadata.add("last_saved_time", datetime.now().isoformat())
             metadata.add("interaction_count", len([m for m in conversation_history if m["role"] == "user"]))
-            metadata.add("root_dir", self.root_dir)
+            metadata.add("root_dir", self.root_dir if self.root_dir is not None else "free_chat")
             doc.add("metadata", metadata)
             
             conv_array = tomlkit.aot()
@@ -113,6 +117,11 @@ class SessionLogger:
         """Get the number of logged interactions from current session"""
         session_data = self.load_session(self.session_path)
         if session_data and "metadata" in session_data:
-            return session_data["metadata"].get("interaction_count", 0)
+            metadata = session_data["metadata"]
+            try:
+                # metadata may be a tomlkit container
+                return metadata["interaction_count"]
+            except (KeyError, TypeError, AttributeError):
+                return 0
         return 0
 

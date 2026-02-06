@@ -91,8 +91,12 @@ class CommandHandler:
         """Reload a previous conversation from the current project root"""
         sessions = self.session_logger.list_available_sessions()
         if not sessions:
-            print(f"{UI.colorize('No previous conversations found for this project root.', 'BRIGHT_YELLOW')}")
-            print(f"Project root: {UI.colorize(self.chat_app.root_dir, 'BRIGHT_CYAN')}")
+            if self.chat_app.root_dir is not None:
+                print(f"{UI.colorize('No previous conversations found for this project root.', 'BRIGHT_YELLOW')}")
+            else:
+                print(f"{UI.colorize('No previous conversations found in free chat mode.', 'BRIGHT_YELLOW')}")
+            root_display = self.chat_app.root_dir if self.chat_app.root_dir is not None else "Free chat mode"
+            print(f"Project root: {UI.colorize(root_display, 'BRIGHT_CYAN')}")
             print(f"Conversation directory: {UI.colorize(self.session_logger.conversation_dir, 'BRIGHT_CYAN')}")
             return
         
@@ -114,7 +118,8 @@ class CommandHandler:
                 pass
             return name  # Return original if parsing fails
         
-        print(f"Project root: {UI.colorize(self.chat_app.root_dir, 'BRIGHT_CYAN')}")
+        root_display = self.chat_app.root_dir if self.chat_app.root_dir is not None else "Free chat mode"
+        print(f"Project root: {UI.colorize(root_display, 'BRIGHT_CYAN')}")
         print(f"Conversation directory: {UI.colorize(self.session_logger.conversation_dir, 'BRIGHT_CYAN')}")
         print()
         
@@ -146,6 +151,12 @@ class CommandHandler:
 
     def handle_files_command(self):
         """Handle Ctrl+B file context menu"""
+        # In free chat mode, prompt for root directory selection instead
+        if hasattr(self.chat_app, 'free_chat_mode') and self.chat_app.free_chat_mode:
+            print("Free chat mode active. Selecting a root directory will enable file context.")
+            self._handle_rootdir([])
+            return
+        
         from menu import FileMenuApp
         try:
             app = FileMenuApp(
@@ -161,7 +172,7 @@ class CommandHandler:
             print(f"Error opening file menu: {e}")
 
     def _handle_rootdir(self, args):
-        """Show or set project root directory using interactive selection"""
+        """Show or set project root directory using interactive selection with free chat option"""
         if args:
             # Direct path argument provided
             new_root = Path(args[0]).expanduser().resolve()
@@ -173,22 +184,59 @@ class CommandHandler:
             else:
                 print(f"{UI.colorize('Error:', 'RED')} {new_root} is not a valid directory")
         else:
-            # Interactive selection mode
-            try:
-                selected_root = UI.interactive_selection(
-                    prompt_title="Previous project roots:",
-                    prompt_message="Enter a number to select, or type a new path (Tab for completion, ~ for home):",
-                    no_items_message="No previous roots found.",
-                    items=self.chat_app.recent_roots,
-                    item_formatter=lambda x: x,
-                    allow_new=True,
-                    new_item_validator=lambda p: p.is_dir(),
-                    new_item_error="Not a valid directory"
-                )
+            # Interactive selection mode with free chat option
+            from prompt_toolkit import PromptSession
+            from prompt_toolkit.completion import PathCompleter
+            
+            completer = PathCompleter(expanduser=True)
+            session = PromptSession(completer=completer)
+            
+            free_chat_label = "No root directory - Free chatting without file context"
+            
+            while True:
+                print(f"{UI.colorize('Previous project roots:', 'BRIGHT_CYAN')}")
+                print(f"  0. {free_chat_label}")
+                for i, item in enumerate(self.chat_app.recent_roots, 1):
+                    print(f"  {i}. {item}")
+                print("Enter a number to select, or type a new path (Tab for completion, ~ for home):")
                 
-                if selected_root:
-                    self.chat_app.set_root_dir(selected_root)
-            except (KeyboardInterrupt, EOFError):
-                print("\nRoot directory change cancelled.")
+                try:
+                    user_input = session.prompt("> ").strip()
+                except (KeyboardInterrupt, EOFError):
+                    print("\nSelection cancelled.")
+                    return
+                
+                if not user_input:
+                    print(f"{UI.colorize('Error:', 'RED')} Empty input - please try again.")
+                    continue
+                
+                # Numeric selection
+                if user_input.isdigit():
+                    idx = int(user_input)
+                    if idx == 0:
+                        print(f"{UI.colorize('Selected:', 'BRIGHT_CYAN')} {free_chat_label}")
+                        self.chat_app.set_root_dir(self.chat_app.FREE_CHAT_MODE)
+                        return
+                    elif 1 <= idx <= len(self.chat_app.recent_roots):
+                        chosen = self.chat_app.recent_roots[idx - 1]
+                        print(f"{UI.colorize('Selected:', 'BRIGHT_CYAN')} {chosen}")
+                        self.chat_app.set_root_dir(chosen)
+                        return
+                    else:
+                        print(f"{UI.colorize('Error:', 'RED')} Number out of range.")
+                        continue
+                
+                # Manual path entry
+                try:
+                    new_item = Path(user_input).expanduser().resolve(strict=False)
+                    if new_item.is_dir():
+                        resolved_str = str(new_item)
+                        print(f"{UI.colorize('Using:', 'BRIGHT_CYAN')} {resolved_str}")
+                        self.chat_app.set_root_dir(resolved_str)
+                        return
+                    else:
+                        print(f"{UI.colorize('Error:', 'RED')} Not a valid directory: {user_input}")
+                except Exception as e:
+                    print(f"{UI.colorize('Error:', 'RED')} Invalid input: {e}")
 
 
