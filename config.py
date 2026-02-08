@@ -163,6 +163,14 @@ def _load_config_internal(config_path: str | None = None) -> dict:
             raise ValueError(f"Model '{model_name}' missing 'api_key' field")
         if 'api_base_url' not in model_config:
             raise ValueError(f"Model '{model_name}' missing 'api_base_url' field")
+        # Validate proxy field if present
+        if 'proxy' in model_config:
+            proxy_value = model_config['proxy']
+            if not isinstance(proxy_value, bool):
+                raise ValueError(f"Model '{model_name}' proxy field must be boolean, got {type(proxy_value)}")
+        # Set default proxy to False if not present
+        else:
+            model_config['proxy'] = False
     
     # Set defaults for backup section if not present
     if 'backup' not in config_data:
@@ -253,7 +261,8 @@ COMMANDS = {
     '/model': 'Switch AI model',
     '/reload': 'Reload a previous conversation',
     '/rootdir': 'Show or set project root directory (option 0 for free chat mode)',
-    '/files': 'Handle Ctrl+B file context menu'
+    '/files': 'Handle Ctrl+B file context menu',
+    '/proxy': 'Manage proxy (off to disable, number for previous, or new URL like socks5://127.0.0.1:1080)'
 }
 
 

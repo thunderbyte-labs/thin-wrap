@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from ui import UI
 import config
+from proxy_wrapper import validate_proxy_url
 
 class CommandHandler:
     def __init__(self, llm_client, session_logger, input_handler, chat_app):
@@ -32,6 +33,8 @@ class CommandHandler:
             self.handle_files_command()
         elif cmd == '/rootdir':
             self._handle_rootdir(args)
+        elif cmd == '/proxy':
+            self._handle_proxy(args)
         else:
             print(f"Unknown command: {cmd}. Type /help for available commands.")
         
@@ -101,7 +104,13 @@ class CommandHandler:
             return
         
         # Format session names for display
-        # Here we might wrap inside a light LLM call that would be able to read and give a 10 words summary of the conversation
+        # Load metadata for all sessions
+        metadata_cache = {}
+        for session_path in sessions:
+            meta = self.session_logger.load_session_metadata(session_path)
+            if meta:
+                metadata_cache[session_path] = meta
+        
         def format_session(path):
             filename = os.path.basename(path)
             # Remove the .toml.zip extension and session_ prefix
@@ -113,10 +122,28 @@ class CommandHandler:
                     date_part, time_part = name.split('_', 1)
                     if len(date_part) == 8 and len(time_part) == 6:
                         # Format: YYYY-MM-DD HH:MM:SS
-                        return f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]} {time_part[:2]}:{time_part[2:4]}:{time_part[4:6]}"
+                        timestamp = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]} {time_part[:2]}:{time_part[2:4]}:{time_part[4:6]}"
+                    else:
+                        timestamp = name
+                else:
+                    timestamp = name
             except:
-                pass
-            return name  # Return original if parsing fails
+                timestamp = name
+            
+            # Add metadata if available
+            meta = metadata_cache.get(path)
+            if meta:
+                count = meta.get('interaction_count', 0)
+                preview = meta.get('preview', '')
+                if preview:
+                    # Truncate preview to 50 chars for display
+                    if len(preview) > 50:
+                        preview = preview[:47] + '...'
+                    return f"{timestamp} ({count} messages) - {preview}"
+                else:
+                    return f"{timestamp} ({count} messages)"
+            else:
+                return timestamp
         
         root_display = self.chat_app.root_dir if self.chat_app.root_dir is not None else "Free chat mode"
         print(f"Project root: {UI.colorize(root_display, 'BRIGHT_CYAN')}")
@@ -238,5 +265,61 @@ class CommandHandler:
                         print(f"{UI.colorize('Error:', 'RED')} Not a valid directory: {user_input}")
                 except Exception as e:
                     print(f"{UI.colorize('Error:', 'RED')} Invalid input: {e}")
+
+    def _handle_proxy(self, args):
+        """Handle /proxy command to manage proxy settings."""
+        if args:
+            # Direct proxy URL or "off" argument provided
+            proxy_arg = args[0]
+            if proxy_arg.lower() == 'off':
+                self.chat_app.set_proxy(None)
+            else:
+                self.chat_app.set_proxy(proxy_arg)
+        else:
+            # Interactive selection mode
+            from prompt_toolkit import PromptSession
+            from prompt_toolkit.completion import PathCompleter
+            
+            completer = PathCompleter(expanduser=True)
+            session = PromptSession(completer=completer)
+            
+            disable_label = "Disable proxy (turn off)"
+            
+            while True:
+                print(f"{UI.colorize('Proxy management:', 'BRIGHT_CYAN')}")
+                print(f"  0. {disable_label}")
+                for i, proxy in enumerate(self.chat_app.recent_proxies, 1):
+                    print(f"  {i}. {proxy}")
+                print("Enter a number to select, or type a new proxy URL:")
+                
+                try:
+                    user_input = session.prompt("> ").strip()
+                except (KeyboardInterrupt, EOFError):
+                    print("\nSelection cancelled.")
+                    return
+                
+                if not user_input:
+                    print(f"{UI.colorize('Error:', 'RED')} Empty input - please try again.")
+                    continue
+                
+                # Numeric selection
+                if user_input.isdigit():
+                    idx = int(user_input)
+                    if idx == 0:
+                        print(f"{UI.colorize('Selected:', 'BRIGHT_CYAN')} {disable_label}")
+                        self.chat_app.set_proxy(None)
+                        return
+                    elif 1 <= idx <= len(self.chat_app.recent_proxies):
+                        chosen = self.chat_app.recent_proxies[idx - 1]
+                        print(f"{UI.colorize('Selected:', 'BRIGHT_CYAN')} {chosen}")
+                        self.chat_app.set_proxy(chosen)
+                        return
+                    else:
+                        print(f"{UI.colorize('Error:', 'RED')} Number out of range.")
+                        continue
+                
+                # Manual proxy URL entry
+                self.chat_app.set_proxy(user_input)
+                return
 
 
