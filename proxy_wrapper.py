@@ -8,11 +8,6 @@ from typing import Optional
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
-if not logger.handlers:
-    console_handler = logging.StreamHandler()
-    formatter = logging.Formatter('[PROXY] %(levelname)s: %(message)s')
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
 
 def set_proxy_log_level(level):
     logger.setLevel(level)
@@ -104,7 +99,7 @@ class ProxyConfig:
 class SOCKSProxyWrapper(ProxyWrapper):
     """SOCKS5 proxy wrapper for LLM API requests"""
     def __init__(self, proxy_url=None):
-        logging.info("using SOCKSProxyWrapper")
+        logging.debug("using SOCKSProxyWrapper")
         super().__init__(proxy_url)
         self.proxy_config = None
         self.original_socket = None
@@ -138,7 +133,7 @@ class SOCKSProxyWrapper(ProxyWrapper):
                     logger.debug(f"Testing with URL: {test_url}")
                     response = session.get(test_url, timeout=10)
                     if response.status_code == 200:
-                        logger.info("Proxy connection successful.")
+                        logger.debug("Proxy connection successful.")
                         return True
                 except Exception as e:
                     logger.debug(f"Failed to test with {test_url}: {e}")
@@ -153,7 +148,7 @@ class SOCKSProxyWrapper(ProxyWrapper):
     @contextmanager
     def proxy_connection(self):
         """Context manager for proxy connection"""
-        logger.info("Setting up proxy connection...")
+        logger.debug("Setting up proxy connection...")
         if not self._setup_proxy_config():
             raise RuntimeError("Failed to setup proxy configuration")
         if not self._test_proxy_connection():

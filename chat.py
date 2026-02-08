@@ -335,8 +335,7 @@ class LLMChat:
                 return False
             
             # Try to enter proxy context (which tests connection)
-            with test_wrapper.proxy_connection():
-                print(f"{UI.colorize('Proxy connection test successful!', 'BRIGHT_GREEN')}")
+            test_wrapper.proxy_connection()
             
             # Connection test passed, now switch
             old_proxy = self.proxy_wrapper
@@ -388,6 +387,45 @@ class LLMChat:
         print(format_files(self.readable_files, "Readable"))
         print()
 
+    def _prompt_for_proxy_if_needed(self, selected_model: str) -> bool:
+        """
+        Prompt for proxy selection if the selected model suggests proxy and no proxy is configured.
+        
+        Args:
+            selected_model: Name of the selected model
+            
+        Returns:
+            bool: True if proxy was configured or not needed, False if user cancelled
+        """
+        # Check if proxy already configured
+        if self.proxy_wrapper is not None:
+            return True
+            
+        # Get model config to check if proxy suggested
+        models = config.get_models()
+        model_config = models.get(selected_model)
+        if not model_config:
+            return True
+            
+        # Check if model suggests proxy
+        if not model_config.get('proxy', False):
+            return True
+            
+        # Model suggests proxy but none configured - prompt user
+        print(f"\n{UI.colorize('Proxy suggested for this model:', 'BRIGHT_YELLOW')}")
+        print(f"Model '{selected_model}' recommends using a proxy for optimal connectivity.")
+        print("Would you like to configure a proxy now?")
+        
+        # Use the existing command handler for proxy selection
+        try:
+            self.command_handler._handle_proxy([])
+        except KeyboardInterrupt:
+            print(f"\n{UI.colorize('Proxy selection cancelled.', 'BRIGHT_YELLOW')}")
+            return False
+        
+        # Return True regardless - if user selected "No proxy", proxy_wrapper remains None
+        return True
+
     def run(self):
         """Main chat loop"""
         logger.debug("Starting run method")
@@ -412,6 +450,25 @@ class LLMChat:
 
         try:
             model = self.llm_client.choose_model()
+        except KeyboardInterrupt as e:
+            print(f"\n{UI.colorize('Exiting during setup...', 'BRIGHT_WHITE')}")
+            self._save_and_exit()
+            return
+        
+        # Prompt for proxy if model suggests it and no proxy configured
+        if model is None:
+            # This shouldn't happen during initialization, but handle gracefully
+            logger.warning("Model selection returned None, skipping proxy prompt")
+        else:
+            try:
+                if not self._prompt_for_proxy_if_needed(model):
+                    # User cancelled proxy selection, continue without proxy
+                    print(f"{UI.colorize('Continuing without proxy.', 'BRIGHT_YELLOW')}")
+            except KeyboardInterrupt:
+                print(f"\n{UI.colorize('Proxy setup cancelled, continuing without proxy.', 'BRIGHT_YELLOW')}")
+        
+        # Now set up API key (may fail if proxy still needed but not configured)
+        try:
             self.llm_client.setup_api_key(model)
             logger.debug("Set up API key successfully")
         except KeyboardInterrupt as e:
