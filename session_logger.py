@@ -22,6 +22,10 @@ class SessionLogger:
 
     def _get_conversation_dir(self):
         """Get the conversation directory for the current root_dir"""
+        if self.root_dir is None:
+            # Free chat mode - store in special directory
+            return os.path.join(config.CONVERSATIONS_DIR, "free_chat")
+        
         # Normalize the root_dir path to create a safe directory name
         root_path = Path(self.root_dir).resolve()
         # Create a hash or use the absolute path (we'll use a safe version of the path)
@@ -46,7 +50,16 @@ class SessionLogger:
             metadata.add("session_start_time", self.session_start_time.isoformat())
             metadata.add("last_saved_time", datetime.now().isoformat())
             metadata.add("interaction_count", len([m for m in conversation_history if m["role"] == "user"]))
-            metadata.add("root_dir", self.root_dir)
+            # Add preview of first user message
+            preview = ""
+            for msg in conversation_history:
+                if msg["role"] == "user":
+                    preview = msg["content"].replace('\\n', '\n').strip()
+                    # Take first 200 characters, replace newlines with spaces
+                    preview = ' '.join(preview.split())[:200]
+                    break
+            metadata.add("preview", preview)
+            metadata.add("root_dir", self.root_dir if self.root_dir is not None else "free_chat")
             doc.add("metadata", metadata)
             
             conv_array = tomlkit.aot()
@@ -95,6 +108,29 @@ class SessionLogger:
             print(f"⚠️  Error loading session: {e}")
             return None
 
+    def load_session_metadata(self, zip_path):
+        """
+        Load only metadata from a session zip file.
+        Returns a dict with metadata fields, or None if failed.
+        """
+        session_data = self.load_session(zip_path)
+        if not session_data or "metadata" not in session_data:
+            return None
+        
+        metadata = session_data["metadata"]
+        # Convert to plain dict for easier access
+        result = {}
+        try:
+            result["session_start_time"] = metadata.get("session_start_time")
+            result["last_saved_time"] = metadata.get("last_saved_time")
+            result["interaction_count"] = metadata.get("interaction_count", 0)
+            result["preview"] = metadata.get("preview", "")
+            result["root_dir"] = metadata.get("root_dir", "")
+        except (KeyError, TypeError, AttributeError):
+            # If metadata is malformed, return partial data
+            pass
+        return result
+
     def get_session_path(self):
         """Get the path to the current session file"""
         return self.session_path
@@ -113,6 +149,11 @@ class SessionLogger:
         """Get the number of logged interactions from current session"""
         session_data = self.load_session(self.session_path)
         if session_data and "metadata" in session_data:
-            return session_data["metadata"].get("interaction_count", 0)
+            metadata = session_data["metadata"]
+            try:
+                # metadata may be a tomlkit container
+                return metadata.get("interaction_count", 0)
+            except (KeyError, TypeError, AttributeError):
+                return 0
         return 0
 

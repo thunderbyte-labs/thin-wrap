@@ -2,7 +2,8 @@
   "models": {
     "gemini-2.5-flash": {
       "api_key": "GOOGLE_API_KEY",
-      "api_base_url": "https://generativelanguage.googleapis.com/v1beta/openai/"
+      "api_base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+      "proxy": true
     },
     "deepseek-chat": {
       "api_key": "DEEPSEEK_API_KEY",
@@ -14,11 +15,13 @@
     },
     "claude-sonnet-4-20250514": {
       "api_key": "ANTHROPIC_API_KEY",
-      "api_base_url": "https://api.anthropic.com/v1/"
+      "api_base_url": "https://api.anthropic.com/v1/",
+      "proxy": true
     },
     "anthropic/claude-sonnet-4.5": {
       "api_key": "OPENROUTER_API_KEY",
-      "api_base_url": "https://openrouter.ai/api/v1"
+      "api_base_url": "https://openrouter.ai/api/v1",
+      "proxy": true
     },
     "x-ai/grok-4.1-fast": {
       "api_key": "OPENROUTER_API_KEY",
@@ -44,6 +47,6 @@
   "backup": {
     "timestamp_format": "%Y%m%d%H%M%S",
     "extra_string": "thin-wrap",
-    "backup_old_file": false
+    "backup_old_file": true
   }
 }

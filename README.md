@@ -31,6 +31,7 @@ A sample `config.json` is provided with the release. It contains two main sectio
 A dictionary defining available LLM models. Each entry uses a unique model identifier as the key, with:
 - **api_key**: The name of the environment variable that holds the actual API key (recommended for security). Direct API key strings may also be used, though this is discouraged.
 - **api_base_url**: The base URL for the model's API endpoint.
+- **proxy** (optional): Boolean flag indicating whether this model recommends using a proxy. If `true` and no proxy is configured via command line, the application will prompt for proxy selection when this model is chosen. Defaults to `false`.
 
 Example entries (from the sample):
 ```json
@@ -44,7 +45,8 @@ Example entries (from the sample):
 },
 "anthropic/claude-sonnet-4.5": {
   "api_key": "OPENROUTER_API_KEY",
-  "api_base_url": "https://openrouter.ai/api/v1"
+  "api_base_url": "https://openrouter.ai/api/v1",
+  "proxy": true
 }
 ```
 
@@ -64,13 +66,14 @@ If `config.json` is missing or invalid, the application will raise an error with
 
 - **Multi-LLM Support**: Seamlessly switch between providers like Claude, DeepSeek, Grok, Gemini, and others via the `/model` command.
 - **File Context Management**: Interactive three-column file browser (activated with **Ctrl+B**) for selecting editable and readable files, with a new file insertion flow and Ctrl+D shortcut to clear selected files.
-- **Proxy Support**: Configure SOCKS5 or HTTP proxies to bypass geographic restrictions (e.g., for Anthropic or Gemini in restricted regions). Recommended providers: [Webshare](https://www.webshare.io/) (tested), [IPRoyal](https://iproyal.com/) (untested), [Proxy-Seller](https://proxy-seller.com/) (untested). Use the `--proxy` flag (e.g., `--proxy socks5://127.0.0.1:1080`).
+- **Proxy Support**: Configure SOCKS5 or HTTP proxies to bypass geographic restrictions (e.g., for Anthropic or Gemini in restricted regions). Recommended providers: [Webshare](https://www.webshare.io/) (tested), [IPRoyal](https://iproyal.com/) (untested), [Proxy-Seller](https://proxy-seller.com/) (untested). Use the `--proxy` flag (e.g., `--proxy socks5://127.0.0.1:1080`). Models can be configured with `"proxy": true` to automatically prompt for proxy selection when chosen.
 - **Intelligent Code Editing**:
   - Automatic file versioning with timestamped backups (e.g., `file.py` becomes `file.202601301511.py`).
   - Git-style diff reporting for changes using `git diff`.
   - Preservation of file permissions and formatting.
 - **Project Root Selection**: Interactive selection of project root directory with history, Tab autocompletion, and support for `~` (home directory). Change via `/rootdir` command.
 - **Multi-line Input**: Compose messages across multiple lines; send with **Alt+Enter**.
+- **Message History Navigation**: Navigate through previously sent messages and temporary drafts with **Page Up/Down** keys.
 - **Session Logging**: Automatic saving of chat sessions as timestamped text files (e.g., `llm_session_20260130_151145.txt`) in the project root or user data directory.
 - **Token Estimation**: Built-in token estimator for input and output messages to monitor usage.
 - **Colorized UI Elements**: Enhanced help menu and outputs with colorization for better readability.
@@ -80,13 +83,15 @@ If `config.json` is missing or invalid, the application will raise an error with
 ## Usage
 
 1. Launch the application as described in the Installation section.
-2. Select a project root directory (if not specified via `--root-dir`).
+2. Select a project root directory (if not specified via `--root-dir`). You can choose "No root directory - Free chatting without file context" to enable free chat mode without file context.
 3. Choose an LLM model from the available options.
 4. Enter your message and press **Alt+Enter** to send.
 5. Use commands starting with `/` for additional functionality (see Commands below).
-6. Manage file contexts with **Ctrl+B** to open the file browser menu.
+6. Manage file contexts with **Ctrl+B** to open the file browser menu. In free chat mode, Ctrl+B allows you to select a root directory and switch to file context mode.
 
 Sessions are automatically saved upon exit or after each exchange.
+
+**Navigation**: Use **Page Up** and **Page Down** to navigate through message history (sent messages and temporary drafts).
 
 ### Command-Line Arguments
 
@@ -106,6 +111,7 @@ Available in-chat commands:
 - `/reload`: Load a previous conversation from available sessions in the project root.
 - `/rootdir`: Show or change the current project root directory.
 - `/files`: Open the file context management menu (equivalent to Ctrl+B).
+- `/proxy`: Manage proxy (off to disable, number for previous, or new URL like socks5://127.0.0.1:1080).
 
 ## Architecture
 

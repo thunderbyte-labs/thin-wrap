@@ -43,7 +43,7 @@ class LLMClient:
 
         # Setup API connection
         if self.proxy_wrapper:
-            logger.info(f"Setting up {model} API connection through proxy...")
+            logger.debug(f"Setting up {model} API connection through proxy...")
             try:
                 self._initialize_client_with_proxy(api_key, api_base_url)
                 logger.info("Proxy-enabled API connection established successfully!")
@@ -114,6 +114,24 @@ class LLMClient:
             print(f"✗ Failed to switch to {new_model}: {e}")
             return False
 
+    def update_proxy(self, proxy_wrapper):
+        """Update proxy configuration."""
+        # Clean up existing proxy context
+        self._cleanup_proxy_context()
+        
+        # Update proxy wrapper
+        self.proxy_wrapper = proxy_wrapper
+        
+        # If we have a current model, reinitialize with new proxy
+        if self.current_model:
+            try:
+                self.setup_api_key(self.current_model)
+                return True
+            except Exception as e:
+                print(f"✗ Failed to update proxy: {e}")
+                return False
+        return True
+
     def _initialize_client_with_proxy(self, api_key, api_base_url):
         """Initialize client with proxy configuration"""
         try:
@@ -165,7 +183,7 @@ class LLMClient:
             max_tokens=10,
             messages=[{"role": "user", "content": "Hi"}],
         )
-        print(f"{self.current_model} API key validated successfully!\n")
+        logger.info(f"{self.current_model} API key validated successfully!")
 
     def _cleanup_proxy_context(self):
         """Clean up proxy context and related resources"""
