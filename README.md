@@ -135,6 +135,40 @@ The application is modular, with key components:
 - Check file permissions for editing.
 - Adjust `config.json` backup settings if needed.
 
+## Testing
+
+The project includes comprehensive tests to protect key functionalities:
+
+### Running Tests
+```bash
+# Install test dependencies
+pip install -r requirements.txt
+
+# Run all tests
+python -m pytest tests/ -v
+
+# Run specific test suites
+python -m pytest tests/test_config_validation.py -v
+python -m pytest tests/test_proxy_suggestion.py -v
+python -m pytest tests/test_session_metadata.py -v
+```
+
+### Test Coverage
+Tests protect critical functionality including:
+- Configuration validation and loading
+- Proxy suggestion for models requiring proxies  
+- Session metadata and preview generation
+- Command handling and error management
+- File context and free chat modes
+- Input handling and draft navigation
+
+### CI/CD Pipeline
+GitHub Actions runs tests automatically on:
+- Push to main, develop, and feature branches
+- Pull requests targeting main branch
+
+See [TESTING.md](TESTING.md) for detailed testing guidelines and CI/CD setup.
+
 ## Contributing
 Contributions are welcome! Please follow these guidelines:
 
