@@ -571,7 +571,7 @@ class LLMChat:
 
         if comments:
             print("\n" + UI.colorize("LLM Explanation / Reasoning:", "BRIGHT_CYAN"))
-            print(comments)
+            UI.render_markdown(comments)
         else:
             print("\nNo explanation provided by the LLM.")
 
