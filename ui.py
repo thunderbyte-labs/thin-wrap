@@ -1,8 +1,14 @@
 """UI utilities for LLM Terminal Chat"""
+import logging
 import os
 from pathlib import Path
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import PathCompleter
+from rich.markdown import Markdown
+from rich.console import Console
+
+logger = logging.getLogger(__name__)
+
 
 class UI:
     # ANSI color codes
@@ -71,6 +77,20 @@ class UI:
             print("\n" + UI.colorize("Session log saved to:", 'BRIGHT_CYAN'))
             print(f"  {log_path}")
         print("\n" + UI.colorize("Goodbye!", 'BRIGHT_GREEN'))
+
+    @staticmethod
+    def render_markdown(text):
+        """Render markdown text with glow-like formatting."""
+        if not text:
+            return
+        try:
+            console = Console()
+            md = Markdown(text)
+            console.print(md)
+        except Exception as e:
+            # Log error with traceback and fallback to plain print if markdown rendering fails
+            logger.exception("Failed to render markdown")
+            print(text)
 
     @staticmethod
     def interactive_selection(prompt_title, prompt_message, no_items_message, items, 
