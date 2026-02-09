@@ -53,7 +53,9 @@ def test_proxy_history():
     # Create a dummy LLMChat instance with a temp config path
     # This will create its own history file
     try:
-        chat = LLMChat(config_path=config_path)
+        root_dir = os.path.join(temp_dir, "project_root")
+        os.makedirs(root_dir, exist_ok=True)
+        chat = LLMChat(root_dir=root_dir, config_path=config_path)
         # Access the history file path
         history_file = chat.history_file
         
