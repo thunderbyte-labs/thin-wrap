@@ -253,8 +253,15 @@ class LLMClient:
             response = self.openai_client.chat.completions.create(
                 model=self.current_model,
                 messages=messages,
+                stream=True
             )
-            return response.choices[0].message.content
+            content = ""
+            for chunk in response:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    content += chunk.choices[0].delta.content
+                    print(chunk.choices[0].delta.content, end='', flush=True)  # optional live output
+
+            return content
         except KeyboardInterrupt:
             # Let the interruption propagate to send_message for proper handling
             raise
