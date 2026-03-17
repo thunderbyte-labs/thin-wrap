@@ -130,7 +130,7 @@ def test_proxy_integration_with_config():
         assert "proxy" in model_config
         assert model_config["proxy"] == True
         
-        # Simulate what chat.py would check
+        # Simulate what thin-wrap.py would check
         should_prompt = model_config.get('proxy', False)
         assert should_prompt == True
         

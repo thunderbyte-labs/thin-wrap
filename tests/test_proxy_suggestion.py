@@ -128,7 +128,7 @@ def test_proxy_suggestion_integration():
         assert models["model-needs-proxy"]["proxy"] == True
         assert models["model-no-proxy"]["proxy"] == False
         
-        # Simulate what chat.py would do
+        # Simulate what thin-wrap.py would do
         model1_config = models["model-needs-proxy"]
         model2_config = models["model-no-proxy"]
         
