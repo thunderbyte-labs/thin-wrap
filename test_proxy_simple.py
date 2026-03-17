@@ -17,7 +17,7 @@ mock_wrapper.get_connection_info.return_value = {'proxy_url': 'socks5://127.0.0.
 with mock.patch('proxy_wrapper.create_proxy_wrapper', return_value=mock_wrapper):
     with mock.patch('proxy_wrapper.validate_proxy_url', return_value=None):
         # Now import chat
-        from chat import LLMChat
+        from thin_wrap import LLMChat
         import config
         import json
         import tempfile

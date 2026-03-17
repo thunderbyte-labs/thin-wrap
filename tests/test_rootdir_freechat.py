@@ -7,7 +7,7 @@ import shutil
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import config
-from chat import LLMChat
+from thin_wrap import LLMChat
 
 def test_set_root_dir_free_chat():
     """Test set_root_dir with FREE_CHAT_MODE."""
