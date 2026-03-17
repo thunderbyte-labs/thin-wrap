@@ -1,6 +1,13 @@
 # Thin Wrap - LLM Terminal Chat
 
-A thin cross-platform terminal-based chat application for wrapping any Large Language Model (LLM) API endpoint, featuring file context management, intelligent code editing, proxy support, and session logging.
+**A thin terminal chat for wrapping any Large Language Model (LLM) API endpoint**  
+*Simplicity for people needing to **control** the code : it is not pure coding but also not vibe-coding, it is in between*
+
+It features:  
+-cross-platform compatibility  
+-strict file context management  
+-proxy support (to bypass geopolitical walls without VPN)  
+-session logging  
 
 ## Installation
 
