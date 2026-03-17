@@ -601,9 +601,9 @@ def parse_arguments():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python chat.py
-  python chat.py --proxy socks5://127.0.0.1:1080
-  python chat.py --config /path/to/config.json
+  python thin-wrap.py
+  python thin-wrap.py --proxy socks5://127.0.0.1:1080
+  python thin-wrap.py --config /path/to/config.json
         """
     )
 

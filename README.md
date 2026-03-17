@@ -117,7 +117,7 @@ Available in-chat commands:
 
 The application is modular, with key components:
 
-- `chat.py`: Main entry point and chat loop.
+- `thin-wrap.py`: Main entry point and chat loop.
 - `config.py`: Configuration settings and model loading.
 - `llm_client.py`: Unified LLM API wrapper using the OpenAI library.
 - `file_processor.py`: Handles file queries, versioning, and diff generation.
