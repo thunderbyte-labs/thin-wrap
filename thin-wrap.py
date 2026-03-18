@@ -15,6 +15,7 @@ import platformdirs
 
 # Local application imports (after third-party and standard library)
 import config
+
 config.setup_logging()
 
 from command_handler import CommandHandler
@@ -27,6 +28,7 @@ from text_utils import clean_text, estimate_tokens
 from ui import UI
 
 logger = logging.getLogger(__name__)
+
 
 def enforce_non_root():
     """Block root execution for security (Dilemma F)."""
@@ -75,10 +77,6 @@ class LLMChat:
         proxy_url=None,
         config_path=None,
     ):
-class LLMChat:
-    FREE_CHAT_MODE = "FREE_CHAT_MODE"
-    
-    def __init__(self, root_dir=None, readable_files=None, editable_files=None, first_message=None, proxy_url=None, config_path=None):
         logger.debug("Initializing LLMChat")
         self.script_directory = os.path.dirname(os.path.abspath(__file__))
         self.config_path = config_path
@@ -240,6 +238,7 @@ class LLMChat:
             for i, item in enumerate(self.recent_roots, 1):
                 print(f"  {i}. {item}")
             print("Enter a number to select, or type a new path (Tab for completion, ~ for home):")
+
             try:
                 user_input = session.prompt("> ").strip()
             except (KeyboardInterrupt, EOFError):
@@ -263,6 +262,7 @@ class LLMChat:
                 else:
                     print(f"{UI.colorize('Error:', 'RED')} Number out of range.")
                     continue
+
             # Manual path entry
             try:
                 new_item = Path(user_input).expanduser().resolve(strict=False)
@@ -278,6 +278,7 @@ class LLMChat:
     def set_root_dir(self, new_root: str, ask_to_reload: bool = True) -> None:
         """
         Change the current project root directory or switch to free chat mode.
+
         Args:
             new_root: New root directory path, or FREE_CHAT_MODE for free chat
             ask_to_reload: Whether to prompt user to reload a conversation from the new root
@@ -358,6 +359,7 @@ class LLMChat:
             # Clean up existing proxy wrapper
             old_proxy = self.proxy_wrapper
             self.proxy_wrapper = None
+
             # Update LLM client
             if self.llm_client.update_proxy(None):
                 print(f"{UI.colorize('Success:', 'BRIGHT_GREEN')} Proxy disabled")
@@ -367,11 +369,13 @@ class LLMChat:
                 self.proxy_wrapper = old_proxy
                 print(f"{UI.colorize('Error:', 'RED')} Failed to disable proxy")
                 return False
+
         # Validate proxy URL format
         error_msg = validate_proxy_url(proxy_url)
         if error_msg:
             print(f"{UI.colorize('Error:', 'RED')} Invalid proxy URL: {error_msg}")
             return False
+
         # Test proxy connection
         print(f"{UI.colorize('Testing proxy connection...', 'BRIGHT_CYAN')}")
         try:
@@ -398,6 +402,7 @@ class LLMChat:
                 self.proxy_wrapper = old_proxy
                 print(f"{UI.colorize('Error:', 'RED')} Failed to update LLM client with new proxy")
                 return False
+
         except Exception as e:
             print(f"{UI.colorize('Error:', 'RED')} Proxy connection test failed: {e}")
             return False
@@ -446,6 +451,7 @@ class LLMChat:
         # Check if proxy already configured
         if self.proxy_wrapper is not None:
             return True
+
         # Get model config to check if proxy suggested
         models = config.get_models()
         model_config = models.get(selected_model)
@@ -460,12 +466,14 @@ class LLMChat:
         print(f"\n{UI.colorize('Proxy suggested for this model:', 'BRIGHT_YELLOW')}")
         print(f"Model '{selected_model}' recommends using a proxy for optimal connectivity.")
         print("Would you like to configure a proxy now?")
+
         # Use the existing command handler for proxy selection
         try:
             self.command_handler._handle_proxy([])
         except KeyboardInterrupt:
             print(f"\n{UI.colorize('Proxy selection cancelled.', 'BRIGHT_YELLOW')}")
             return False
+
         # Return True regardless - if user selected "No proxy", proxy_wrapper remains None
         return True
 
@@ -497,6 +505,7 @@ class LLMChat:
             print(f"\n{UI.colorize('Exiting during setup...', 'BRIGHT_WHITE')}")
             self._save_and_exit()
             return
+
         # Prompt for proxy if model suggests it and no proxy configured
         if model is None:
             # This shouldn't happen during initialization, but handle gracefully
@@ -508,6 +517,7 @@ class LLMChat:
                     print(f"{UI.colorize('Continuing without proxy.', 'BRIGHT_YELLOW')}")
             except KeyboardInterrupt:
                 print(f"\n{UI.colorize('Proxy setup cancelled, continuing without proxy.', 'BRIGHT_YELLOW')}")
+
         # Now set up API key (may fail if proxy still needed but not configured)
         try:
             self.llm_client.setup_api_key(model)
@@ -529,6 +539,7 @@ class LLMChat:
             logger.debug("Entering main chat loop iteration")
             user_input = self.input_handler.get_input_with_editing(default=next_default)
             next_default = ""
+
             if isinstance(user_input, tuple) and user_input[0] == "Ctrl+B":
                 next_default = user_input[1]
                 self.command_handler.handle_files_command()
@@ -564,6 +575,7 @@ class LLMChat:
                 continue
             else:
                 self.input_handler.add_to_history(user_input)
+
         logger.debug("Exiting main chat loop")
         self._save_and_exit()
 
@@ -579,6 +591,7 @@ class LLMChat:
     def _send_message(self, message):
         """
         Send message to LLM with specified token limit.
+
         Returns:
             'insert_files' if user chose to insert files (abort send),
             None otherwise
@@ -634,6 +647,7 @@ class LLMChat:
         except Exception as e:
             print(f"   ?? Could not estimate token usage: {e}")
 
+
 def parse_arguments():
     """Parse command line arguments"""
     logger.debug("Parsing command line arguments")
@@ -645,7 +659,11 @@ Examples:
   python thin-wrap.py
   python thin-wrap.py --proxy socks5://127.0.0.1:1080
   python thin-wrap.py --config /path/to/config.json
-  """
+<<<<<<<< HEAD:thin_wrap.py
+        """,
+========
+        """
+>>>>>>>> origin/main:thin-wrap.py
     )
 
     parser.add_argument("-rd", "--root-dir", help="Root directory of the code project.")
@@ -665,9 +683,6 @@ def main():
     # Dilemma F: Block root immediately
     enforce_non_root()
 
-def main():
-    """Entry point"""
-    logger.debug("Entering main function")
     try:
         args = parse_arguments()
 
