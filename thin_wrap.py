@@ -15,6 +15,7 @@ import platformdirs
 
 # Local application imports (after third-party and standard library)
 import config
+
 config.setup_logging()
 
 from command_handler import CommandHandler
@@ -27,6 +28,7 @@ from text_utils import clean_text, estimate_tokens
 from ui import UI
 
 logger = logging.getLogger(__name__)
+
 
 def enforce_non_root():
     """Block root execution for security (Dilemma F)."""
@@ -75,10 +77,6 @@ class LLMChat:
         proxy_url=None,
         config_path=None,
     ):
-class LLMChat:
-    FREE_CHAT_MODE = "FREE_CHAT_MODE"
-    
-    def __init__(self, root_dir=None, readable_files=None, editable_files=None, first_message=None, proxy_url=None, config_path=None):
         logger.debug("Initializing LLMChat")
         self.script_directory = os.path.dirname(os.path.abspath(__file__))
         self.config_path = config_path
@@ -634,6 +632,7 @@ class LLMChat:
         except Exception as e:
             print(f"   ?? Could not estimate token usage: {e}")
 
+
 def parse_arguments():
     """Parse command line arguments"""
     logger.debug("Parsing command line arguments")
@@ -645,7 +644,7 @@ Examples:
   python thin-wrap.py
   python thin-wrap.py --proxy socks5://127.0.0.1:1080
   python thin-wrap.py --config /path/to/config.json
-  """
+  """,
     )
 
     parser.add_argument("-rd", "--root-dir", help="Root directory of the code project.")
@@ -664,6 +663,7 @@ def main():
 
     # Dilemma F: Block root immediately
     enforce_non_root()
+
 
 def main():
     """Entry point"""
