@@ -4,22 +4,66 @@ A thin cross-platform terminal-based chat application for wrapping any Large Lan
 
 ## Installation
 
-Pre-built zipped executables are available for Windows, macOS, and Linux platforms.
+### Linux & macOS
 
-1. Visit the [Releases page](https://github.com/thunderbyte-labs/thin-wrap/releases).
-2. Download the appropriate zip file for your platform:
-   - Windows: `thin-wrap-windows.zip`
-   - macOS: `thin-wrap-macos.zip`
-   - Linux: `thin-wrap-linux.zip`
-3. Extract the zip file to a directory of your choice.
+**Requirements:** `curl` or `wget`, `unzip` (usually pre-installed)
 
-A sample `config.json` file is included in the extracted directory.
+```bash
+curl -fsSL https://raw.githubusercontent.com/thunderbyte-labs/thin-wrap/main/install.sh | sh
+```
 
-4. Run the executable:
-   - On Windows: Double-click `thin-wrap.exe` (or run from Command Prompt).
-   - On macOS or Linux: Open a terminal, navigate to the extracted directory, and execute `./thin-wrap`.
+Or with `wget`:
+```bash
+wget -qO- https://raw.githubusercontent.com/thunderbyte-labs/thin-wrap/main/install.sh | sh
+```
 
-Note: On macOS or Linux, you may need to grant execution permissions with `chmod +x thin-wrap` if required.
+**What it does:**
+- Installs to `~/.local/bin` and `~/.local/lib/thin-wrap/` (no root required, root is blocked)
+- Asks where to store config: portable (with binary) or `~/.config/thin-wrap/`
+- Adds to your login shell PATH (`.profile` on Linux, `.bash_profile` on macOS)
+- Detects your architecture automatically (x86_64, ARM64, Apple Silicon)
+
+**macOS Security Note:** If you see "developer cannot be verified" warnings after manual install, run:
+```bash
+xattr -d com.apple.quarantine ~/.local/lib/thin-wrap/thin-wrap
+```
+Or install via Homebrew (when available) to avoid this: `brew install thunderbyte-labs/tap/thin-wrap`
+
+### Windows (Manual)
+
+1. Download `thin-wrap-Windows-x86_64.zip` from the [Releases page](https://github.com/thunderbyte-labs/thin-wrap/releases)
+2. Extract to a directory of your choice (e.g., `C:\Program Files\thin-wrap\` or `C:\Users\YourName\bin\`)
+3. Add the directory to your PATH manually:
+   - Search "Environment Variables" in Start Menu
+   - Edit "Path" under User variables
+   - Add your extraction directory
+4. Run `thin-wrap.exe` from Command Prompt or PowerShell
+
+### Uninstall (Linux & macOS)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/thunderbyte-labs/thin-wrap/main/uninstall.sh | sh
+```
+
+Removes binary and wrapper, preserves config by default (asks before deleting API keys).
+
+### Supported Platforms
+
+| OS | Architecture | Download |
+|----|-------------|----------|
+| Linux | x86_64 | `thin-wrap-Linux-x86_64.zip` |
+| Linux | ARM64 | `thin-wrap-Linux-aarch64.zip` |
+| macOS | Intel | `thin-wrap-Darwin-x86_64.zip` |
+| macOS | Apple Silicon | `thin-wrap-Darwin-arm64.zip` |
+| Windows | x86_64 | `thin-wrap-Windows-x86_64.zip` |
+
+**Note:** If the installer reports "unsupported architecture," download manually and extract to `~/.local/bin/` (Linux/macOS) or `C:\Windows\` (Windows, not recommended).
+
+## Security Features
+
+- **No root execution:** The application refuses to run as root (Linux/macOS) to prevent accidental file permission changes
+- **Config precedence:** `--config /path/to/config.json` overrides any auto-detected configuration
+- **XDG compliance:** Follows XDG Base Directory Specification for config storage when available
 
 ## Configuration
 

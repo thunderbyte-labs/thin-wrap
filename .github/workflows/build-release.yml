@@ -3,17 +3,14 @@ name: Build and Release Executables
 on:
   push:
     tags:
-      - 'v*'  # Triggers on any tag starting with 'v' (e.g., v0.0.1, v.0.0.1, v1.0.0)
+      - 'v*'  # Triggers on any tag starting with 'v'
 
 permissions:
-  contents: write  # Required for release creation, asset uploads, and note generation
+  contents: write
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+  build-linux:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -32,34 +29,150 @@ jobs:
       - name: Build with PyInstaller
         run: |
           pyinstaller --console --name thin-wrap --collect-submodules rich._unicode_data thin-wrap.py
-          # Default is --onedir bundle; produces dist/thin-wrap/ directory
 
       - name: Include sample config.json
-        shell: bash {0}
         run: |
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            powershell -Command "New-Item -ItemType Directory -Path dist\thin-wrap -Force | Out-Null; Copy-Item -Path config.json -Destination dist\thin-wrap\config.json -Force"
-          else
-            mkdir -p dist/thin-wrap
-            cp config.json dist/thin-wrap/config.json
-          fi
+          mkdir -p dist/thin-wrap
+          cp config.json dist/thin-wrap/config.json
 
-      - name: Package asset as zip
-        shell: bash {0}
+      - name: Package Linux x86_64
         run: |
           cd dist
-          if [[ "${{ runner.os }}" == "Linux" ]]; then
-            zip -r ../thin-wrap-linux.zip thin-wrap
-          elif [[ "${{ runner.os }}" == "macOS" ]]; then
-            zip -r ../thin-wrap-macos.zip thin-wrap
-          elif [[ "${{ runner.os }}" == "Windows" ]]; then
-            powershell Compress-Archive -Path thin-wrap -DestinationPath ../thin-wrap-windows.zip
-          fi
+          zip -r ../thin-wrap-Linux-x86_64.zip thin-wrap
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64
+          path: thin-wrap-Linux-x86_64.zip
+
+  build-macos-intel:
+    runs-on: macos-13  # Intel runner
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller --console --name thin-wrap --collect-submodules rich._unicode_data thin-wrap.py
+
+      - name: Include sample config.json
+        run: |
+          mkdir -p dist/thin-wrap
+          cp config.json dist/thin-wrap/config.json
+
+      - name: Package macOS x86_64
+        run: |
+          cd dist
+          zip -r ../thin-wrap-Darwin-x86_64.zip thin-wrap
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-x86_64
+          path: thin-wrap-Darwin-x86_64.zip
+
+  build-macos-arm:
+    runs-on: macos-latest  # ARM64 runner (Apple Silicon)
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller --console --name thin-wrap --collect-submodules rich._unicode_data thin-wrap.py
+
+      - name: Include sample config.json
+        run: |
+          mkdir -p dist/thin-wrap
+          cp config.json dist/thin-wrap/config.json
+
+      - name: Package macOS arm64
+        run: |
+          cd dist
+          zip -r ../thin-wrap-Darwin-arm64.zip thin-wrap
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64
+          path: thin-wrap-Darwin-arm64.zip
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller --console --name thin-wrap --collect-submodules rich._unicode_data thin-wrap.py
+
+      - name: Include sample config.json
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Path dist\thin-wrap -Force | Out-Null
+          Copy-Item -Path config.json -Destination dist\thin-wrap\config.json -Force
+
+      - name: Package Windows x86_64
+        shell: powershell
+        run: |
+          cd dist
+          Compress-Archive -Path thin-wrap -DestinationPath ..\thin-wrap-Windows-x86_64.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64
+          path: thin-wrap-Windows-x86_64.zip
+
+  release:
+    needs: [build-linux, build-macos-intel, build-macos-arm, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
 
       - name: Release with assets
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: thin-wrap-*.zip
+          files: |
+            linux-x86_64/thin-wrap-Linux-x86_64.zip
+            macos-x86_64/thin-wrap-Darwin-x86_64.zip
+            macos-arm64/thin-wrap-Darwin-arm64.zip
+            windows-x86_64/thin-wrap-Windows-x86_64.zip
           fail_on_unmatched_files: true
           generate_release_notes: true
