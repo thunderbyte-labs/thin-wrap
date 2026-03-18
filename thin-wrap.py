@@ -15,6 +15,7 @@ import platformdirs
 
 # Local application imports (after third-party and standard library)
 import config
+
 config.setup_logging()
 
 from command_handler import CommandHandler
@@ -28,10 +29,54 @@ from ui import UI
 
 logger = logging.getLogger(__name__)
 
+
+def enforce_non_root():
+    """Block root execution for security (Dilemma F)."""
+    try:
+        if os.geteuid() == 0:
+            print("ERROR: thin-wrap refuses to run as root.", file=sys.stderr)
+            print("Run as a regular user, or use sudo -u $USER if file permissions require it.", file=sys.stderr)
+            sys.exit(1)
+    except AttributeError:
+        pass  # Non-POSIX systems (Windows) don't have geteuid
+
+
+def resolve_config_path():
+    """
+    Resolve config.json path from wrapper env var or XDG directories.
+    Returns path string or None to trigger default search.
+    Priority: THIN_WRAP_CONFIG_DIR > XDG_CONFIG_HOME > None
+    """
+    # 1. Wrapper script sets this (portable or XDG location)
+    env_dir = os.environ.get("THIN_WRAP_CONFIG_DIR")
+    if env_dir:
+        env_path = Path(env_dir) / "config.json"
+        # Ensure directory exists (first-run edge case)
+        env_path.parent.mkdir(parents=True, exist_ok=True)
+        return str(env_path)
+
+    # 2. XDG standard location (fallback if no wrapper)
+    xdg_home = os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")
+    xdg_path = Path(xdg_home) / "thin-wrap" / "config.json"
+    if xdg_path.exists():
+        return str(xdg_path)
+
+    # 3. Return None to let config.py search script dir/CWD
+    return None
+
+
 class LLMChat:
     FREE_CHAT_MODE = "FREE_CHAT_MODE"
-    
-    def __init__(self, root_dir=None, readable_files=None, editable_files=None, first_message=None, proxy_url=None, config_path=None):
+
+    def __init__(
+        self,
+        root_dir=None,
+        readable_files=None,
+        editable_files=None,
+        first_message=None,
+        proxy_url=None,
+        config_path=None,
+    ):
         logger.debug("Initializing LLMChat")
         self.script_directory = os.path.dirname(os.path.abspath(__file__))
         self.config_path = config_path
@@ -82,13 +127,17 @@ class LLMChat:
         else:
             assert self.root_dir is not None, "root_dir must be set when free_chat_mode is False"
             root_path = Path(self.root_dir)
-            self.editable_files = [str((Path(p).resolve() if Path(p).is_absolute() else (root_path / p)).resolve()) 
-                                  for p in (editable_files or [])]
-            self.readable_files = [str((Path(p).resolve() if Path(p).is_absolute() else (root_path / p)).resolve())
-                                  for p in (readable_files or [])]
+            self.editable_files = [
+                str((Path(p).resolve() if Path(p).is_absolute() else (root_path / p)).resolve())
+                for p in (editable_files or [])
+            ]
+            self.readable_files = [
+                str((Path(p).resolve() if Path(p).is_absolute() else (root_path / p)).resolve())
+                for p in (readable_files or [])
+            ]
         self.first_message = "" if not first_message else first_message
         self.proxy_wrapper = create_proxy_wrapper(proxy_url) if proxy_url else None
-        
+
         # Add to proxy history if valid
         if proxy_url and validate_proxy_url(proxy_url) is None:
             self._add_to_recent_proxies(self.history_file, proxy_url)
@@ -104,7 +153,7 @@ class LLMChat:
         """Load recent root_dirs from history file."""
         try:
             if history_file.exists():
-                data = json.loads(history_file.read_text(encoding='utf-8'))
+                data = json.loads(history_file.read_text(encoding="utf-8"))
                 return [r for r in data.get("recent_root_dirs", []) if Path(r).is_dir()]
         except Exception as e:
             logger.debug(f"Failed to load root history: {e}")
@@ -116,12 +165,12 @@ class LLMChat:
             # Load existing data to preserve proxies
             existing_data = {}
             if history_file.exists():
-                existing_data = json.loads(history_file.read_text(encoding='utf-8'))
-            
+                existing_data = json.loads(history_file.read_text(encoding="utf-8"))
+
             # Update roots, keep proxies and any other fields
             existing_data["recent_root_dirs"] = self.recent_roots[:10]
-            
-            history_file.write_text(json.dumps(existing_data, indent=2), encoding='utf-8')
+
+            history_file.write_text(json.dumps(existing_data, indent=2), encoding="utf-8")
         except Exception as e:
             logger.debug(f"Failed to save root history: {e}")
 
@@ -138,7 +187,7 @@ class LLMChat:
         """Load recent proxy URLs from history file."""
         try:
             if history_file.exists():
-                data = json.loads(history_file.read_text(encoding='utf-8'))
+                data = json.loads(history_file.read_text(encoding="utf-8"))
                 # Only return proxies that are valid (format-wise)
                 valid_proxies = []
                 for proxy in data.get("recent_proxies", []):
@@ -156,12 +205,12 @@ class LLMChat:
             # Load existing data to preserve roots
             existing_data = {}
             if history_file.exists():
-                existing_data = json.loads(history_file.read_text(encoding='utf-8'))
-            
+                existing_data = json.loads(history_file.read_text(encoding="utf-8"))
+
             # Update proxies, keep roots and any other fields
             existing_data["recent_proxies"] = self.recent_proxies[:10]
-            
-            history_file.write_text(json.dumps(existing_data, indent=2), encoding='utf-8')
+
+            history_file.write_text(json.dumps(existing_data, indent=2), encoding="utf-8")
         except Exception as e:
             logger.debug(f"Failed to save proxy history: {e}")
 
@@ -177,29 +226,29 @@ class LLMChat:
         """Interactive prompt for root selection with history, Tab autocompletion, and free chat option."""
         from prompt_toolkit import PromptSession
         from prompt_toolkit.completion import PathCompleter
-        
+
         completer = PathCompleter(expanduser=True)
         session = PromptSession(completer=completer)
-        
+
         free_chat_label = "No root directory - Free chatting without file context"
-        
+
         while True:
             print(f"{UI.colorize('Previous project roots:', 'BRIGHT_CYAN')}")
             print(f"  0. {free_chat_label}")
             for i, item in enumerate(self.recent_roots, 1):
                 print(f"  {i}. {item}")
             print("Enter a number to select, or type a new path (Tab for completion, ~ for home):")
-            
+
             try:
                 user_input = session.prompt("> ").strip()
             except (KeyboardInterrupt, EOFError):
                 print("\nSelection cancelled.")
                 raise
-            
+
             if not user_input:
                 print(f"{UI.colorize('Error:', 'RED')} Empty input - please try again.")
                 continue
-            
+
             # Numeric selection
             if user_input.isdigit():
                 idx = int(user_input)
@@ -213,7 +262,7 @@ class LLMChat:
                 else:
                     print(f"{UI.colorize('Error:', 'RED')} Number out of range.")
                     continue
-            
+
             # Manual path entry
             try:
                 new_item = Path(user_input).expanduser().resolve(strict=False)
@@ -229,7 +278,7 @@ class LLMChat:
     def set_root_dir(self, new_root: str, ask_to_reload: bool = True) -> None:
         """
         Change the current project root directory or switch to free chat mode.
-        
+
         Args:
             new_root: New root directory path, or FREE_CHAT_MODE for free chat
             ask_to_reload: Whether to prompt user to reload a conversation from the new root
@@ -241,23 +290,23 @@ class LLMChat:
             self.free_chat_mode = True
             self.editable_files = []
             self.readable_files = []
-            
+
             # Update session logger with None root (free chat mode)
             self.session_logger = SessionLogger(self.script_directory, self.root_dir)
             self.llm_client.session_logger = self.session_logger
-            
+
             print(f"{UI.colorize('Success:', 'BRIGHT_GREEN')} Switched to free chat mode (no file context)")
             return
-        
+
         # Otherwise, it's a directory path
         root_path = Path(new_root).expanduser().resolve()
         if not root_path.is_dir():
             raise ValueError(f"Specified root_dir is not a valid directory: {root_path}")
-        
+
         old_root = self.root_dir
         self.root_dir = str(root_path)
         self.free_chat_mode = False
-        
+
         # Clear file lists when switching to a different project root
         # Only clear if actually changing to a different directory (not same directory via different path)
         should_clear_files = True
@@ -266,49 +315,51 @@ class LLMChat:
             old_resolved = Path(old_root).resolve()
             if old_resolved == root_path:
                 should_clear_files = False
-        
+
         if should_clear_files:
             self.editable_files = []
             self.readable_files = []
-        
+
         # Update history
         self._add_to_recent_roots(self.history_file, self.root_dir)
-        
+
         # Update session logger with new root
         self.session_logger = SessionLogger(self.script_directory, self.root_dir)
-        
+
         # Update LLM client's session logger reference
         self.llm_client.session_logger = self.session_logger
-        
+
         print(f"{UI.colorize('Success:', 'BRIGHT_GREEN')} Project root changed from '{old_root}' to '{self.root_dir}'")
-        
+
         # If there are sessions available in the new root, ask if user wants to reload
         if ask_to_reload:
             sessions = self.session_logger.list_available_sessions()
             if sessions:
-                print(f"\n{UI.colorize('Note:', 'BRIGHT_CYAN')} Found {len(sessions)} conversation(s) in the new project root.")
+                print(
+                    f"\n{UI.colorize('Note:', 'BRIGHT_CYAN')} Found {len(sessions)} conversation(s) in the new project root."
+                )
                 print(f"Use {UI.colorize('/reload', 'BRIGHT_YELLOW')} to load one of these conversations.")
 
     def set_proxy(self, proxy_url: str | None, ask_to_reload: bool = True) -> bool:
         """
         Set proxy URL or disable proxy.
-        
+
         Args:
             proxy_url: Proxy URL string, None or 'off' to disable
             ask_to_reload: Whether to ask about reloading sessions (not used for proxy)
-            
+
         Returns:
             bool: True if successful, False otherwise
         """
         from proxy_wrapper import create_proxy_wrapper, validate_proxy_url
-        
+
         # Handle disable proxy
-        if proxy_url is None or proxy_url.lower() == 'off':
+        if proxy_url is None or proxy_url.lower() == "off":
             print(f"{UI.colorize('Disabling proxy...', 'BRIGHT_CYAN')}")
             # Clean up existing proxy wrapper
             old_proxy = self.proxy_wrapper
             self.proxy_wrapper = None
-            
+
             # Update LLM client
             if self.llm_client.update_proxy(None):
                 print(f"{UI.colorize('Success:', 'BRIGHT_GREEN')} Proxy disabled")
@@ -318,13 +369,13 @@ class LLMChat:
                 self.proxy_wrapper = old_proxy
                 print(f"{UI.colorize('Error:', 'RED')} Failed to disable proxy")
                 return False
-        
+
         # Validate proxy URL format
         error_msg = validate_proxy_url(proxy_url)
         if error_msg:
             print(f"{UI.colorize('Error:', 'RED')} Invalid proxy URL: {error_msg}")
             return False
-        
+
         # Test proxy connection
         print(f"{UI.colorize('Testing proxy connection...', 'BRIGHT_CYAN')}")
         try:
@@ -333,14 +384,14 @@ class LLMChat:
             if test_wrapper is None:
                 print(f"{UI.colorize('Error:', 'RED')} Failed to create proxy wrapper")
                 return False
-            
+
             # Try to enter proxy context (which tests connection)
             test_wrapper.proxy_connection()
-            
+
             # Connection test passed, now switch
             old_proxy = self.proxy_wrapper
             self.proxy_wrapper = test_wrapper
-            
+
             if self.llm_client.update_proxy(test_wrapper):
                 # Add to recent proxies history
                 self._add_to_recent_proxies(self.history_file, proxy_url)
@@ -351,7 +402,7 @@ class LLMChat:
                 self.proxy_wrapper = old_proxy
                 print(f"{UI.colorize('Error:', 'RED')} Failed to update LLM client with new proxy")
                 return False
-                
+
         except Exception as e:
             print(f"{UI.colorize('Error:', 'RED')} Proxy connection test failed: {e}")
             return False
@@ -375,11 +426,11 @@ class LLMChat:
             # Truncate if too many
             max_show = 5
             if len(rel_paths) <= max_show:
-                files_str = ', '.join(rel_paths)
+                files_str = ", ".join(rel_paths)
                 return f"{label} ({len(rel_paths)}): {files_str}"
             else:
                 shown = rel_paths[:max_show]
-                files_str = ', '.join(shown) + f" ... and {len(rel_paths)-max_show} more"
+                files_str = ", ".join(shown) + f" ... and {len(rel_paths)-max_show} more"
                 return f"{label} ({len(rel_paths)}): {files_str}"
 
         print()
@@ -390,39 +441,39 @@ class LLMChat:
     def _prompt_for_proxy_if_needed(self, selected_model: str) -> bool:
         """
         Prompt for proxy selection if the selected model suggests proxy and no proxy is configured.
-        
+
         Args:
             selected_model: Name of the selected model
-            
+
         Returns:
             bool: True if proxy was configured or not needed, False if user cancelled
         """
         # Check if proxy already configured
         if self.proxy_wrapper is not None:
             return True
-            
+
         # Get model config to check if proxy suggested
         models = config.get_models()
         model_config = models.get(selected_model)
         if not model_config:
             return True
-            
+
         # Check if model suggests proxy
-        if not model_config.get('proxy', False):
+        if not model_config.get("proxy", False):
             return True
-            
+
         # Model suggests proxy but none configured - prompt user
         print(f"\n{UI.colorize('Proxy suggested for this model:', 'BRIGHT_YELLOW')}")
         print(f"Model '{selected_model}' recommends using a proxy for optimal connectivity.")
         print("Would you like to configure a proxy now?")
-        
+
         # Use the existing command handler for proxy selection
         try:
             self.command_handler._handle_proxy([])
         except KeyboardInterrupt:
             print(f"\n{UI.colorize('Proxy selection cancelled.', 'BRIGHT_YELLOW')}")
             return False
-        
+
         # Return True regardless - if user selected "No proxy", proxy_wrapper remains None
         return True
 
@@ -454,7 +505,7 @@ class LLMChat:
             print(f"\n{UI.colorize('Exiting during setup...', 'BRIGHT_WHITE')}")
             self._save_and_exit()
             return
-        
+
         # Prompt for proxy if model suggests it and no proxy configured
         if model is None:
             # This shouldn't happen during initialization, but handle gracefully
@@ -466,7 +517,7 @@ class LLMChat:
                     print(f"{UI.colorize('Continuing without proxy.', 'BRIGHT_YELLOW')}")
             except KeyboardInterrupt:
                 print(f"\n{UI.colorize('Proxy setup cancelled, continuing without proxy.', 'BRIGHT_YELLOW')}")
-        
+
         # Now set up API key (may fail if proxy still needed but not configured)
         try:
             self.llm_client.setup_api_key(model)
@@ -488,7 +539,7 @@ class LLMChat:
             logger.debug("Entering main chat loop iteration")
             user_input = self.input_handler.get_input_with_editing(default=next_default)
             next_default = ""
-            
+
             if isinstance(user_input, tuple) and user_input[0] == "Ctrl+B":
                 next_default = user_input[1]
                 self.command_handler.handle_files_command()
@@ -497,7 +548,12 @@ class LLMChat:
 
             if not user_input:
                 logger.debug("Empty user input, continuing")
-                print(UI.colorize("Empty message or KeyboardInterrupt. Type /help to see command or /bye (then Alt+Enter) to quit.\n\n", "BOLD"))
+                print(
+                    UI.colorize(
+                        "Empty message or KeyboardInterrupt. Type /help to see command or /bye (then Alt+Enter) to quit.\n\n",
+                        "BOLD",
+                    )
+                )
                 continue
 
             logger.debug(f"Processing user input: {user_input[:50]}...")
@@ -512,14 +568,14 @@ class LLMChat:
 
             logger.debug("Handling non-command user message")
             send_result = self._send_message(user_input)
-            
+
             # If user chose to insert files, return to editor with the message
-            if send_result == 'insert_files':
+            if send_result == "insert_files":
                 next_default = user_input
                 continue
             else:
                 self.input_handler.add_to_history(user_input)
-            
+
         logger.debug("Exiting main chat loop")
         self._save_and_exit()
 
@@ -535,7 +591,7 @@ class LLMChat:
     def _send_message(self, message):
         """
         Send message to LLM with specified token limit.
-        
+
         Returns:
             'insert_files' if user chose to insert files (abort send),
             None otherwise
@@ -552,13 +608,11 @@ class LLMChat:
         else:
             # In non-free chat mode, root_dir must be a string
             root_dir_str = cast(str, self.root_dir)
-            query, response_parser = generate_query(
-                root_dir_str, self.readable_files, self.editable_files, message
-            )
+            query, response_parser = generate_query(root_dir_str, self.readable_files, self.editable_files, message)
             # Check if user chose to insert files (abort send)
             if query is None and response_parser is None:
-                return 'insert_files'
-        
+                return "insert_files"
+
         assert query is not None
         query = clean_text(query)
 
@@ -593,6 +647,7 @@ class LLMChat:
         except Exception as e:
             print(f"   ?? Could not estimate token usage: {e}")
 
+
 def parse_arguments():
     """Parse command line arguments"""
     logger.debug("Parsing command line arguments")
@@ -604,7 +659,11 @@ Examples:
   python thin-wrap.py
   python thin-wrap.py --proxy socks5://127.0.0.1:1080
   python thin-wrap.py --config /path/to/config.json
+<<<<<<<< HEAD:thin_wrap.py
+        """,
+========
         """
+>>>>>>>> origin/main:thin-wrap.py
     )
 
     parser.add_argument("-rd", "--root-dir", help="Root directory of the code project.")
@@ -616,9 +675,14 @@ Examples:
 
     return parser.parse_args()
 
+
 def main():
     """Entry point"""
     logger.debug("Entering main function")
+
+    # Dilemma F: Block root immediately
+    enforce_non_root()
+
     try:
         args = parse_arguments()
 
@@ -630,14 +694,25 @@ def main():
                 logger.error(f"Invalid proxy URL provided: {args.proxy} -- {error_msg}")
                 sys.exit(1)
             logger.debug(f"Proxy enabled: {proxy_url}")
-        
+
+        # Config resolution: CLI arg > env/XDG > default search
+        if args.config:
+            effective_config_path = args.config
+            logger.debug(f"Using config from --config arg: {effective_config_path}")
+        else:
+            effective_config_path = resolve_config_path()
+            if effective_config_path:
+                logger.debug(f"Using resolved config path: {effective_config_path}")
+            else:
+                logger.debug("No env/XDG config found; using default search")
+
         chat = LLMChat(
             root_dir=args.root_dir,
             readable_files=args.read,
             editable_files=args.edit,
             first_message=args.message,
             proxy_url=args.proxy,
-            config_path=args.config
+            config_path=effective_config_path,  # Prevails if set, None otherwise
         )
         chat.run()
 
@@ -649,4 +724,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
