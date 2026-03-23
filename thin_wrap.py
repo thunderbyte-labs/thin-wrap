@@ -661,13 +661,8 @@ def main():
     """Entry point"""
     logger.debug("Entering main function")
 
-    # Dilemma F: Block root immediately
     enforce_non_root()
-
-
-def main():
-    """Entry point"""
-    logger.debug("Entering main function")
+    
     try:
         args = parse_arguments()
 
