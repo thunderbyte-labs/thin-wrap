@@ -657,26 +657,12 @@ Examples:
     return parser.parse_args()
 
 
-<<<<<<< HEAD
-=======
 def main():
     """Entry point"""
     logger.debug("Entering main function")
 
-    # Dilemma F: Block root immediately
-    enforce_non_root()
-
-
->>>>>>> origin/main
-def main():
-    """Entry point"""
-    logger.debug("Entering main function")
-
-    # Dilemma F: Block root immediately
     enforce_non_root()
     
-    """Entry point"""
-    logger.debug("Entering main function")
     try:
         args = parse_arguments()
 
