@@ -28,7 +28,7 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller --console --name thin-wrap --collect-submodules rich._unicode_data thin-wrap.py
+          pyinstaller --console --name thin-wrap --collect-submodules rich._unicode_data thin_wrap.py
 
       - name: Include sample config.json
         run: |
@@ -47,7 +47,7 @@ jobs:
           path: thin-wrap-Linux-x86_64.zip
 
   build-macos-intel:
-    runs-on: macos-13  # Intel runner
+    runs-on: macos-15-intel
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -65,7 +65,7 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller --console --name thin-wrap --collect-submodules rich._unicode_data thin-wrap.py
+          pyinstaller --console --name thin-wrap --collect-submodules rich._unicode_data thin_wrap.py
 
       - name: Include sample config.json
         run: |
@@ -102,7 +102,7 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller --console --name thin-wrap --collect-submodules rich._unicode_data thin-wrap.py
+          pyinstaller --console --name thin-wrap --collect-submodules rich._unicode_data thin_wrap.py
 
       - name: Include sample config.json
         run: |
@@ -139,7 +139,7 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller --console --name thin-wrap --collect-submodules rich._unicode_data thin-wrap.py
+          pyinstaller --console --name thin-wrap --collect-submodules rich._unicode_data thin_wrap.py
 
       - name: Include sample config.json
         shell: powershell

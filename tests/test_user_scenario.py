@@ -27,7 +27,7 @@ def test_user_scenario():
     os.makedirs(footstat, exist_ok=True)
     
     # Create some files in thin-wrap
-    with open(os.path.join(thin_wrap, "thin-wrap.py"), "w") as f:
+    with open(os.path.join(thin_wrap, "thin_wrap.py"), "w") as f:
         f.write("print('hello')")
     with open(os.path.join(thin_wrap, "command_handler.py"), "w") as f:
         f.write("print('world')")
@@ -58,7 +58,7 @@ def test_user_scenario():
         # Simulate user adding files via Ctrl+B menu
         # (In real usage, these would be added via FileMenuApp)
         chat.editable_files = [
-            os.path.join(thin_wrap, "thin-wrap.py"),
+            os.path.join(thin_wrap, "thin_wrap.py"),
             os.path.join(thin_wrap, "command_handler.py")
         ]
         chat.readable_files = [
