@@ -74,6 +74,10 @@ BINDIR="${PREFIX}/bin"
 CONFIG_DIR_XDG="${XDG_CONFIG_HOME:-${HOME}/.config}/thin-wrap"
 APP_DIR="${LIBDIR}/thin-wrap"
 
+# Create necessary directories early to prevent mv errors
+mkdir -p "$LIBDIR"
+mkdir -p "$BINDIR"
+
 # Fetch latest version info
 fetch_latest_info
 
@@ -153,13 +157,19 @@ else
 fi
 
 # Extract
-unzip -o "${ARCHIVE}"
+if command -v unzip >/dev/null 2>&1; then
+    unzip -o "${ARCHIVE}"
+else
+    echo "ERROR: unzip command not found. Please install unzip."
+    exit 1
+fi
 rm -f "${ARCHIVE}"
 
 # Handle PyInstaller one-directory structure
 if [ -d "thin-wrap" ] && [ -f "thin-wrap/thin-wrap" ]; then
     # PyInstaller mode: directory contains binary and _internal/
     rm -rf "$APP_DIR"  # Remove old version if updating
+    mkdir -p "$(dirname "$APP_DIR")"  # Ensure parent directory exists
     mv thin-wrap "$APP_DIR"
 elif [ -f "thin-wrap" ]; then
     # Single binary mode (fallback)
@@ -171,9 +181,6 @@ else
 fi
 
 chmod +x "${APP_DIR}/thin-wrap"
-
-# Create directories
-mkdir -p "$BINDIR"
 
 # Store config mode for future updates
 echo "$CONFIG_MODE" > "${APP_DIR}/.config_location"
