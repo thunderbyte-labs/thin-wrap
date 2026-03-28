@@ -22,6 +22,7 @@ class LLMClient:
         self._proxy_context = None
         self._http_client = None
         self.current_model = None
+        self.current_model_config = None
         self.session_logger = session_logger
 
     def setup_api_key(self, model):
@@ -32,6 +33,7 @@ class LLMClient:
         self.current_model = model
         models = config.get_models()
         model_config = models[model]
+        self.current_model_config = model_config
         api_key = os.getenv(model_config["api_key"]) or model_config["api_key"]
         api_base_url = model_config["api_base_url"]
 
@@ -178,11 +180,23 @@ class LLMClient:
 
     def _test_connection(self):
         """Test API connection with a simple request"""
-        self.openai_client.chat.completions.create(
-            model=self.current_model,
-            max_tokens=10,
-            messages=[{"role": "user", "content": "Hi"}],
-        )
+        # Prepare extra body parameters if plugins are configured
+        extra_body = {}
+        if self.current_model_config and 'plugins' in self.current_model_config:
+            plugins = self.current_model_config['plugins']
+            if plugins:
+                extra_body['plugins'] = plugins
+        
+        # Build request parameters
+        request_params = {
+            'model': self.current_model,
+            'max_tokens': 10,
+            'messages': [{"role": "user", "content": "Hi"}],
+        }
+        if extra_body:
+            request_params['extra_body'] = extra_body
+        
+        self.openai_client.chat.completions.create(**request_params)
         logger.info(f"{self.current_model} API key validated successfully!")
 
     def _cleanup_proxy_context(self):
@@ -250,10 +264,23 @@ class LLMClient:
         try:
             # Prepare messages without timestamps for API
             messages = [{"role": msg["role"], "content": msg["content"]} for msg in self.conversation_history]
-            response = self.openai_client.chat.completions.create(
-                model=self.current_model,
-                messages=messages,
-            )
+            
+            # Prepare extra body parameters if plugins are configured
+            extra_body = {}
+            if self.current_model_config and 'plugins' in self.current_model_config:
+                plugins = self.current_model_config['plugins']
+                if plugins:
+                    extra_body['plugins'] = plugins
+            
+            # Build request parameters
+            request_params = {
+                'model': self.current_model,
+                'messages': messages,
+            }
+            if extra_body:
+                request_params['extra_body'] = extra_body
+            
+            response = self.openai_client.chat.completions.create(**request_params)
             return response.choices[0].message.content
         except KeyboardInterrupt:
             # Let the interruption propagate to send_message for proper handling
