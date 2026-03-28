@@ -34,7 +34,8 @@
     },
     "moonshotai/kimi-k2.5": {
       "api_key": "OPENROUTER_API_KEY",
-      "api_base_url": "https://openrouter.ai/api/v1"
+      "api_base_url": "https://openrouter.ai/api/v1",
+      "plugins": [{"id": "web"}]
     },
     "qwen/qwen3-coder": {
       "api_key": "OPENROUTER_API_KEY",
