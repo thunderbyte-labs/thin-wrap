@@ -178,24 +178,31 @@ class LLMClient:
             logger.error(f"Failed to setup client with proxy: {e}")
             self.openai_client = OpenAI(**client_kwargs)
 
-    def _test_connection(self):
-        """Test API connection with a simple request"""
+    def _build_request_params(self, messages, **kwargs):
+        """Build request parameters for OpenAI API call, including plugins if configured."""
         # Prepare extra body parameters if plugins are configured
         extra_body = {}
         if self.current_model_config and 'plugins' in self.current_model_config:
             plugins = self.current_model_config['plugins']
             if plugins:
                 extra_body['plugins'] = plugins
-        
-        # Build request parameters
+
         request_params = {
             'model': self.current_model,
-            'max_tokens': 10,
-            'messages': [{"role": "user", "content": "Hi"}],
+            'messages': messages,
         }
+        # Add any additional parameters (e.g., max_tokens)
+        request_params.update(kwargs)
         if extra_body:
             request_params['extra_body'] = extra_body
-        
+        return request_params
+
+    def _test_connection(self):
+        """Test API connection with a simple request"""
+        request_params = self._build_request_params(
+            messages=[{"role": "user", "content": "Hi"}],
+            max_tokens=10
+        )
         self.openai_client.chat.completions.create(**request_params)
         logger.info(f"{self.current_model} API key validated successfully!")
 
@@ -264,22 +271,7 @@ class LLMClient:
         try:
             # Prepare messages without timestamps for API
             messages = [{"role": msg["role"], "content": msg["content"]} for msg in self.conversation_history]
-            
-            # Prepare extra body parameters if plugins are configured
-            extra_body = {}
-            if self.current_model_config and 'plugins' in self.current_model_config:
-                plugins = self.current_model_config['plugins']
-                if plugins:
-                    extra_body['plugins'] = plugins
-            
-            # Build request parameters
-            request_params = {
-                'model': self.current_model,
-                'messages': messages,
-            }
-            if extra_body:
-                request_params['extra_body'] = extra_body
-            
+            request_params = self._build_request_params(messages=messages)
             response = self.openai_client.chat.completions.create(**request_params)
             return response.choices[0].message.content
         except KeyboardInterrupt:
@@ -306,5 +298,4 @@ class LLMClient:
     def __del__(self):
         """Cleanup when object is destroyed"""
         self._cleanup_proxy_context()
-
 
