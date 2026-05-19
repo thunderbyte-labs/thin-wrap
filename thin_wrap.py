@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.11
+#!/usr/bin/env python
 
 """Main LLM Terminal Chat application"""
 import argparse
@@ -633,13 +633,43 @@ class LLMChat:
             print(f"   ?? Could not estimate token usage: {e}")
 
 
+def _get_binary_and_config_info():
+    """
+    Determine the binary path and config file path for --help output.
+    Returns a tuple (binary_path, config_path_description).
+    """
+    # Binary path: resolve symlinks and get real location
+    binary_path = os.path.realpath(sys.argv[0])
+
+    # Config path: use the same resolution as resolve_config_path()
+    config_path = resolve_config_path()
+    if config_path:
+        config_desc = config_path
+    else:
+        # Fallback: default search locations
+        config_desc = (
+            "default searched locations:\n"
+            "  - $THIN_WRAP_CONFIG_DIR/config.json\n"
+            "  - ~/.config/thin-wrap/config.json\n"
+            "  - (same directory as binary)"
+        )
+    return binary_path, config_desc
+
+
 def parse_arguments():
     """Parse command line arguments"""
     logger.debug("Parsing command line arguments")
+
+    # Compute binary and config info for inclusion in help text
+    binary_path, config_desc = _get_binary_and_config_info()
+
     parser = argparse.ArgumentParser(
         description="LLM Terminal Chat connected with most of LLM API",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog=f"""
+Binary location: {binary_path}
+Config location: {config_desc}
+
 Examples:
   python thin_wrap.py
   python thin_wrap.py --proxy socks5://127.0.0.1:1080

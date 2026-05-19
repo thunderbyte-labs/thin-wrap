@@ -89,16 +89,13 @@ if [ -t 0 ]; then
     INTERACTIVE=1
 else
     INTERACTIVE=0
-    echo "Non-interactive mode detected (SSH/CI). Using defaults."
 fi
 
 echo "=== thin-wrap ${VERSION} Installer (${PLATFORM}/${ARCH}) ==="
-echo ""
 
 # Check existing installation
 if [ -d "$APP_DIR" ] && [ -f "${APP_DIR}/thin-wrap" ]; then
     UPDATE_MODE=1
-    echo "Existing installation detected. Updating to ${VERSION}..."
     if [ -f "${APP_DIR}/.config_location" ]; then
         CONFIG_MODE=$(cat "${APP_DIR}/.config_location")
     else
@@ -112,10 +109,7 @@ fi
 # Config location choice
 if [ -z "$CONFIG_MODE" ]; then
     if [ $INTERACTIVE -eq 1 ]; then
-        echo "Choose configuration storage location:"
-        echo "  [1] Portable (next to app, in ~/.local/lib/thin-wrap/) - DEFAULT"
-        echo "  [2] XDG Standard (~/.config/thin-wrap/)"
-        printf "Select [1/2]: "
+        printf "Select config location [1=portable (default), 2=XDG]: "
         read -r choice
         case "$choice" in
             2) CONFIG_MODE="xdg" ;;
@@ -123,7 +117,6 @@ if [ -z "$CONFIG_MODE" ]; then
         esac
     else
         CONFIG_MODE="portable"
-        echo "Defaulting to portable mode."
     fi
 fi
 
@@ -133,10 +126,6 @@ if [ "$CONFIG_MODE" = "xdg" ]; then
 else
     CONFIG_TARGET="$APP_DIR"
 fi
-
-echo "Installing to: $APP_DIR"
-echo "Config location: $CONFIG_TARGET"
-echo "Downloading ${ARCHIVE}..."
 
 # Download
 if command -v curl >/dev/null 2>&1; then
@@ -156,9 +145,9 @@ else
     exit 1
 fi
 
-# Extract
+# Extract (quietly)
 if command -v unzip >/dev/null 2>&1; then
-    unzip -o "${ARCHIVE}"
+    unzip -qq -o "${ARCHIVE}"
 else
     echo "ERROR: unzip command not found. Please install unzip."
     exit 1
@@ -167,12 +156,10 @@ rm -f "${ARCHIVE}"
 
 # Handle PyInstaller one-directory structure
 if [ -d "thin-wrap" ] && [ -f "thin-wrap/thin-wrap" ]; then
-    # PyInstaller mode: directory contains binary and _internal/
-    rm -rf "$APP_DIR"  # Remove old version if updating
-    mkdir -p "$(dirname "$APP_DIR")"  # Ensure parent directory exists
+    rm -rf "$APP_DIR"
+    mkdir -p "$(dirname "$APP_DIR")"
     mv thin-wrap "$APP_DIR"
 elif [ -f "thin-wrap" ]; then
-    # Single binary mode (fallback)
     mkdir -p "$APP_DIR"
     mv thin-wrap "$APP_DIR/"
 else
@@ -185,13 +172,24 @@ chmod +x "${APP_DIR}/thin-wrap"
 # Store config mode for future updates
 echo "$CONFIG_MODE" > "${APP_DIR}/.config_location"
 
-# Create wrapper script
+# Create wrapper script with --help enhancement
 cat > "${BINDIR}/thin-wrap" << EOF
 #!/bin/sh
 # thin-wrap wrapper - hardcoded paths for SSH/compatibility
 export THIN_WRAP_APP_DIR="${APP_DIR}"
 export THIN_WRAP_CONFIG_DIR="${CONFIG_TARGET}"
-exec "${APP_DIR}/thin-wrap" "\$@"
+case "\${1}" in
+    --help|-h)
+        echo "thin-wrap - LLM Terminal Chat"
+        echo "Binary location: ${APP_DIR}/thin-wrap"
+        echo "Config location: ${CONFIG_TARGET}/config.json"
+        echo ""
+        exec "${APP_DIR}/thin-wrap" "\$@"
+        ;;
+    *)
+        exec "${APP_DIR}/thin-wrap" "\$@"
+        ;;
+esac
 EOF
 chmod +x "${BINDIR}/thin-wrap"
 
@@ -200,7 +198,6 @@ if [ ! -f "${CONFIG_TARGET}/config.json" ]; then
     mkdir -p "${CONFIG_TARGET}"
     if [ -f "${APP_DIR}/config.json" ]; then
         cp "${APP_DIR}/config.json" "${CONFIG_TARGET}/config.json"
-        echo "Created default config at: ${CONFIG_TARGET}/config.json"
     fi
 fi
 
@@ -208,41 +205,19 @@ fi
 cd - >/dev/null 2>&1 || true
 rm -rf "$TMPDIR"
 
-# PATH handling
-if echo ":${PATH}:" | grep -q ":${BINDIR}:"; then
-    echo "PATH already configured."
-else
-    if [ $INTERACTIVE -eq 1 ]; then
-        echo ""
-        echo "WARNING: ${BINDIR} is not in your PATH."
-        printf "Add to ${PROFILE_FILE}? [y/N]: "
-        read -r add_path
-        if [ "$add_path" = "y" ] || [ "$add_path" = "Y" ]; then
-            echo "export PATH=\"${BINDIR}:\$PATH\"" >> "$PROFILE_FILE"
-            echo "Added to ${PROFILE_FILE}"
-            echo "Run: source ${PROFILE_FILE}"
-        else
-            echo "Add manually: export PATH=\"${BINDIR}:\$PATH\""
-        fi
-    else
-        echo ""
-        echo "WARNING: Add to your PATH:"
-        echo "  export PATH=\"${BINDIR}:\$PATH\""
-        echo "Add to ${PROFILE_FILE} for persistence."
-    fi
+# Ensure PATH entry in profile (automatic, no manual steps)
+PATH_LINE="export PATH=\"${BINDIR}:\$PATH\""
+if ! echo ":${PATH}:" | grep -q ":${BINDIR}:" && ! grep -qsF "$PATH_LINE" "$PROFILE_FILE" 2>/dev/null; then
+    echo "" >> "$PROFILE_FILE"
+    echo "# thin-wrap install - added by installer" >> "$PROFILE_FILE"
+    echo "$PATH_LINE" >> "$PROFILE_FILE"
 fi
 
 # macOS Gatekeeper warning
 if [ "$PLATFORM" = "Darwin" ]; then
-    echo ""
-    echo "macOS Security Notice:"
-    echo "If you see 'cannot be verified' warnings, run:"
-    echo "  xattr -d com.apple.quarantine ${APP_DIR}/thin-wrap"
-    echo "Or install via Homebrew (recommended) when available:"
-    echo "  brew install thunderbyte-labs/tap/thin-wrap"
+    echo "macOS: if 'cannot be verified' see README for xattr command."
 fi
 
-echo ""
 if [ $UPDATE_MODE -eq 1 ]; then
     echo "Update complete! (${VERSION})"
 else
