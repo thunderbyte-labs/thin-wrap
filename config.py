@@ -171,6 +171,15 @@ def _load_config_internal(config_path: str | None = None) -> dict:
         # Set default proxy to False if not present
         else:
             model_config['proxy'] = False
+        
+        # Validate plugins field if present
+        if 'plugins' in model_config:
+            plugins_value = model_config['plugins']
+            if not isinstance(plugins_value, list):
+                raise ValueError(f"Model '{model_name}' plugins field must be a list, got {type(plugins_value)}")
+        # Set default plugins to empty list if not present
+        else:
+            model_config['plugins'] = []
     
     # Set defaults for backup section if not present
     if 'backup' not in config_data:
