@@ -10,31 +10,25 @@ permissions:
 
 jobs:
   build-linux:
-    runs-on: ubuntu-latest
-    container:
-      image: ubuntu:20.04
+    runs-on: ubuntu-22.04          # ← Fixed: glibc 2.35 for wide compatibility
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Python 3.11 and build dependencies
-        run: |
-          apt-get update
-          apt-get install -y software-properties-common curl
-          add-apt-repository -y ppa:deadsnakes/ppa
-          apt-get update
-          apt-get install -y python3.11 python3.11-venv python3.11-dev python3-pip build-essential
-          python3.11 -m ensurepip --upgrade
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-      - name: Install Python dependencies
+      - name: Install dependencies
         run: |
-          python3.11 -m pip install --upgrade pip
-          python3.11 -m pip install -r requirements.txt
-          python3.11 -m pip install pyinstaller
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
 
       - name: Build with PyInstaller
         run: |
-          python3.11 -m PyInstaller --console --name thin-wrap --collect-submodules rich._unicode_data thin_wrap.py
+          pyinstaller --console --name thin-wrap --collect-submodules rich._unicode_data thin_wrap.py
 
       - name: Include sample config.json
         run: |
@@ -51,7 +45,7 @@ jobs:
         with:
           name: linux-x86_64
           path: thin-wrap-Linux-x86_64.zip
-
+  
   build-macos-intel:
     runs-on: macos-15-intel
     steps:
@@ -165,7 +159,7 @@ jobs:
           name: windows-x86_64
           path: thin-wrap-Windows-x86_64.zip
 
-  release:
+release:
     needs: [build-linux, build-macos-intel, build-macos-arm, build-windows]
     runs-on: ubuntu-latest
     steps:

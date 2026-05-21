@@ -66,23 +66,21 @@ case "$ARCH_RAW" in
         ;;
 esac
 
-# glibc compatibility check on Linux (defensive measure)
-# Updated for more conservative build targeting glibc 2.31 (Ubuntu 20.04)
+# glibc compatibility check on Linux
 if [ "$PLATFORM" = "Linux" ]; then
     if command -v ldd >/dev/null 2>&1; then
         GLIBC_VERSION=$(ldd --version 2>/dev/null | head -n 1 | grep -oE '[0-9]+\.[0-9]+' | head -n 1)
         if [ -n "$GLIBC_VERSION" ]; then
-            # Pre-built Linux binaries now target glibc >= 2.31 (built via Docker on Ubuntu 20.04)
-            # This provides an early, clear warning instead of a cryptic PyInstaller glibc error.
+            # Pre-built Linux binaries now target glibc >= 2.35 (built on ubuntu-22.04)
             MAJOR=$(echo "$GLIBC_VERSION" | cut -d. -f1)
             MINOR=$(echo "$GLIBC_VERSION" | cut -d. -f2)
-            if [ "$MAJOR" -lt 2 ] || { [ "$MAJOR" -eq 2 ] && [ "$MINOR" -lt 31 ]; }; then
+            if [ "$MAJOR" -lt 2 ] || { [ "$MAJOR" -eq 2 ] && [ "$MINOR" -lt 35 ]; }; then
                 echo "WARNING: Your system's glibc version is $GLIBC_VERSION."
-                echo "The pre-built binary was compiled against glibc 2.31+."
-                echo "It may fail to start with a library version error (GLIBC_2.xx not found)."
+                echo "The pre-built binary requires glibc 2.35+."
+                echo "It may fail with a library version error (GLIBC_2.xx not found)."
                 echo "Recommended actions:"
-                echo "  - Upgrade your distribution (Ubuntu 20.04+ or equivalent recommended), or"
-                echo "  - Build from source on your system (see README for instructions)."
+                echo "  - Upgrade your distribution (Ubuntu 22.04+ or equivalent), or"
+                echo "  - Build from source on your system (see README)."
                 echo ""
             fi
         fi
