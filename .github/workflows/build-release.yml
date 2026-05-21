@@ -159,7 +159,7 @@ jobs:
           name: windows-x86_64
           path: thin-wrap-Windows-x86_64.zip
 
-release:
+  release:
     needs: [build-linux, build-macos-intel, build-macos-arm, build-windows]
     runs-on: ubuntu-latest
     steps:
