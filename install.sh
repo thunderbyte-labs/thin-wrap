@@ -47,8 +47,8 @@ fi
 # Platform detection
 OS="$(uname -s)"
 case "$OS" in
-    Linux*)  PLATFORM="Linux" ; PROFILE_FILE="${HOME}/.profile" ;;
-    Darwin*) PLATFORM="Darwin" ; PROFILE_FILE="${HOME}/.bash_profile" ;;
+    Linux*)  PLATFORM="Linux" ;;
+    Darwin*) PLATFORM="Darwin" ;;
     *) echo "ERROR: Unsupported OS: $OS"; exit 1 ;;
 esac
 
@@ -169,6 +169,12 @@ fi
 
 chmod +x "${APP_DIR}/thin-wrap"
 
+# Verify binary exists and is executable
+if [ ! -x "${APP_DIR}/thin-wrap" ]; then
+    echo "ERROR: Binary not executable after extraction: ${APP_DIR}/thin-wrap"
+    exit 1
+fi
+
 # Store config mode for future updates
 echo "$CONFIG_MODE" > "${APP_DIR}/.config_location"
 
@@ -205,12 +211,38 @@ fi
 cd - >/dev/null 2>&1 || true
 rm -rf "$TMPDIR"
 
-# Ensure PATH entry in profile (automatic, no manual steps)
-PATH_LINE="export PATH=\"${BINDIR}:\$PATH\""
-if ! echo ":${PATH}:" | grep -q ":${BINDIR}:" && ! grep -qsF "$PATH_LINE" "$PROFILE_FILE" 2>/dev/null; then
-    echo "" >> "$PROFILE_FILE"
-    echo "# thin-wrap install - added by installer" >> "$PROFILE_FILE"
-    echo "$PATH_LINE" >> "$PROFILE_FILE"
+# ---- PATH configuration ----
+# On Linux: add to ~/.bashrc (interactive non-login shells) and ~/.profile (login shells)
+# On macOS: add to ~/.bash_profile (login shells) and also ~/.bashrc if bash is the shell
+
+add_path_to_file() {
+    FILE="$1"
+    PATH_LINE="export PATH=\"${BINDIR}:\$PATH\""
+    # Skip if line already present
+    if grep -qsF "$PATH_LINE" "$FILE" 2>/dev/null; then
+        return 0
+    fi
+    # Skip if already in current PATH (important for update mode where user might have already sourced)
+    # but we still want the line in the file for future sessions.
+    # So we always add if not already in file.
+    echo "" >> "$FILE"
+    echo "# thin-wrap install - added by installer" >> "$FILE"
+    echo "$PATH_LINE" >> "$FILE"
+    echo "Added PATH to $FILE"
+}
+
+if [ "$PLATFORM" = "Linux" ]; then
+    # Primary: ~/.bashrc (for interactive non-login shells, which is most common)
+    add_path_to_file "${HOME}/.bashrc"
+    # Secondary: ~/.profile (for login shells, e.g., SSH)
+    add_path_to_file "${HOME}/.profile"
+elif [ "$PLATFORM" = "Darwin" ]; then
+    # macOS: ~/.bash_profile is standard for login shells
+    add_path_to_file "${HOME}/.bash_profile"
+    # Also add to ~/.bashrc if bash is the current shell (common for Terminal)
+    if basename "$SHELL" 2>/dev/null | grep -q bash; then
+        add_path_to_file "${HOME}/.bashrc"
+    fi
 fi
 
 # macOS Gatekeeper warning
@@ -224,3 +256,11 @@ else
     echo "Installation complete!"
 fi
 echo "Run: thin-wrap --help"
+echo ""
+echo "NOTE: To use thin-wrap in this terminal, run:"
+if [ "$PLATFORM" = "Linux" ]; then
+    echo "  source ~/.bashrc"
+elif [ "$PLATFORM" = "Darwin" ]; then
+    echo "  source ~/.bash_profile"
+fi
+echo "Or open a new terminal window."
