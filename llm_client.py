@@ -43,7 +43,6 @@ class LLMClient:
             if not api_key:
                 raise ValueError("No API key provided")
 
-        # Setup API connection
         if self.proxy_wrapper:
             logger.debug(f"Setting up {model} API connection through proxy...")
             try:
@@ -56,35 +55,31 @@ class LLMClient:
                     self._initialize_client_direct(api_key, api_base_url)
                     print("✓ Direct connection established successfully!")
                 except Exception as e2:
-                    print(f"Direct connection also failed: {e2}")
+                    print(f"✗ Direct connection also failed: {e2}")
                     raise ConnectionError("Failed to establish API connection")
         else:
             self._initialize_client_direct(api_key, api_base_url)
 
     def choose_model(self):
-        """Let user choose which LLM model to use"""
-        return self.interactive_model_selection()
-
-    def interactive_model_selection(self):
-        """Display interactive model selection menu and return selected model"""
+        """Display interactive model selection menu (model@full.endpoint format)"""
         models = config.get_models()
         print("Available LLM Models:")
-        for i, (model, details) in enumerate(models.items(), 1):
-            endpoint = details.get('api_base_url')
+        
+        for i, (model_key, details) in enumerate(models.items(), 1):
+            endpoint = details.get('api_base_url', '')
             endpoint = endpoint.removeprefix("https://").removeprefix("http://").rstrip('/')
-            print(f"{i}. {UI.colorize(model,'BRIGHT_GREEN')}@{endpoint}")
+            print(f"{i}. {UI.colorize(model_key,'BRIGHT_GREEN')}@{endpoint}")
+
         while True:
             try:
-                choice = input(f"Choose model (1-{len(models)}): ").strip()
+                choice = input(f"\nChoose model (1-{len(models)}): ").strip()
             except KeyboardInterrupt:
-                # If we have an active model, return to conversation
                 if self.current_model is not None:
-                    print()  # Add a newline after ^C
+                    print()
                     print(f"{UI.colorize('Model selection cancelled.', 'BRIGHT_YELLOW')}")
                     print(f"{UI.colorize('Keeping current model:', 'BRIGHT_CYAN')} {self.current_model}")
-                    return None  # Signal cancellation
+                    return None
                 else:
-                    # No active model - this is during initialization, re-raise to exit
                     raise
 
             try:
@@ -179,22 +174,41 @@ class LLMClient:
             self.openai_client = OpenAI(**client_kwargs)
 
     def _build_request_params(self, messages, **kwargs):
-        """Build request parameters for OpenAI API call, including plugins if configured."""
-        # Prepare extra body parameters if plugins are configured
+        """Build request parameters.
+        Supports both legacy list-style plugins and new dict-style plugins for complex APIs (e.g. Qwen Beijing)."""
+        model_config = self.current_model_config
+        plugins = model_config.get("plugins", [])
+
+        # Legacy behaviour: plugins as list → put into extra_body
         extra_body = {}
-        if self.current_model_config and 'plugins' in self.current_model_config:
-            plugins = self.current_model_config['plugins']
-            if plugins:
-                extra_body['plugins'] = plugins
+        if isinstance(plugins, list) and plugins:
+            extra_body['plugins'] = plugins
 
         request_params = {
-            'model': self.current_model,
+            'model': model_config.get("model", self.current_model),
             'messages': messages,
         }
-        # Add any additional parameters (e.g., max_tokens)
+
+        # === Scalable plugins dict handling (new) ===
+        # If plugins is a dict, we treat its keys as top-level request parameters
+        # This is future-proof and works for any complex API (Aliyuncs' Dashscope, future providers, etc.)
+        if isinstance(plugins, dict):
+            for key, value in plugins.items():
+                if key == "thinking":
+                    request_params["enable_thinking"] = value
+                elif key == "tools":
+                    request_params["tools"] = [{"type": t} for t in value]
+                    request_params["search_options"] = {"search_strategy": "agent"}
+                else:
+                    # Allow any other top-level keys in the future
+                    request_params[key] = value
+
+        # Add any additional parameters passed via **kwargs
         request_params.update(kwargs)
+        
         if extra_body:
             request_params['extra_body'] = extra_body
+
         return request_params
 
     def _test_connection(self):
@@ -298,4 +312,3 @@ class LLMClient:
     def __del__(self):
         """Cleanup when object is destroyed"""
         self._cleanup_proxy_context()
-

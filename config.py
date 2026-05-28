@@ -91,7 +91,6 @@ def _load_config_internal(config_path: str | None = None) -> dict:
     """
     global _CONFIG_PATH
     
-    # Determine which path to use
     search_path = config_path or _CONFIG_PATH
     
     if search_path:
@@ -99,15 +98,12 @@ def _load_config_internal(config_path: str | None = None) -> dict:
         if not config_file.exists():
             raise FileNotFoundError(f"Config file not found: {config_file}")
     else:
-        # Try to find config.json in the script/executable directory
         script_dir = _get_script_dir()
         config_file = script_dir / "config.json"
         
-        # If not found, try current working directory
         if not config_file.exists():
             config_file = Path.cwd() / "config.json"
         
-        # If still not found, prompt user for interactive selection
         if not config_file.exists():
             try:
                 from ui import UI
@@ -120,7 +116,7 @@ def _load_config_internal(config_path: str | None = None) -> dict:
                     prompt_title="Config file selection:",
                     prompt_message="Enter path to config.json file (Tab for completion, ~ for home):",
                     no_items_message="No config file found.",
-                    items=[],  # No history items
+                    items=[],
                     item_formatter=lambda x: x,
                     allow_new=True,
                     new_item_validator=lambda p: p.is_file() and p.name == "config.json",
@@ -132,7 +128,6 @@ def _load_config_internal(config_path: str | None = None) -> dict:
                 
                 config_file = Path(config_file_path).expanduser().resolve()
             except ImportError:
-                # UI module might not be available in some contexts
                 raise FileNotFoundError(
                     f"config.json not found. Searched in:\n"
                     f"  - {script_dir / 'config.json'}\n"
@@ -140,7 +135,6 @@ def _load_config_internal(config_path: str | None = None) -> dict:
                     f"Please create config.json or specify path with --config"
                 )
     
-    # Store the resolved path for future calls
     _CONFIG_PATH = str(config_file)
     
     try:
@@ -153,35 +147,33 @@ def _load_config_internal(config_path: str | None = None) -> dict:
             e.pos
         )
     
-    # Validate that config has required sections
     if 'models' not in config_data:
         raise ValueError(f"Config file {config_file} must have 'models' section")
     
-    # Validate each model has required fields
+    # STRICT VALIDATION FOR NEW FORMAT
     for model_name, model_config in config_data['models'].items():
+        if 'model' not in model_config:
+            raise ValueError(f"Model '{model_name}' is missing required 'model' field. "
+                           f"Every entry must now contain 'model': 'actual-model-name'")
         if 'api_key' not in model_config:
             raise ValueError(f"Model '{model_name}' missing 'api_key' field")
         if 'api_base_url' not in model_config:
             raise ValueError(f"Model '{model_name}' missing 'api_base_url' field")
-        # Validate proxy field if present
+        
         if 'proxy' in model_config:
-            proxy_value = model_config['proxy']
-            if not isinstance(proxy_value, bool):
-                raise ValueError(f"Model '{model_name}' proxy field must be boolean, got {type(proxy_value)}")
-        # Set default proxy to False if not present
+            if not isinstance(model_config['proxy'], bool):
+                raise ValueError(f"Model '{model_name}' proxy field must be boolean")
         else:
             model_config['proxy'] = False
         
-        # Validate plugins field if present
+        # NEW: allow plugins as list (old) OR dict (new Qwen Beijing)
         if 'plugins' in model_config:
             plugins_value = model_config['plugins']
-            if not isinstance(plugins_value, list):
-                raise ValueError(f"Model '{model_name}' plugins field must be a list, got {type(plugins_value)}")
-        # Set default plugins to empty list if not present
+            if not isinstance(plugins_value, (list, dict)):
+                raise ValueError(f"Model '{model_name}' plugins field must be a list or dict, got {type(plugins_value)}")
         else:
             model_config['plugins'] = []
     
-    # Set defaults for backup section if not present
     if 'backup' not in config_data:
         config_data['backup'] = {}
     
@@ -227,19 +219,8 @@ def backup() -> dict:
     config_data = _load_config_internal()
     return config_data.get('backup', {})
 
-# Token Configuration
-MIN_TOKENS = 100
-MAX_TOKENS = 16000
-
-
-# History and Logging
-HISTORY_FILE = os.path.join(os.path.expanduser("~"), ".llm_chat_history")
-HISTORY_LENGTH = 1000
-LOG_PREFIX = "llm_session_"
-
 # UI Configuration
 BANNER_WIDTH = 70
-PREVIEW_MAX_LENGTH = 500
 
 # Text Processing
 UNICODE_REPLACEMENTS = {
@@ -255,11 +236,6 @@ UNICODE_REPLACEMENTS = {
 
 # Terminal Configuration
 TERMINAL_WIDTH_FALLBACK = 120
-
-# Proxy Configuration
-PROXY_CONNECTION_TIMEOUT = 30
-PROXY_VERIFICATION_TIMEOUT = 10
-PROXY_RETRY_ATTEMPTS = 3
 
 # Commands
 COMMANDS = {

@@ -1,67 +1,104 @@
 {
   "models": {
     "gemini-2.5-flash": {
+      "model": "gemini-2.5-flash",
       "api_key": "GOOGLE_API_KEY",
       "api_base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
       "proxy": true
     },
     "deepseek-chat": {
+      "model": "deepseek-chat",
       "api_key": "DEEPSEEK_API_KEY",
       "api_base_url": "https://api.deepseek.com/v1"
     },
     "deepseek-reasoner": {
+      "model": "deepseek-reasoner",
       "api_key": "DEEPSEEK_API_KEY",
       "api_base_url": "https://api.deepseek.com/v1"
     },
     "claude-sonnet-4-20250514": {
+      "model": "claude-sonnet-4-20250514",
       "api_key": "ANTHROPIC_API_KEY",
       "api_base_url": "https://api.anthropic.com/v1/",
       "proxy": true
     },
     "anthropic/claude-sonnet-4.5": {
+      "model": "anthropic/claude-sonnet-4.5",
       "api_key": "OPENROUTER_API_KEY",
       "api_base_url": "https://openrouter.ai/api/v1",
       "proxy": true
     },
     "anthropic/claude-opus-4.6": {
+      "model": "anthropic/claude-opus-4.6",
       "api_key": "OPENROUTER_API_KEY",
       "api_base_url": "https://openrouter.ai/api/v1",
       "proxy": true
     },
     "x-ai/grok-4.1-fast": {
+      "model": "x-ai/grok-4.1-fast",
       "api_key": "OPENROUTER_API_KEY",
       "api_base_url": "https://openrouter.ai/api/v1"
     },
     "moonshotai/kimi-k2.5": {
+      "model": "moonshotai/kimi-k2.5",
       "api_key": "OPENROUTER_API_KEY",
       "api_base_url": "https://openrouter.ai/api/v1",
       "plugins": [{"id": "web"}]
     },
     "qwen/qwen3-coder": {
+      "model": "qwen/qwen3-coder",
       "api_key": "OPENROUTER_API_KEY",
       "api_base_url": "https://openrouter.ai/api/v1"
     },
     "qwen/qwen3.5-397b-a17b": {
+      "model": "qwen/qwen3.5-397b-a17b",
       "api_key": "OPENROUTER_API_KEY",
       "api_base_url": "https://openrouter.ai/api/v1",
       "plugins": [{"id": "web"}]
     },
     "z-ai/glm-5-websearch": {
+      "model": "z-ai/glm-5-websearch",
       "api_key": "OPENROUTER_API_KEY",
       "api_base_url": "https://openrouter.ai/api/v1",
       "plugins": [{"id": "web"}]
     },
     "baidu/ernie-4.5-300b-a47b": {
+      "model": "baidu/ernie-4.5-300b-a47b",
       "api_key": "OPENROUTER_API_KEY",
       "api_base_url": "https://openrouter.ai/api/v1"
     },
     "hera/qwen": {
+      "model": "hera/qwen",
       "api_key": "HERA_API_KEY",
       "api_base_url": "https://hera-llm.thunderbyte.ovh/v1"
     },
     "kangxi/qwen": {
+      "model": "kangxi/qwen",
       "api_key": "HERA_API_KEY",
-      "api_base_url": "http://192.168.10.20:8080" 
+      "api_base_url": "http://192.168.10.20:8080"
+    },
+    "qwen3.6-plus-basic": {
+      "model": "qwen3.6-plus",
+      "api_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/",
+      "api_key": "QWEN_BEIJING_API_KEY",
+      "plugins": {}
+    },
+    "qwen3.6-plus-think": {
+      "model": "qwen3.6-plus",
+      "api_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/",
+      "api_key": "QWEN_BEIJING_API_KEY",
+      "plugins": {
+        "thinking": true
+      }
+    },
+    "qwen3.6-plus-agent": {
+      "model": "qwen3.6-plus",
+      "api_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/",
+      "api_key": "QWEN_BEIJING_API_KEY",
+      "plugins": {
+        "thinking": true,
+        "tools": ["web_search", "web_extractor"]
+      }
     }
   },
   "backup": {

@@ -69,7 +69,7 @@ class CommandHandler:
         if not args:
             # No arguments provided - show interactive model selection menu
             print("Interactive model selection:")
-            selected_model = self.llm_client.interactive_model_selection()
+            selected_model = self.llm_client.choose_model()
             if selected_model:
                 success = self.llm_client.switch_model(selected_model)
                 if success:
