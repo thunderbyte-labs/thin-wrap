@@ -43,7 +43,11 @@
       "model": "moonshotai/kimi-k2.5",
       "api_key": "OPENROUTER_API_KEY",
       "api_base_url": "https://openrouter.ai/api/v1",
-      "plugins": [{"id": "web"}]
+      "plugins": [
+        {
+          "id": "web"
+        }
+      ]
     },
     "qwen/qwen3-coder": {
       "model": "qwen/qwen3-coder",
@@ -54,13 +58,21 @@
       "model": "qwen/qwen3.5-397b-a17b",
       "api_key": "OPENROUTER_API_KEY",
       "api_base_url": "https://openrouter.ai/api/v1",
-      "plugins": [{"id": "web"}]
+      "plugins": [
+        {
+          "id": "web"
+        }
+      ]
     },
     "z-ai/glm-5-websearch": {
       "model": "z-ai/glm-5-websearch",
       "api_key": "OPENROUTER_API_KEY",
       "api_base_url": "https://openrouter.ai/api/v1",
-      "plugins": [{"id": "web"}]
+      "plugins": [
+        {
+          "id": "web"
+        }
+      ]
     },
     "baidu/ernie-4.5-300b-a47b": {
       "model": "baidu/ernie-4.5-300b-a47b",
@@ -97,7 +109,13 @@
       "api_key": "QWEN_BEIJING_API_KEY",
       "plugins": {
         "thinking": true,
-        "tools": ["web_search", "web_extractor"]
+        "tools": [
+          "web_search",
+          "web_extractor"
+        ],
+        "search_options": {
+          "search_strategy": "agent"
+        }
       }
     }
   },

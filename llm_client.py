@@ -10,6 +10,7 @@ from ui import UI
 from proxy_wrapper import ProxyWrapper
 from datetime import datetime
 import json
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +176,7 @@ class LLMClient:
 
     def _build_request_params(self, messages, **kwargs):
         """Build request parameters.
-        Supports both legacy list-style plugins and new dict-style plugins for complex APIs (e.g. Qwen Beijing)."""
+        Supports both legacy list-style plugins and new dict-style plugins for complex APIs (Qwen Beijing)."""
         model_config = self.current_model_config
         plugins = model_config.get("plugins", [])
 
@@ -189,23 +190,19 @@ class LLMClient:
             'messages': messages,
         }
 
-        # === Scalable plugins dict handling (new) ===
-        # If plugins is a dict, we treat its keys as top-level request parameters
-        # This is future-proof and works for any complex API (Aliyuncs' Dashscope, future providers, etc.)
+        # Scalable dict-style plugins handling
         if isinstance(plugins, dict):
             for key, value in plugins.items():
                 if key == "thinking":
                     request_params["enable_thinking"] = value
                 elif key == "tools":
                     request_params["tools"] = [{"type": t} for t in value]
-                    request_params["search_options"] = {"search_strategy": "agent"}
                 else:
-                    # Allow any other top-level keys in the future
+                    # Any other key (including search_options) is passed as top-level field
                     request_params[key] = value
 
         # Add any additional parameters passed via **kwargs
         request_params.update(kwargs)
-        
         if extra_body:
             request_params['extra_body'] = extra_body
 
@@ -213,12 +210,42 @@ class LLMClient:
 
     def _test_connection(self):
         """Test API connection with a simple request"""
-        request_params = self._build_request_params(
-            messages=[{"role": "user", "content": "Hi"}],
-            max_tokens=10
-        )
-        self.openai_client.chat.completions.create(**request_params)
-        logger.info(f"{self.current_model} API key validated successfully!")
+        plugins = self.current_model_config.get("plugins", [])
+
+        if isinstance(plugins, dict):
+            # Use /responses for dict-style plugins (Qwen Beijing)
+            payload = {
+                "model": self.current_model_config.get("model"),
+                "input": "Hi",
+                "enable_thinking": plugins.get("thinking", False)
+            }
+            # Merge any additional fields from plugins dict (search_options, etc.)
+            for k, v in plugins.items():
+                if k not in ["thinking", "tools"]:
+                    payload[k] = v
+
+            # Use httpx for reliable call (avoids SDK unpacking issues)
+            api_key = os.getenv(self.current_model_config["api_key"]) or self.current_model_config["api_key"]
+            api_base_url = self.current_model_config["api_base_url"].rstrip('/')
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(
+                    f"{api_base_url}/responses",
+                    json=payload,
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json"
+                    }
+                )
+                response.raise_for_status()
+            logger.info(f"{self.current_model} API key validated successfully!")
+        else:
+            # Normal OpenAI-compatible path
+            request_params = self._build_request_params(
+                messages=[{"role": "user", "content": "Hi"}],
+                max_tokens=10
+            )
+            self.openai_client.chat.completions.create(**request_params)
+            logger.info(f"{self.current_model} API key validated successfully!")
 
     def _cleanup_proxy_context(self):
         """Clean up proxy context and related resources"""
@@ -280,16 +307,67 @@ class LLMClient:
             return f"Error communicating with {self.current_model}: {e}"
 
     def _send_message_to_openai_client(self):
-        """Send message to OpenAI API using OpenAI v1.0+ syntax"""
+        """Send message to LLM — uses /responses for dict-style plugins (Qwen Beijing)"""
         print("⏳ Sending request to LLM client... (Press Ctrl+C to interrupt)")
         try:
-            # Prepare messages without timestamps for API
             messages = [{"role": msg["role"], "content": msg["content"]} for msg in self.conversation_history]
-            request_params = self._build_request_params(messages=messages)
-            response = self.openai_client.chat.completions.create(**request_params)
-            return response.choices[0].message.content
+            plugins = self.current_model_config.get("plugins", {})
+
+            if isinstance(plugins, dict):
+                # === Qwen Beijing special path using /responses ===
+                # Prepend a strong instruction to reliably trigger tool use
+                user_input = messages[-1]["content"]
+                agent_prompt = (
+                    "You are an agent with access to web_search and web_extractor tools. "
+                    "For any question that requires current or real-time information, "
+                    "you MUST use the tools to get fresh data before answering.\n\n"
+                    + user_input
+                )
+
+                payload = {
+                    "model": self.current_model_config.get("model"),
+                    "input": agent_prompt,
+                    "enable_thinking": plugins.get("thinking", False)
+                }
+                # Merge everything else from plugins dict (tools, search_options, etc.)
+                for k, v in plugins.items():
+                    if k not in ["thinking"]:
+                        payload[k] = v
+
+                api_key = os.getenv(self.current_model_config["api_key"]) or self.current_model_config["api_key"]
+                api_base_url = self.current_model_config["api_base_url"].rstrip('/')
+
+                with httpx.Client(timeout=300.0) as client:
+                    response = client.post(
+                        f"{api_base_url}/responses",
+                        json=payload,
+                        headers={
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json"
+                        }
+                    )
+                    result = response.json()
+
+                # Extract text from Dashscope /responses format
+                if "output" in result and result["output"]:
+                    for item in result["output"]:
+                        if isinstance(item, dict) and "content" in item:
+                            for block in item["content"]:
+                                if isinstance(block, dict) and block.get("type") == "output_text":
+                                    return block.get("text", "")
+                return str(result)  # fallback
+
+            else:
+                # Normal OpenAI-compatible path
+                request_params = self._build_request_params(messages=messages)
+                response = self.openai_client.chat.completions.create(**request_params)
+                return response.choices[0].message.content
+
         except KeyboardInterrupt:
             # Let the interruption propagate to send_message for proper handling
+            raise
+        except Exception as e:
+            logger.error(f"Error in _send_message_to_openai_client: {e}")
             raise
 
     def clear_conversation(self):
