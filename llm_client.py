@@ -178,12 +178,7 @@ class LLMClient:
         """Build request parameters.
         Supports both legacy list-style plugins and new dict-style plugins for complex APIs (Qwen Beijing)."""
         model_config = self.current_model_config
-        plugins = model_config.get("plugins", [])
-
-        # Legacy behaviour: plugins as list → put into extra_body
-        extra_body = {}
-        if isinstance(plugins, list) and plugins:
-            extra_body['plugins'] = plugins
+        plugins = model_config.get("plugins", None)
 
         request_params = {
             'model': model_config.get("model", self.current_model),
@@ -191,7 +186,7 @@ class LLMClient:
         }
 
         # Scalable dict-style plugins handling
-        if isinstance(plugins, dict):
+        if plugins and isinstance(plugins, dict):
             for key, value in plugins.items():
                 if key == "thinking":
                     request_params["enable_thinking"] = value
@@ -203,7 +198,10 @@ class LLMClient:
 
         # Add any additional parameters passed via **kwargs
         request_params.update(kwargs)
-        if extra_body:
+
+        if plugins and isinstance(plugins, list):
+            extra_body = {}
+            extra_body['plugins'] = plugins
             request_params['extra_body'] = extra_body
 
         return request_params
@@ -317,16 +315,10 @@ class LLMClient:
                 # === Qwen Beijing special path using /responses ===
                 # Prepend a strong instruction to reliably trigger tool use
                 user_input = messages[-1]["content"]
-                agent_prompt = (
-                    "You are an agent with access to web_search and web_extractor tools. "
-                    "For any question that requires current or real-time information, "
-                    "you MUST use the tools to get fresh data before answering.\n\n"
-                    + user_input
-                )
 
                 payload = {
                     "model": self.current_model_config.get("model"),
-                    "input": agent_prompt,
+                    "input": user_input,
                     "enable_thinking": plugins.get("thinking", False)
                 }
                 # Merge everything else from plugins dict (tools, search_options, etc.)
@@ -348,13 +340,36 @@ class LLMClient:
                     )
                     result = response.json()
 
-                # Extract text from Dashscope /responses format
+                # ==================== FULL DEBUG PRINT ====================
+                print("\n=== RAW DASHSCOPE RESPONSE (full) ===")
+                print(json.dumps(result, indent=2))
+                print("=== END OF RAW RESPONSE ===\n")
+
+                print("=== OUTPUT ARRAY BREAKDOWN ===")
+                if "output" in result and result["output"]:
+                    for idx, item in enumerate(result["output"]):
+                        print(f"Item {idx} → type: {item.get('type')}")
+                        print(f"Item {idx} keys: {list(item.keys())}")
+                        if "content" in item:
+                            print(f"  → content blocks: {len(item.get('content', []))}")
+                        if "summary" in item:
+                            print(f"  → summary entries: {len(item.get('summary', []))}")
+                print("=== END OF OUTPUT BREAKDOWN ===\n")
+
+                # Try to extract final answer
                 if "output" in result and result["output"]:
                     for item in result["output"]:
                         if isinstance(item, dict) and "content" in item:
                             for block in item["content"]:
                                 if isinstance(block, dict) and block.get("type") == "output_text":
-                                    return block.get("text", "")
+                                    final_text = block.get("text", "")
+                                    print(f"Extracted final text (output_text): {final_text[:300]}...")
+                                    return final_text
+                        if isinstance(item, dict) and "summary" in item:
+                            for s in item["summary"]:
+                                if isinstance(s, dict) and "text" in s:
+                                    print(f"Extracted from summary: {s['text'][:300]}...")
+                                    return s["text"]
                 return str(result)  # fallback
 
             else:
