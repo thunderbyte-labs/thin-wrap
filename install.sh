@@ -37,7 +37,7 @@ fetch_latest_info() {
     fi
 }
 
-# Dilemma F: Block root
+# Block root execution
 if [ "$(id -u)" -eq 0 ]; then
     echo "ERROR: thin-wrap refuses to install as root."
     echo "Run without sudo to install to ~/.local/"
@@ -66,6 +66,27 @@ case "$ARCH_RAW" in
         ;;
 esac
 
+# glibc compatibility check on Linux
+if [ "$PLATFORM" = "Linux" ]; then
+    if command -v ldd >/dev/null 2>&1; then
+        GLIBC_VERSION=$(ldd --version 2>/dev/null | head -n 1 | grep -oE '[0-9]+\.[0-9]+' | head -n 1)
+        if [ -n "$GLIBC_VERSION" ]; then
+            # Pre-built Linux binaries now target glibc >= 2.35 (built on ubuntu-22.04)
+            MAJOR=$(echo "$GLIBC_VERSION" | cut -d. -f1)
+            MINOR=$(echo "$GLIBC_VERSION" | cut -d. -f2)
+            if [ "$MAJOR" -lt 2 ] || { [ "$MAJOR" -eq 2 ] && [ "$MINOR" -lt 35 ]; }; then
+                echo "WARNING: Your system's glibc version is $GLIBC_VERSION."
+                echo "The pre-built binary requires glibc 2.35+."
+                echo "It may fail with a library version error (GLIBC_2.xx not found)."
+                echo "Recommended actions:"
+                echo "  - Upgrade your distribution (Ubuntu 22.04+ or equivalent), or"
+                echo "  - Build from source on your system (see README)."
+                echo ""
+            fi
+        fi
+    fi
+fi
+
 ARCHIVE="thin-wrap-${PLATFORM}-${ARCH}.zip"
 TMPDIR="${TMPDIR:-/tmp}/thin-wrap-install-$$"
 PREFIX="${HOME}/.local"
@@ -74,7 +95,7 @@ BINDIR="${PREFIX}/bin"
 CONFIG_DIR_XDG="${XDG_CONFIG_HOME:-${HOME}/.config}/thin-wrap"
 APP_DIR="${LIBDIR}/thin-wrap"
 
-# Create necessary directories early to prevent mv errors
+# Create necessary directories early
 mkdir -p "$LIBDIR"
 mkdir -p "$BINDIR"
 
@@ -84,7 +105,7 @@ fetch_latest_info
 mkdir -p "$TMPDIR"
 cd "$TMPDIR"
 
-# Determine if interactive
+# Determine if running interactively
 if [ -t 0 ]; then
     INTERACTIVE=1
 else
@@ -93,7 +114,7 @@ fi
 
 echo "=== thin-wrap ${VERSION} Installer (${PLATFORM}/${ARCH}) ==="
 
-# Check existing installation
+# Check for existing installation (update mode)
 if [ -d "$APP_DIR" ] && [ -f "${APP_DIR}/thin-wrap" ]; then
     UPDATE_MODE=1
     if [ -f "${APP_DIR}/.config_location" ]; then
@@ -106,7 +127,7 @@ else
     CONFIG_MODE=""
 fi
 
-# Config location choice
+# Config location selection
 if [ -z "$CONFIG_MODE" ]; then
     if [ $INTERACTIVE -eq 1 ]; then
         printf "Select config location [1=portable (default), 2=XDG]: "
@@ -120,7 +141,7 @@ if [ -z "$CONFIG_MODE" ]; then
     fi
 fi
 
-# Set config target path
+# Set config target
 if [ "$CONFIG_MODE" = "xdg" ]; then
     CONFIG_TARGET="$CONFIG_DIR_XDG"
 else
@@ -145,7 +166,7 @@ else
     exit 1
 fi
 
-# Extract (quietly)
+# Extract quietly
 if command -v unzip >/dev/null 2>&1; then
     unzip -qq -o "${ARCHIVE}"
 else
@@ -169,7 +190,7 @@ fi
 
 chmod +x "${APP_DIR}/thin-wrap"
 
-# Verify binary exists and is executable
+# Verify binary
 if [ ! -x "${APP_DIR}/thin-wrap" ]; then
     echo "ERROR: Binary not executable after extraction: ${APP_DIR}/thin-wrap"
     exit 1
@@ -178,10 +199,10 @@ fi
 # Store config mode for future updates
 echo "$CONFIG_MODE" > "${APP_DIR}/.config_location"
 
-# Create wrapper script with --help enhancement
+# Create wrapper script with --help enhancement and environment variables
 cat > "${BINDIR}/thin-wrap" << EOF
 #!/bin/sh
-# thin-wrap wrapper - hardcoded paths for SSH/compatibility
+# thin-wrap wrapper - provides path information and environment variables
 export THIN_WRAP_APP_DIR="${APP_DIR}"
 export THIN_WRAP_CONFIG_DIR="${CONFIG_TARGET}"
 case "\${1}" in
@@ -245,7 +266,7 @@ elif [ "$PLATFORM" = "Darwin" ]; then
     fi
 fi
 
-# macOS Gatekeeper warning
+# macOS Gatekeeper note
 if [ "$PLATFORM" = "Darwin" ]; then
     echo "macOS: if 'cannot be verified' see README for xattr command."
 fi
