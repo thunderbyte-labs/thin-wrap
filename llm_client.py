@@ -16,7 +16,9 @@ logger = logging.getLogger(__name__)
 
 
 class LLMClient:
-    def __init__(self, proxy_wrapper: Optional[ProxyWrapper] = None, session_logger=None) -> None:
+    def __init__(
+        self, proxy_wrapper: Optional[ProxyWrapper] = None, session_logger=None
+    ) -> None:
         self.openai_client: Optional[OpenAI] = None
         self.conversation_history: list[dict[str, str]] = []
         self.proxy_wrapper: Optional[ProxyWrapper] = proxy_wrapper
@@ -65,10 +67,12 @@ class LLMClient:
         """Display interactive model selection menu (model@full.endpoint format)"""
         models = config.get_models()
         print("Available LLM Models:")
-        
+
         for i, (model_key, details) in enumerate(models.items(), 1):
-            endpoint = details.get('api_base_url', '')
-            endpoint = endpoint.removeprefix("https://").removeprefix("http://").rstrip('/')
+            endpoint = details.get("api_base_url", "")
+            endpoint = (
+                endpoint.removeprefix("https://").removeprefix("http://").rstrip("/")
+            )
             print(f"{i}. {UI.colorize(model_key,'BRIGHT_GREEN')}@{endpoint}")
 
         while True:
@@ -77,8 +81,12 @@ class LLMClient:
             except KeyboardInterrupt:
                 if self.current_model is not None:
                     print()
-                    print(f"{UI.colorize('Model selection cancelled.', 'BRIGHT_YELLOW')}")
-                    print(f"{UI.colorize('Keeping current model:', 'BRIGHT_CYAN')} {self.current_model}")
+                    print(
+                        f"{UI.colorize('Model selection cancelled.', 'BRIGHT_YELLOW')}"
+                    )
+                    print(
+                        f"{UI.colorize('Keeping current model:', 'BRIGHT_CYAN')} {self.current_model}"
+                    )
                     return None
                 else:
                     raise
@@ -95,7 +103,9 @@ class LLMClient:
         """Switch to a different LLM model/model"""
         models = config.get_models()
         if new_model not in models:
-            print(f"Error: Unknown model '{new_model}'. Available: {', '.join(models.keys())}")
+            print(
+                f"Error: Unknown model '{new_model}'. Available: {', '.join(models.keys())}"
+            )
             return False
 
         if new_model == self.current_model:
@@ -106,7 +116,9 @@ class LLMClient:
 
         try:
             self.setup_api_key(new_model)
-            print(f"✓ Successfully switched to {new_model}. Conversation history preserved.")
+            print(
+                f"✓ Successfully switched to {new_model}. Conversation history preserved."
+            )
             return True
         except Exception as e:
             print(f"✗ Failed to switch to {new_model}: {e}")
@@ -116,10 +128,10 @@ class LLMClient:
         """Update proxy configuration."""
         # Clean up existing proxy context
         self._cleanup_proxy_context()
-        
+
         # Update proxy wrapper
         self.proxy_wrapper = proxy_wrapper
-        
+
         # If we have a current model, reinitialize with new proxy
         if self.current_model:
             try:
@@ -146,7 +158,11 @@ class LLMClient:
     def _initialize_client_direct(self, api_key, api_base_url):
         """Initialize client without proxy"""
         try:
-            client_kwargs = {"api_key": api_key, "base_url": api_base_url, "timeout": 300.0}
+            client_kwargs = {
+                "api_key": api_key,
+                "base_url": api_base_url,
+                "timeout": 300.0,
+            }
             self.openai_client = OpenAI(**client_kwargs)
             self._test_connection()
         except Exception as e:
@@ -165,7 +181,9 @@ class LLMClient:
                     import httpx
 
                     proxy_transport = httpx.HTTPTransport(proxy=proxy_url)
-                    client_kwargs["http_client"] = httpx.Client(transport=proxy_transport)
+                    client_kwargs["http_client"] = httpx.Client(
+                        transport=proxy_transport
+                    )
                 except ImportError:
                     logger.warning("httpx not available for proxy configuration")
 
@@ -174,15 +192,16 @@ class LLMClient:
             logger.error(f"Failed to setup client with proxy: {e}")
             self.openai_client = OpenAI(**client_kwargs)
 
-    def _build_request_params(self, messages, **kwargs):
+    def _build_request_params(self, messages, max_tokens=0):
         """Build request parameters.
-        Supports both legacy list-style plugins and new dict-style plugins for complex APIs (Qwen Beijing)."""
+        Supports both legacy list-style plugins and new dict-style plugins for complex APIs (Qwen Beijing).
+        """
         model_config = self.current_model_config
         plugins = model_config.get("plugins", None)
 
         request_params = {
-            'model': model_config.get("model", self.current_model),
-            'messages': messages,
+            "model": model_config.get("model", self.current_model),
+            "messages": messages,
         }
 
         # Scalable dict-style plugins handling
@@ -196,13 +215,12 @@ class LLMClient:
                     # Any other key (including search_options) is passed as top-level field
                     request_params[key] = value
 
-        # Add any additional parameters passed via **kwargs
-        request_params.update(kwargs)
+        # Add max_tokens params
+        if max_tokens > 0:
+            request_params["max_tokens"] = max_tokens
 
         if plugins and isinstance(plugins, list):
-            extra_body = {}
-            extra_body['plugins'] = plugins
-            request_params['extra_body'] = extra_body
+            request_params["extra_body"] = {"plugins": plugins}
 
         return request_params
 
@@ -215,7 +233,7 @@ class LLMClient:
             payload = {
                 "model": self.current_model_config.get("model"),
                 "input": "Hi",
-                "enable_thinking": plugins.get("thinking", False)
+                "enable_thinking": plugins.get("thinking", False),
             }
             # Merge any additional fields from plugins dict (search_options, etc.)
             for k, v in plugins.items():
@@ -223,24 +241,26 @@ class LLMClient:
                     payload[k] = v
 
             # Use httpx for reliable call (avoids SDK unpacking issues)
-            api_key = os.getenv(self.current_model_config["api_key"]) or self.current_model_config["api_key"]
-            api_base_url = self.current_model_config["api_base_url"].rstrip('/')
+            api_key = (
+                os.getenv(self.current_model_config["api_key"])
+                or self.current_model_config["api_key"]
+            )
+            api_base_url = self.current_model_config["api_base_url"].rstrip("/")
             with httpx.Client(timeout=30.0) as client:
                 response = client.post(
                     f"{api_base_url}/responses",
                     json=payload,
                     headers={
                         "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json"
-                    }
+                        "Content-Type": "application/json",
+                    },
                 )
                 response.raise_for_status()
             logger.info(f"{self.current_model} API key validated successfully!")
         else:
             # Normal OpenAI-compatible path
             request_params = self._build_request_params(
-                messages=[{"role": "user", "content": "Hi"}],
-                max_tokens=10
+                messages=[{"role": "user", "content": "Hi"}], max_tokens=10
             )
             self.openai_client.chat.completions.create(**request_params)
             logger.info(f"{self.current_model} API key validated successfully!")
@@ -267,7 +287,11 @@ class LLMClient:
         try:
             # Add user message to history and save immediately
             self.conversation_history.append(
-                {"role": "user", "content": message, "timestamp": datetime.now().isoformat()}
+                {
+                    "role": "user",
+                    "content": message,
+                    "timestamp": datetime.now().isoformat(),
+                }
             )
 
             # Save session with user message before API call
@@ -280,7 +304,11 @@ class LLMClient:
 
             # Add assistant response to history and save again
             self.conversation_history.append(
-                {"role": "assistant", "content": response, "timestamp": datetime.now().isoformat()}
+                {
+                    "role": "assistant",
+                    "content": response,
+                    "timestamp": datetime.now().isoformat(),
+                }
             )
 
             # Save session with assistant response
@@ -289,9 +317,14 @@ class LLMClient:
 
             return response
         except KeyboardInterrupt:
-            print(f"\n{UI.colorize('Request interrupted by user (Ctrl+C)', 'BRIGHT_YELLOW')}")
+            print(
+                f"\n{UI.colorize('Request interrupted by user (Ctrl+C)', 'BRIGHT_YELLOW')}"
+            )
             # Request was interrupted - remove the user message that was interrupted
-            if self.conversation_history and self.conversation_history[-1]["role"] == "user":
+            if (
+                self.conversation_history
+                and self.conversation_history[-1]["role"] == "user"
+            ):
                 self.conversation_history.pop()
                 # Save the updated session without the interrupted message
                 if self.session_logger:
@@ -308,10 +341,17 @@ class LLMClient:
         """Send message to LLM — uses /responses for dict-style plugins (Qwen Beijing)"""
         print("⏳ Sending request to LLM client... (Press Ctrl+C to interrupt)")
         try:
-            messages = [{"role": msg["role"], "content": msg["content"]} for msg in self.conversation_history]
+            messages = [
+                {"role": msg["role"], "content": msg["content"]}
+                for msg in self.conversation_history
+            ]
             plugins = self.current_model_config.get("plugins", {})
-
-            if isinstance(plugins, dict):
+            if not isinstance(plugins, dict):
+                # Normal OpenAI-compatible path
+                request_params = self._build_request_params(messages=messages)
+                response = self.openai_client.chat.completions.create(**request_params)
+                return response.choices[0].message.content
+            else:
                 # === Qwen Beijing special path using /responses ===
                 # Prepend a strong instruction to reliably trigger tool use
                 user_input = messages[-1]["content"]
@@ -319,15 +359,18 @@ class LLMClient:
                 payload = {
                     "model": self.current_model_config.get("model"),
                     "input": user_input,
-                    "enable_thinking": plugins.get("thinking", False)
+                    "enable_thinking": plugins.get("thinking", False),
                 }
                 # Merge everything else from plugins dict (tools, search_options, etc.)
                 for k, v in plugins.items():
                     if k not in ["thinking"]:
                         payload[k] = v
 
-                api_key = os.getenv(self.current_model_config["api_key"]) or self.current_model_config["api_key"]
-                api_base_url = self.current_model_config["api_base_url"].rstrip('/')
+                api_key = (
+                    os.getenv(self.current_model_config["api_key"])
+                    or self.current_model_config["api_key"]
+                )
+                api_base_url = self.current_model_config["api_base_url"].rstrip("/")
 
                 with httpx.Client(timeout=300.0) as client:
                     response = client.post(
@@ -335,8 +378,8 @@ class LLMClient:
                         json=payload,
                         headers={
                             "Authorization": f"Bearer {api_key}",
-                            "Content-Type": "application/json"
-                        }
+                            "Content-Type": "application/json",
+                        },
                     )
                     result = response.json()
 
@@ -353,7 +396,9 @@ class LLMClient:
                         if "content" in item:
                             print(f"  → content blocks: {len(item.get('content', []))}")
                         if "summary" in item:
-                            print(f"  → summary entries: {len(item.get('summary', []))}")
+                            print(
+                                f"  → summary entries: {len(item.get('summary', []))}"
+                            )
                 print("=== END OF OUTPUT BREAKDOWN ===\n")
 
                 # Try to extract final answer
@@ -361,22 +406,23 @@ class LLMClient:
                     for item in result["output"]:
                         if isinstance(item, dict) and "content" in item:
                             for block in item["content"]:
-                                if isinstance(block, dict) and block.get("type") == "output_text":
+                                if (
+                                    isinstance(block, dict)
+                                    and block.get("type") == "output_text"
+                                ):
                                     final_text = block.get("text", "")
-                                    print(f"Extracted final text (output_text): {final_text[:300]}...")
+                                    print(
+                                        f"Extracted final text (output_text): {final_text[:300]}..."
+                                    )
                                     return final_text
                         if isinstance(item, dict) and "summary" in item:
                             for s in item["summary"]:
                                 if isinstance(s, dict) and "text" in s:
-                                    print(f"Extracted from summary: {s['text'][:300]}...")
+                                    print(
+                                        f"Extracted from summary: {s['text'][:300]}..."
+                                    )
                                     return s["text"]
                 return str(result)  # fallback
-
-            else:
-                # Normal OpenAI-compatible path
-                request_params = self._build_request_params(messages=messages)
-                response = self.openai_client.chat.completions.create(**request_params)
-                return response.choices[0].message.content
 
         except KeyboardInterrupt:
             # Let the interruption propagate to send_message for proper handling
