@@ -233,12 +233,19 @@ cd - >/dev/null 2>&1 || true
 rm -rf "$TMPDIR"
 
 # ---- PATH configuration ----
+# On Linux: add to ~/.bashrc (interactive non-login shells) and ~/.profile (login shells)
+# On macOS: add to ~/.bash_profile (login shells) and also ~/.bashrc if bash is the shell
+
 add_path_to_file() {
     FILE="$1"
     PATH_LINE="export PATH=\"${BINDIR}:\$PATH\""
+    # Skip if line already present
     if grep -qsF "$PATH_LINE" "$FILE" 2>/dev/null; then
         return 0
     fi
+    # Skip if already in current PATH (important for update mode where user might have already sourced)
+    # but we still want the line in the file for future sessions.
+    # So we always add if not already in file.
     echo "" >> "$FILE"
     echo "# thin-wrap install - added by installer" >> "$FILE"
     echo "$PATH_LINE" >> "$FILE"
@@ -246,10 +253,14 @@ add_path_to_file() {
 }
 
 if [ "$PLATFORM" = "Linux" ]; then
+    # Primary: ~/.bashrc (for interactive non-login shells, which is most common)
     add_path_to_file "${HOME}/.bashrc"
+    # Secondary: ~/.profile (for login shells, e.g., SSH)
     add_path_to_file "${HOME}/.profile"
 elif [ "$PLATFORM" = "Darwin" ]; then
+    # macOS: ~/.bash_profile is standard for login shells
     add_path_to_file "${HOME}/.bash_profile"
+    # Also add to ~/.bashrc if bash is the current shell (common for Terminal)
     if basename "$SHELL" 2>/dev/null | grep -q bash; then
         add_path_to_file "${HOME}/.bashrc"
     fi
@@ -274,6 +285,3 @@ elif [ "$PLATFORM" = "Darwin" ]; then
     echo "  source ~/.bash_profile"
 fi
 echo "Or open a new terminal window."
-echo ""
-echo "Binary compatibility: Pre-built Linux binaries require glibc >= 2.31"
-echo "(Ubuntu 20.04+ or equivalent). Most modern distributions are compatible."

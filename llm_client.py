@@ -1,32 +1,47 @@
-"""Unified LLM client wrapper (using OpenAI library)"""
+"""Unified LLM client wrapper (using only httpx)
+
+This class provides a clean abstraction over raw HTTP calls while preserving:
+- Full proxy support via ProxyWrapper
+- OpenAI-compatible /chat/completions endpoints
+- Detailed error reporting
+- Session persistence through session_logger
+"""
 
 import os
 from typing import Optional
-from openai import OpenAI
 import config
 import text_utils
 import logging
 from ui import UI
 from proxy_wrapper import ProxyWrapper
 from datetime import datetime
-import json
+import httpx
 
 logger = logging.getLogger(__name__)
 
 
 class LLMClient:
-    def __init__(self, proxy_wrapper: Optional[ProxyWrapper] = None, session_logger=None) -> None:
-        self.openai_client: Optional[OpenAI] = None
+    """Main client for all LLM interactions in Thin Wrap."""
+
+    def __init__(
+        self, proxy_wrapper: Optional[ProxyWrapper] = None, session_logger=None
+    ) -> None:
         self.conversation_history: list[dict[str, str]] = []
         self.proxy_wrapper: Optional[ProxyWrapper] = proxy_wrapper
-        self._proxy_context = None
-        self._http_client = None
+        self._http_client: Optional[httpx.Client] = None
+        self._proxy_context = None  # for proxy_connection() context manager
         self.current_model = None
         self.current_model_config = None
         self.session_logger = session_logger
+        self.api_key: Optional[str] = None
+        self.api_base_url: Optional[str] = None
 
-    def setup_api_key(self, model):
-        """Get API key for specified model or let user choose"""
+    # ===================================================================
+    # PUBLIC API
+    # ===================================================================
+
+    def setup_api_key(self, model: str):
+        """Initialize connection for the selected model (called on startup and model switch)."""
         if model is None:
             raise TypeError("model cannot be None")
 
@@ -34,57 +49,62 @@ class LLMClient:
         models = config.get_models()
         model_config = models[model]
         self.current_model_config = model_config
-        api_key = os.getenv(model_config["api_key"]) or model_config["api_key"]
-        api_base_url = model_config["api_base_url"]
 
-        if not api_key:
+        self.api_key = os.getenv(model_config["api_key"]) or model_config["api_key"]
+        self.api_base_url = model_config["api_base_url"].rstrip("/")
+
+        if not self.api_key:
             print(f"{model_config['api_key']} not found.")
-            api_key = input(f"Please enter your {model} API key: ").strip()
-            if not api_key:
+            self.api_key = input(f"Please enter your {model} API key: ").strip()
+            if not self.api_key:
                 raise ValueError("No API key provided")
 
-        # Setup API connection
         if self.proxy_wrapper:
             logger.debug(f"Setting up {model} API connection through proxy...")
             try:
-                self._initialize_client_with_proxy(api_key, api_base_url)
+                self._initialize_client_with_proxy()
                 logger.info("Proxy-enabled API connection established successfully!")
             except Exception as e:
                 logger.error(f"Proxy configuration failed: {e}")
                 print("Attempting direct connection without proxy...")
+                self._cleanup_http_client()
+                self._initialize_http_client()  # direct mode
                 try:
-                    self._initialize_client_direct(api_key, api_base_url)
+                    self._test_connection()
                     print("✓ Direct connection established successfully!")
                 except Exception as e2:
-                    print(f"Direct connection also failed: {e2}")
+                    print(f"✗ Direct connection also failed: {e2}")
                     raise ConnectionError("Failed to establish API connection")
         else:
-            self._initialize_client_direct(api_key, api_base_url)
+            self._initialize_http_client()
+            self._test_connection()
 
     def choose_model(self):
-        """Let user choose which LLM model to use"""
-        return self.interactive_model_selection()
-
-    def interactive_model_selection(self):
-        """Display interactive model selection menu and return selected model"""
+        """Display interactive model selection menu and return selected model key."""
         models = config.get_models()
         print("Available LLM Models:")
-        for i, (model, details) in enumerate(models.items(), 1):
-            endpoint = details.get('api_base_url')
-            endpoint = endpoint.removeprefix("https://").removeprefix("http://").rstrip('/')
-            print(f"{i}. {UI.colorize(model,'BRIGHT_GREEN')}@{endpoint}")
+
+        for i, (model_key, details) in enumerate(models.items(), 1):
+            endpoint = details.get("api_base_url", "")
+            endpoint = (
+                endpoint.removeprefix("https://").removeprefix("http://").rstrip("/")
+            )
+            print(f"{i}. {UI.colorize(model_key, 'BRIGHT_GREEN')}@{endpoint}")
+
         while True:
             try:
-                choice = input(f"Choose model (1-{len(models)}): ").strip()
+                choice = input(f"\nChoose model (1-{len(models)}): ").strip()
             except KeyboardInterrupt:
-                # If we have an active model, return to conversation
                 if self.current_model is not None:
-                    print()  # Add a newline after ^C
-                    print(f"{UI.colorize('Model selection cancelled.', 'BRIGHT_YELLOW')}")
-                    print(f"{UI.colorize('Keeping current model:', 'BRIGHT_CYAN')} {self.current_model}")
-                    return None  # Signal cancellation
+                    print()
+                    print(
+                        f"{UI.colorize('Model selection cancelled.', 'BRIGHT_YELLOW')}"
+                    )
+                    print(
+                        f"{UI.colorize('Keeping current model:', 'BRIGHT_CYAN')} {self.current_model}"
+                    )
+                    return None
                 else:
-                    # No active model - this is during initialization, re-raise to exit
                     raise
 
             try:
@@ -95,11 +115,13 @@ class LLMClient:
                 pass
             print(f"Please enter a number between 1 and {len(models)}")
 
-    def switch_model(self, new_model):
-        """Switch to a different LLM model/model"""
+    def switch_model(self, new_model: str) -> bool:
+        """Switch to a different model while preserving conversation history."""
         models = config.get_models()
         if new_model not in models:
-            print(f"Error: Unknown model '{new_model}'. Available: {', '.join(models.keys())}")
+            print(
+                f"Error: Unknown model '{new_model}'. Available: {', '.join(models.keys())}"
+            )
             return False
 
         if new_model == self.current_model:
@@ -110,21 +132,17 @@ class LLMClient:
 
         try:
             self.setup_api_key(new_model)
-            print(f"✓ Successfully switched to {new_model}. Conversation history preserved.")
+            print(
+                f"✓ Successfully switched to {new_model}. Conversation history preserved."
+            )
             return True
         except Exception as e:
             print(f"✗ Failed to switch to {new_model}: {e}")
             return False
 
-    def update_proxy(self, proxy_wrapper):
-        """Update proxy configuration."""
-        # Clean up existing proxy context
-        self._cleanup_proxy_context()
-        
-        # Update proxy wrapper
+    def update_proxy(self, proxy_wrapper: ProxyWrapper) -> bool:
+        """Update proxy configuration at runtime."""
         self.proxy_wrapper = proxy_wrapper
-        
-        # If we have a current model, reinitialize with new proxy
         if self.current_model:
             try:
                 self.setup_api_key(self.current_model)
@@ -134,86 +152,57 @@ class LLMClient:
                 return False
         return True
 
-    def _initialize_client_with_proxy(self, api_key, api_base_url):
-        """Initialize client with proxy configuration"""
+    # ===================================================================
+    # PROXY & HTTP CLIENT MANAGEMENT
+    # ===================================================================
+
+    def _initialize_client_with_proxy(self):
+        """Initialize proxy context manager and HTTP client inside it (exact original behaviour)."""
         try:
             self._proxy_context = self.proxy_wrapper.proxy_connection()
             self._proxy_context.__enter__()
-            proxy_info = self.proxy_wrapper.get_connection_info()
-            logger.debug(f"Proxy info: {proxy_info}")
-            self._setup_openai_client_with_proxy(api_key, api_base_url)
+            self._initialize_http_client()
             self._test_connection()
         except Exception as e:
             self._cleanup_proxy_context()
             raise
 
-    def _initialize_client_direct(self, api_key, api_base_url):
-        """Initialize client without proxy"""
-        try:
-            client_kwargs = {"api_key": api_key, "base_url": api_base_url, "timeout": 300.0}
-            self.openai_client = OpenAI(**client_kwargs)
-            self._test_connection()
-        except Exception as e:
-            print(f"Error: Invalid API key or connection failed: {e}")
-            raise
+    def _initialize_http_client(self):
+        """Create (or recreate) the httpx client."""
+        if self._http_client:
+            self._cleanup_http_client()
 
-    def _setup_openai_client_with_proxy(self, api_key, api_base_url):
-        """Setup OpenAI client with proxy using OpenAI v1.0+ syntax"""
-        client_kwargs = {"api_key": api_key, "base_url": api_base_url, "timeout": 300.0}
-        try:
-            proxy_config = self.proxy_wrapper.proxy_config
-            proxy_url = proxy_config.get_proxy_url()
+        client_kwargs = {"timeout": 300.0}
 
-            if proxy_url:
-                try:
-                    import httpx
+        if self.proxy_wrapper:
+            try:
+                if (
+                    hasattr(self.proxy_wrapper, "proxy_config")
+                    and self.proxy_wrapper.proxy_config is not None
+                ):
+                    proxy_url = self.proxy_wrapper.proxy_config.get_proxy_url()
+                    if proxy_url:
+                        transport = httpx.HTTPTransport(proxy=proxy_url)
+                        client_kwargs["transport"] = transport
+                        logger.debug(f"Using proxy: {proxy_url}")
+            except Exception as e:
+                logger.warning(f"Proxy configuration incomplete: {e}")
 
-                    proxy_transport = httpx.HTTPTransport(proxy=proxy_url)
-                    client_kwargs["http_client"] = httpx.Client(transport=proxy_transport)
-                except ImportError:
-                    logger.warning("httpx not available for proxy configuration")
+        self._http_client = httpx.Client(**client_kwargs)
 
-            self.openai_client = OpenAI(**client_kwargs)
-        except Exception as e:
-            logger.error(f"Failed to setup client with proxy: {e}")
-            self.openai_client = OpenAI(**client_kwargs)
-
-    def _build_request_params(self, messages, **kwargs):
-        """Build request parameters for OpenAI API call, including plugins if configured."""
-        # Prepare extra body parameters if plugins are configured
-        extra_body = {}
-        if self.current_model_config and 'plugins' in self.current_model_config:
-            plugins = self.current_model_config['plugins']
-            if plugins:
-                extra_body['plugins'] = plugins
-
-        request_params = {
-            'model': self.current_model,
-            'messages': messages,
-        }
-        # Add any additional parameters (e.g., max_tokens)
-        request_params.update(kwargs)
-        if extra_body:
-            request_params['extra_body'] = extra_body
-        return request_params
-
-    def _test_connection(self):
-        """Test API connection with a simple request"""
-        request_params = self._build_request_params(
-            messages=[{"role": "user", "content": "Hi"}],
-            max_tokens=10
-        )
-        self.openai_client.chat.completions.create(**request_params)
-        logger.info(f"{self.current_model} API key validated successfully!")
-
-    def _cleanup_proxy_context(self):
-        """Clean up proxy context and related resources"""
+    def _cleanup_http_client(self):
+        """Safely close the httpx client."""
         if self._http_client:
             try:
                 self._http_client.close()
-                self._http_client = None
             except Exception as e:
                 logger.debug(f"Error closing HTTP client: {e}")
+            finally:
+                self._http_client = None
+
+    def _cleanup_proxy_context(self):
+        """Clean up both HTTP client and proxy context manager."""
+        self._cleanup_http_client()
 
         if self._proxy_context:
             try:
@@ -223,79 +212,209 @@ class LLMClient:
             finally:
                 self._proxy_context = None
 
-    def send_message(self, message):
-        """Send processed input to LLM with automatic session saving before and after"""
+    # ===================================================================
+    # REQUEST HELPERS
+    # ===================================================================
+
+    def _get_endpoint_and_input_key(self) -> tuple[str, str]:
+        """Declarative normalization for endpoint and payload key."""
+        model_config = self.current_model_config
+        endpoint = model_config.get("endpoint", "/chat/completions")
+        input_key = model_config.get("input_key", "messages")
+        return endpoint.rstrip("/"), input_key
+
+    def _get_request_url_and_headers(self) -> tuple[str, dict]:
+        """Now supports per-model endpoint (OpenCode-style)."""
+        endpoint, _ = self._get_endpoint_and_input_key()
+        base = self.api_base_url
+        url = f"{base}{endpoint}"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+        }
+        return url, headers
+
+    def _build_request_params(self, messages: list, max_tokens: int = 0):
+        """Now uses configurable input_key and deep-merges extra_arguments."""
+        model_config = self.current_model_config
+        _, input_key = self._get_endpoint_and_input_key()
+
+        request_params = {
+            "model": model_config.get("model", self.current_model),
+        }
+
+        # Handle input vs messages (DashScope Responses API uses "input")
+        if input_key == "input":
+            # For chat-style usage, use the last user message (or concatenate history if desired)
+            last_user_content = next(
+                (m["content"] for m in reversed(messages) if m.get("role") == "user"),
+                messages[-1]["content"] if messages else "",
+            )
+            request_params["input"] = last_user_content
+        else:
+            request_params["messages"] = messages
+
+        if max_tokens > 0:
+            request_params["max_tokens"] = max_tokens
+
+        extra_arguments = model_config.get("extra_arguments", {})
+        if extra_arguments and isinstance(extra_arguments, dict):
+            request_params.update(
+                extra_arguments
+            )  # already deep enough for your use case
+
+        return request_params
+
+    def _extract_response_content(self, raw_response: dict) -> str:
+        """Extract final assistant text from both OpenAI /chat/completions and DashScope /responses formats."""
+        # === DashScope Responses API (/responses) ===
+        if "output" in raw_response and isinstance(raw_response.get("output"), list):
+            # Walk backwards to find the final "message" item (after all reasoning/tool calls)
+            for item in reversed(raw_response["output"]):
+                if item.get("type") == "message" and isinstance(
+                    item.get("content"), list
+                ):
+                    texts = [
+                        c.get("text", "")
+                        for c in item["content"]
+                        if c.get("type") == "output_text"
+                    ]
+                    return "\n".join(texts).strip()
+
+        # === Standard OpenAI /chat/completions fallback ===
         try:
-            # Add user message to history and save immediately
-            self.conversation_history.append(
-                {"role": "user", "content": message, "timestamp": datetime.now().isoformat()}
+            return raw_response["choices"][0]["message"]["content"].strip()
+        except (KeyError, IndexError, TypeError):
+            # Fallback for debugging
+            return (
+                f"[RAW RESPONSE] {str(raw_response)[:500]}..."
+                if len(str(raw_response)) > 500
+                else str(raw_response)
             )
 
-            # Save session with user message before API call
+    def _test_connection(self):
+        """Validate API key with a minimal request + detailed error reporting."""
+        payload = self._build_request_params(
+            messages=[{"role": "user", "content": "Hi"}],
+            max_tokens=10,
+        )
+
+        url, headers = self._get_request_url_and_headers()
+
+        try:
+            response = self._http_client.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            # Use same extractor so test passes for both endpoint types
+            content = self._extract_response_content(data)
+            logger.info(
+                f"{self.current_model} API key validated successfully! Sample reply: {content[:60]}..."
+            )
+        except httpx.HTTPStatusError as e:
+            print(f"\n❌ API Error {e.response.status_code} from {self.current_model}")
+            print(f"URL: {url}")
+            try:
+                error_detail = e.response.json()
+                print("Error details returned by the provider:")
+                import json
+
+                print(json.dumps(error_detail, indent=2))
+            except Exception:
+                print("Raw error body:")
+                print(e.response.text)
+            raise
+        except Exception as e:
+            print(f"Unexpected error during connection test: {e}")
+            raise
+
+    # ===================================================================
+    # MESSAGE SENDING & CONVERSATION MANAGEMENT
+    # ===================================================================
+
+    def _send_message_via_httpx(self):
+        """Send conversation to LLM using raw httpx (core request method)."""
+        print("⏳ Sending request to LLM client... (Press Ctrl+C to interrupt)")
+
+        messages = [
+            {"role": msg["role"], "content": msg["content"]}
+            for msg in self.conversation_history
+        ]
+
+        payload = self._build_request_params(messages=messages)
+
+        url, headers = self._get_request_url_and_headers()
+
+        response = self._http_client.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+
+        # Use the new universal extractor
+        return self._extract_response_content(data)
+
+    def send_message(self, message: str) -> str:
+        """Send user message, call LLM, save session before/after, return cleaned response."""
+        try:
+            self.conversation_history.append(
+                {
+                    "role": "user",
+                    "content": message,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+
             if self.session_logger:
                 self.session_logger.save_session(self.conversation_history)
 
-            # Get response from LLM
-            response = self._send_message_to_openai_client()
+            response = self._send_message_via_httpx()
             response = text_utils.clean_text(response)
 
-            # Add assistant response to history and save again
             self.conversation_history.append(
-                {"role": "assistant", "content": response, "timestamp": datetime.now().isoformat()}
+                {
+                    "role": "assistant",
+                    "content": response,
+                    "timestamp": datetime.now().isoformat(),
+                }
             )
 
-            # Save session with assistant response
             if self.session_logger:
                 self.session_logger.save_session(self.conversation_history)
 
             return response
+
         except KeyboardInterrupt:
-            print(f"\n{UI.colorize('Request interrupted by user (Ctrl+C)', 'BRIGHT_YELLOW')}")
-            # Request was interrupted - remove the user message that was interrupted
-            if self.conversation_history and self.conversation_history[-1]["role"] == "user":
+            print(
+                f"\n{UI.colorize('Request interrupted by user (Ctrl+C)', 'BRIGHT_YELLOW')}"
+            )
+            if (
+                self.conversation_history
+                and self.conversation_history[-1]["role"] == "user"
+            ):
                 self.conversation_history.pop()
-                # Save the updated session without the interrupted message
                 if self.session_logger:
                     self.session_logger.save_session(self.conversation_history)
-            # Return empty string to indicate interruption was handled
             return ""
+
         except Exception as e:
-            # Even on error, save the current state
             if self.session_logger:
                 self.session_logger.save_session(self.conversation_history)
             return f"Error communicating with {self.current_model}: {e}"
 
-    def _send_message_to_openai_client(self):
-        """Send message to OpenAI API using OpenAI v1.0+ syntax"""
-        print("⏳ Sending request to LLM client... (Press Ctrl+C to interrupt)")
-        try:
-            # Prepare messages without timestamps for API
-            messages = [{"role": msg["role"], "content": msg["content"]} for msg in self.conversation_history]
-            request_params = self._build_request_params(messages=messages)
-            response = self.openai_client.chat.completions.create(**request_params)
-            return response.choices[0].message.content
-        except KeyboardInterrupt:
-            # Let the interruption propagate to send_message for proper handling
-            raise
-
     def clear_conversation(self):
-        """Clear conversation history and save empty session"""
+        """Clear conversation history and save empty session."""
         self.conversation_history = []
         if self.session_logger:
             self.session_logger.save_session(self.conversation_history)
 
-    def load_conversation(self, conversation_history):
-        """Load a conversation history into the client"""
+    def load_conversation(self, conversation_history: list):
+        """Load a saved conversation history."""
         self.conversation_history = conversation_history
-        # Save the loaded conversation to ensure it's persisted
         if self.session_logger:
             self.session_logger.save_session(self.conversation_history)
 
-    def get_current_model(self):
-        """Get current model information"""
+    def get_current_model(self) -> Optional[str]:
+        """Return currently active model name."""
         return self.current_model
 
     def __del__(self):
-        """Cleanup when object is destroyed"""
+        """Ensure resources are cleaned up when object is destroyed."""
         self._cleanup_proxy_context()
-
