@@ -52,19 +52,27 @@
       "model": "qwen3.6-plus",
       "api_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/",
       "api_key": "QWEN_BEIJING_API_KEY",
+      "endpoint": "/responses",
+      "input_key": "input",
       "extra_arguments": {
-        "thinking": true
+        "enable_thinking": true
       }
     },
-    "qwen3.6-plus-agent": {
+    "qwen3.6-plus-think-web": {
       "model": "qwen3.6-plus",
       "api_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/",
       "api_key": "QWEN_BEIJING_API_KEY",
+      "endpoint": "/responses",
+      "input_key": "input",
       "extra_arguments": {
-        "thinking": true,
+        "enable_thinking": true,
         "tools": [
-          "web_search",
-          "web_extractor"
+          {
+            "type": "web_search"
+          },
+          {
+            "type": "web_extractor"
+          }
         ],
         "search_options": {
           "search_strategy": "agent"

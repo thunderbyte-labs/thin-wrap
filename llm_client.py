@@ -216,8 +216,16 @@ class LLMClient:
     # REQUEST HELPERS
     # ===================================================================
 
-    def _get_request_url_and_headers(self, endpoint: str = "/chat/completions"):
-        """Build URL and headers for any OpenAI-compatible endpoint."""
+    def _get_endpoint_and_input_key(self) -> tuple[str, str]:
+        """Declarative normalization for endpoint and payload key."""
+        model_config = self.current_model_config
+        endpoint = model_config.get("endpoint", "/chat/completions")
+        input_key = model_config.get("input_key", "messages")
+        return endpoint.rstrip("/"), input_key
+
+    def _get_request_url_and_headers(self) -> tuple[str, dict]:
+        """Now supports per-model endpoint (OpenCode-style)."""
+        endpoint, _ = self._get_endpoint_and_input_key()
         base = self.api_base_url
         url = f"{base}{endpoint}"
         headers = {
@@ -227,22 +235,62 @@ class LLMClient:
         return url, headers
 
     def _build_request_params(self, messages: list, max_tokens: int = 0):
-        """Build payload for /chat/completions (standard OpenAI format)."""
+        """Now uses configurable input_key and deep-merges extra_arguments."""
         model_config = self.current_model_config
-        extra_arguments = model_config.get("extra_arguments", {})
+        _, input_key = self._get_endpoint_and_input_key()
 
         request_params = {
             "model": model_config.get("model", self.current_model),
-            "messages": messages,
         }
+
+        # Handle input vs messages (DashScope Responses API uses "input")
+        if input_key == "input":
+            # For chat-style usage, use the last user message (or concatenate history if desired)
+            last_user_content = next(
+                (m["content"] for m in reversed(messages) if m.get("role") == "user"),
+                messages[-1]["content"] if messages else "",
+            )
+            request_params["input"] = last_user_content
+        else:
+            request_params["messages"] = messages
 
         if max_tokens > 0:
             request_params["max_tokens"] = max_tokens
 
+        extra_arguments = model_config.get("extra_arguments", {})
         if extra_arguments and isinstance(extra_arguments, dict):
-            request_params.update(extra_arguments)
+            request_params.update(
+                extra_arguments
+            )  # already deep enough for your use case
 
         return request_params
+
+    def _extract_response_content(self, raw_response: dict) -> str:
+        """Extract final assistant text from both OpenAI /chat/completions and DashScope /responses formats."""
+        # === DashScope Responses API (/responses) ===
+        if "output" in raw_response and isinstance(raw_response.get("output"), list):
+            # Walk backwards to find the final "message" item (after all reasoning/tool calls)
+            for item in reversed(raw_response["output"]):
+                if item.get("type") == "message" and isinstance(
+                    item.get("content"), list
+                ):
+                    texts = [
+                        c.get("text", "")
+                        for c in item["content"]
+                        if c.get("type") == "output_text"
+                    ]
+                    return "\n".join(texts).strip()
+
+        # === Standard OpenAI /chat/completions fallback ===
+        try:
+            return raw_response["choices"][0]["message"]["content"].strip()
+        except (KeyError, IndexError, TypeError):
+            # Fallback for debugging
+            return (
+                f"[RAW RESPONSE] {str(raw_response)[:500]}..."
+                if len(str(raw_response)) > 500
+                else str(raw_response)
+            )
 
     def _test_connection(self):
         """Validate API key with a minimal request + detailed error reporting."""
@@ -256,7 +304,12 @@ class LLMClient:
         try:
             response = self._http_client.post(url, json=payload, headers=headers)
             response.raise_for_status()
-            logger.info(f"{self.current_model} API key validated successfully!")
+            data = response.json()
+            # Use same extractor so test passes for both endpoint types
+            content = self._extract_response_content(data)
+            logger.info(
+                f"{self.current_model} API key validated successfully! Sample reply: {content[:60]}..."
+            )
         except httpx.HTTPStatusError as e:
             print(f"\n❌ API Error {e.response.status_code} from {self.current_model}")
             print(f"URL: {url}")
@@ -295,7 +348,8 @@ class LLMClient:
         response.raise_for_status()
         data = response.json()
 
-        return data["choices"][0]["message"]["content"]
+        # Use the new universal extractor
+        return self._extract_response_content(data)
 
     def send_message(self, message: str) -> str:
         """Send user message, call LLM, save session before/after, return cleaned response."""
