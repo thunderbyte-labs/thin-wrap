@@ -65,10 +65,10 @@ class CommandHandler:
             )
 
     def _handle_clear(self):
-        """Clear conversation history"""
+        """Clear conversation history without user confirmation."""
         self.llm_client.clear_conversation()
         self.input_handler.clear_history()
-        print("Conversation history cleared.")
+        print(f"{UI.colorize('Conversation history cleared.', 'BRIGHT_GREEN')}")
 
     def _handle_model(self, args):
         """Switch or show current model - reloads config.json on each call"""
@@ -81,12 +81,10 @@ class CommandHandler:
             if selected_model:
                 success = self.llm_client.switch_model(selected_model)
                 if success:
-                    # Clear conversation and input history when switching models
-                    self.llm_client.clear_conversation()
-                    self.input_handler.clear_history()
                     print(
-                        f"{UI.colorize('Model switched and history cleared.', 'BRIGHT_GREEN')}"
+                        f"{UI.colorize('Model switched successfully.', 'BRIGHT_GREEN')}"
                     )
+                    self._prompt_clear_after_model_switch()
             elif selected_model is None:
                 # User cancelled with Ctrl+C while already having a model
                 print(f"{UI.colorize('Returning to conversation...', 'BRIGHT_CYAN')}")
@@ -95,12 +93,25 @@ class CommandHandler:
             new_model = args[0]
             success = self.llm_client.switch_model(new_model)
             if success:
-                # Clear conversation and input history when switching models
-                self.llm_client.clear_conversation()
-                self.input_handler.clear_history()
-                print(
-                    f"{UI.colorize('Model switched and history cleared.', 'BRIGHT_GREEN')}"
-                )
+                print(f"{UI.colorize('Model switched successfully.', 'BRIGHT_GREEN')}")
+                self._prompt_clear_after_model_switch()
+
+    def _prompt_clear_after_model_switch(self):
+        """Ask user whether to clear conversation history after a model switch."""
+        print(
+            f"{UI.colorize('Clear conversation history? (y/N): ', 'BRIGHT_YELLOW')}",
+            end="",
+        )
+        try:
+            response = input().strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            print(f"\n{UI.colorize('Clear cancelled.', 'BRIGHT_YELLOW')}")
+            return
+
+        if response == "y" or response == "yes":
+            self._handle_clear()
+        else:
+            print(f"{UI.colorize('Conversation history preserved.', 'BRIGHT_YELLOW')}")
 
     def _handle_reload(self):
         """Reload a previous conversation from the current project root"""
