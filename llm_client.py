@@ -9,7 +9,6 @@ import logging
 from ui import UI
 from proxy_wrapper import ProxyWrapper
 from datetime import datetime
-import json
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -197,30 +196,19 @@ class LLMClient:
         Supports both legacy list-style plugins and new dict-style plugins for complex APIs (Qwen Beijing).
         """
         model_config = self.current_model_config
-        plugins = model_config.get("plugins", None)
+        extra_arguments = model_config.get("extra_arguments", None)
 
         request_params = {
             "model": model_config.get("model", self.current_model),
             "messages": messages,
         }
 
-        # Scalable dict-style plugins handling
-        if plugins and isinstance(plugins, dict):
-            for key, value in plugins.items():
-                if key == "thinking":
-                    request_params["enable_thinking"] = value
-                elif key == "tools":
-                    request_params["tools"] = [{"type": t} for t in value]
-                else:
-                    # Any other key (including search_options) is passed as top-level field
-                    request_params[key] = value
-
         # Add max_tokens params
         if max_tokens > 0:
             request_params["max_tokens"] = max_tokens
 
-        if plugins and isinstance(plugins, list):
-            request_params["extra_body"] = {"plugins": plugins}
+        if extra_arguments and isinstance(extra_arguments, dict):
+            request_params.update(extra_arguments)
 
         return request_params
 
@@ -345,84 +333,10 @@ class LLMClient:
                 {"role": msg["role"], "content": msg["content"]}
                 for msg in self.conversation_history
             ]
-            plugins = self.current_model_config.get("plugins", {})
-            if not isinstance(plugins, dict):
-                # Normal OpenAI-compatible path
-                request_params = self._build_request_params(messages=messages)
-                response = self.openai_client.chat.completions.create(**request_params)
-                return response.choices[0].message.content
-            else:
-                # === Qwen Beijing special path using /responses ===
-                # Prepend a strong instruction to reliably trigger tool use
-                user_input = messages[-1]["content"]
-
-                payload = {
-                    "model": self.current_model_config.get("model"),
-                    "input": user_input,
-                    "enable_thinking": plugins.get("thinking", False),
-                }
-                # Merge everything else from plugins dict (tools, search_options, etc.)
-                for k, v in plugins.items():
-                    if k not in ["thinking"]:
-                        payload[k] = v
-
-                api_key = (
-                    os.getenv(self.current_model_config["api_key"])
-                    or self.current_model_config["api_key"]
-                )
-                api_base_url = self.current_model_config["api_base_url"].rstrip("/")
-
-                with httpx.Client(timeout=300.0) as client:
-                    response = client.post(
-                        f"{api_base_url}/responses",
-                        json=payload,
-                        headers={
-                            "Authorization": f"Bearer {api_key}",
-                            "Content-Type": "application/json",
-                        },
-                    )
-                    result = response.json()
-
-                # ==================== FULL DEBUG PRINT ====================
-                print("\n=== RAW DASHSCOPE RESPONSE (full) ===")
-                print(json.dumps(result, indent=2))
-                print("=== END OF RAW RESPONSE ===\n")
-
-                print("=== OUTPUT ARRAY BREAKDOWN ===")
-                if "output" in result and result["output"]:
-                    for idx, item in enumerate(result["output"]):
-                        print(f"Item {idx} → type: {item.get('type')}")
-                        print(f"Item {idx} keys: {list(item.keys())}")
-                        if "content" in item:
-                            print(f"  → content blocks: {len(item.get('content', []))}")
-                        if "summary" in item:
-                            print(
-                                f"  → summary entries: {len(item.get('summary', []))}"
-                            )
-                print("=== END OF OUTPUT BREAKDOWN ===\n")
-
-                # Try to extract final answer
-                if "output" in result and result["output"]:
-                    for item in result["output"]:
-                        if isinstance(item, dict) and "content" in item:
-                            for block in item["content"]:
-                                if (
-                                    isinstance(block, dict)
-                                    and block.get("type") == "output_text"
-                                ):
-                                    final_text = block.get("text", "")
-                                    print(
-                                        f"Extracted final text (output_text): {final_text[:300]}..."
-                                    )
-                                    return final_text
-                        if isinstance(item, dict) and "summary" in item:
-                            for s in item["summary"]:
-                                if isinstance(s, dict) and "text" in s:
-                                    print(
-                                        f"Extracted from summary: {s['text'][:300]}..."
-                                    )
-                                    return s["text"]
-                return str(result)  # fallback
+            # Normal OpenAI-compatible path
+            request_params = self._build_request_params(messages=messages)
+            response = self.openai_client.chat.completions.create(**request_params)
+            return response.choices[0].message.content
 
         except KeyboardInterrupt:
             # Let the interruption propagate to send_message for proper handling

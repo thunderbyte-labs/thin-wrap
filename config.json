@@ -16,41 +16,8 @@
       "api_key": "DEEPSEEK_API_KEY",
       "api_base_url": "https://api.deepseek.com/v1"
     },
-    "claude-sonnet-4-20250514": {
-      "model": "claude-sonnet-4-20250514",
-      "api_key": "ANTHROPIC_API_KEY",
-      "api_base_url": "https://api.anthropic.com/v1/",
-      "proxy": true
-    },
-    "anthropic/claude-sonnet-4.5": {
-      "model": "anthropic/claude-sonnet-4.5",
-      "api_key": "OPENROUTER_API_KEY",
-      "api_base_url": "https://openrouter.ai/api/v1",
-      "proxy": true
-    },
-    "anthropic/claude-opus-4.6": {
-      "model": "anthropic/claude-opus-4.6",
-      "api_key": "OPENROUTER_API_KEY",
-      "api_base_url": "https://openrouter.ai/api/v1",
-      "proxy": true
-    },
     "google/gemma-4-31b-it:free": {
       "model": "google/gemma-4-31b-it:free",
-      "api_key": "OPENROUTER_API_KEY",
-      "api_base_url": "https://openrouter.ai/api/v1"
-    },
-    "moonshotai/kimi-k2.5": {
-      "model": "moonshotai/kimi-k2.5",
-      "api_key": "OPENROUTER_API_KEY",
-      "api_base_url": "https://openrouter.ai/api/v1",
-      "plugins": [
-        {
-          "id": "web"
-        }
-      ]
-    },
-    "qwen/qwen3-coder": {
-      "model": "qwen/qwen3-coder",
       "api_key": "OPENROUTER_API_KEY",
       "api_base_url": "https://openrouter.ai/api/v1"
     },
@@ -58,26 +25,13 @@
       "model": "qwen/qwen3.5-397b-a17b",
       "api_key": "OPENROUTER_API_KEY",
       "api_base_url": "https://openrouter.ai/api/v1",
-      "plugins": [
-        {
-          "id": "web"
-        }
-      ]
-    },
-    "z-ai/glm-5-websearch": {
-      "model": "z-ai/glm-5-websearch",
-      "api_key": "OPENROUTER_API_KEY",
-      "api_base_url": "https://openrouter.ai/api/v1",
-      "plugins": [
-        {
-          "id": "web"
-        }
-      ]
-    },
-    "baidu/ernie-4.5-300b-a47b": {
-      "model": "baidu/ernie-4.5-300b-a47b",
-      "api_key": "OPENROUTER_API_KEY",
-      "api_base_url": "https://openrouter.ai/api/v1"
+      "extra_arguments": {
+        "tools": [
+          {
+            "type": "openrouter:web_search"
+          }
+        ]
+      }
     },
     "hera/qwen": {
       "model": "hera/qwen",
@@ -93,13 +47,12 @@
       "model": "qwen3.6-plus",
       "api_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/",
       "api_key": "QWEN_BEIJING_API_KEY",
-      "plugins": {}
     },
     "qwen3.6-plus-think": {
       "model": "qwen3.6-plus",
       "api_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/",
       "api_key": "QWEN_BEIJING_API_KEY",
-      "plugins": {
+      "extra_arguments": {
         "thinking": true
       }
     },
@@ -107,7 +60,7 @@
       "model": "qwen3.6-plus",
       "api_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/",
       "api_key": "QWEN_BEIJING_API_KEY",
-      "plugins": {
+      "extra_arguments": {
         "thinking": true,
         "tools": [
           "web_search",
