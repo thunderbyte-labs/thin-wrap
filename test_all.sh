@@ -11,10 +11,13 @@ else
     PYTHON="python3"
 fi
 
-# Run pytest
+# Enable pipefail so that the exit code of the pipeline reflects pytest's status
+set -o pipefail
+
+# Run pytest and show only the last 30 lines of output (clean summary)
 $PYTHON -m pytest tests/ -v --tb=short 2>&1 | tail -30
 
-# Check exit code
+# Check the actual exit code from pytest
 if [ $? -eq 0 ]; then
     echo "✅ All tests passed!"
     exit 0
