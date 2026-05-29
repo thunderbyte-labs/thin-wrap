@@ -1,0 +1,15 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug the CLI",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/thin_wrap.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {},
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
