@@ -202,21 +202,10 @@ echo "$CONFIG_MODE" > "${APP_DIR}/.config_location"
 # Create wrapper script with --help enhancement and environment variables
 cat > "${BINDIR}/thin-wrap" << EOF
 #!/bin/sh
-# thin-wrap wrapper - provides path information and environment variables
+# thin-wrap wrapper – provides environment variables for consistent path reporting
 export THIN_WRAP_APP_DIR="${APP_DIR}"
 export THIN_WRAP_CONFIG_DIR="${CONFIG_TARGET}"
-case "\${1}" in
-    --help|-h)
-        echo "thin-wrap - LLM Terminal Chat"
-        echo "Binary location: ${APP_DIR}/thin-wrap"
-        echo "Config location: ${CONFIG_TARGET}/config.json"
-        echo ""
-        exec "${APP_DIR}/thin-wrap" "\$@"
-        ;;
-    *)
-        exec "${APP_DIR}/thin-wrap" "\$@"
-        ;;
-esac
+exec "${APP_DIR}/thin-wrap" "\$@"
 EOF
 chmod +x "${BINDIR}/thin-wrap"
 
