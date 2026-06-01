@@ -691,56 +691,72 @@ class LLMChat:
             print(f"   ?? Could not estimate token usage: {e}")
 
 
-def _get_binary_and_config_info():
+def get_location_info() -> str:
     """
-    Determine the binary path and config file path for --help output.
-    Returns a tuple (binary_path, config_path_description).
+    Return a cleanly structured, multi-line string containing all
+    relevant file and directory locations for --help output.
+    This is the single source of truth for both the installed binary
+    and direct 'python thin_wrap.py' execution.
     """
-    # Binary path: resolve symlinks and get real location
-    binary_path = os.path.realpath(sys.argv[0])
-
-    # Config path: use the same resolution as resolve_config_path()
-    config_path = resolve_config_path()
-    if config_path:
-        config_desc = config_path
+    # Binary location – respects wrapper environment variable when present
+    app_dir = os.environ.get("THIN_WRAP_APP_DIR")
+    if app_dir and Path(app_dir).is_dir():
+        binary_path = str(Path(app_dir) / "thin-wrap")
     else:
-        # Fallback: default search locations
+        # Direct Python execution (git clone / development)
+        binary_path = os.path.realpath(sys.argv[0])
+
+    # Config location – reuses the exact same logic as the rest of the application
+    config_path_obj = resolve_config_path()
+    if config_path_obj:
+        config_desc = str(config_path_obj)
+    else:
         config_desc = (
             "default searched locations:\n"
             "  - $THIN_WRAP_CONFIG_DIR/config.json\n"
             "  - ~/.config/thin-wrap/config.json\n"
             "  - (same directory as binary)"
         )
-    return binary_path, config_desc
+
+    # Data locations (using the same platformdirs logic as the application)
+    config_dir = Path(platformdirs.user_config_dir(config.APP_NAME))
+    data_dir = Path(platformdirs.user_data_dir(config.APP_NAME))
+
+    history_file = config_dir / "history.json"
+    conversations_base = data_dir / "conversations"
+
+    return f"""  ===============================
+  |  APPLICATION DATA LOCATION  |
+  ===============================
+  
+binary: {binary_path}
+  
+config: {config_desc}
+
+project roots and proxies history: {history_file}
+
+past conversations: {conversations_base}
+
+file backups: inside the active project root directory (only if the 'backup' feature is enabled in config.json)"""
 
 
 def parse_arguments():
     """Parse command line arguments"""
     logger.debug("Parsing command line arguments")
 
-    # Compute binary and config info for inclusion in help text
-    binary_path, config_desc = _get_binary_and_config_info()
+    locations = get_location_info()
 
     parser = argparse.ArgumentParser(
         description="LLM Terminal Chat connected with most of LLM API",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=f"""
-Binary location: {binary_path}
-Config location: {config_desc}
-
-Examples:
-  python thin_wrap.py
-  python thin_wrap.py --proxy socks5://127.0.0.1:1080
-  python thin_wrap.py --config /path/to/config.json
-  """,
+        epilog="""examples:
+  thin-wrap
+  thin-wrap --proxy socks5://127.0.0.1:1080
+  thin-wrap --config /path/to/config.json
+  
+""" + locations,
     )
 
-    parser.add_argument("-rd", "--root-dir", help="Root directory of the code project.")
-    parser.add_argument("-r", "--read", nargs="+", help="List of readable files")
-    parser.add_argument("-e", "--edit", nargs="+", help="List of editable files")
-    parser.add_argument(
-        "-m", "--message", help="First message ready to send to the assistant"
-    )
     parser.add_argument(
         "-p",
         "--proxy",
@@ -752,6 +768,12 @@ Examples:
         "--config",
         metavar="CONFIG_PATH",
         help="Path to config.json configuration file",
+    )
+    parser.add_argument("-rd", "--root-dir", help="Root directory of the code project.")
+    parser.add_argument("-r", "--read", nargs="+", help="List of readable files")
+    parser.add_argument("-e", "--edit", nargs="+", help="List of editable files")
+    parser.add_argument(
+        "-m", "--message", help="First message ready to send to the assistant"
     )
 
     return parser.parse_args()
