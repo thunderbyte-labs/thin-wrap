@@ -23,7 +23,7 @@ from command_handler import CommandHandler
 from file_processor import generate_query, generate_plain_query, parse_plain_response
 from input_handler import InputHandler
 from llm_client import LLMClient
-from proxy_wrapper import create_proxy_wrapper, validate_proxy_url
+from proxy_wrapper import create_proxy_wrapper, validate_proxy_url, normalize_proxy_url
 from session_logger import SessionLogger
 from text_utils import clean_text, estimate_tokens
 from ui import UI
@@ -208,32 +208,31 @@ class LLMChat:
         self._save_recent_roots(history_file)
 
     def _load_recent_proxies(self, history_file: Path) -> list[str]:
-        """Load recent proxy URLs from history file."""
+        """Load recent proxy URLs from history file and normalize them to prevent duplicates."""
         try:
             if history_file.exists():
                 data = json.loads(history_file.read_text(encoding="utf-8"))
-                # Only return proxies that are valid (format-wise)
                 valid_proxies = []
+                seen = set()  # Deduplicate after normalization
                 for proxy in data.get("recent_proxies", []):
                     error_msg = validate_proxy_url(proxy)
                     if error_msg is None:
-                        valid_proxies.append(proxy)
+                        normalized = normalize_proxy_url(proxy)
+                        if normalized not in seen:
+                            seen.add(normalized)
+                            valid_proxies.append(normalized)  # Store clean version
                 return valid_proxies
         except Exception as e:
             logger.debug(f"Failed to load proxy history: {e}")
         return []
 
     def _save_recent_proxies(self, history_file: Path) -> None:
-        """Save current recent_proxies list along with existing roots."""
+        """Save current recent_proxies list (already normalized) along with existing roots."""
         try:
-            # Load existing data to preserve roots
             existing_data = {}
             if history_file.exists():
                 existing_data = json.loads(history_file.read_text(encoding="utf-8"))
-
-            # Update proxies, keep roots and any other fields
             existing_data["recent_proxies"] = self.recent_proxies[:10]
-
             history_file.write_text(
                 json.dumps(existing_data, indent=2), encoding="utf-8"
             )
@@ -241,10 +240,20 @@ class LLMChat:
             logger.debug(f"Failed to save proxy history: {e}")
 
     def _add_to_recent_proxies(self, history_file: Path, proxy_url: str) -> None:
-        """Add proxy URL to history: move to front if already present, limit to 10."""
-        if proxy_url in self.recent_proxies:
+        """Add proxy URL to history using normalized form to prevent duplicates."""
+        if not proxy_url:
+            return
+
+        # Normalize before any comparison or storage
+        normalized = normalize_proxy_url(proxy_url)
+
+        # Remove existing entry (if present in either original or normalized form)
+        if normalized in self.recent_proxies:
+            self.recent_proxies.remove(normalized)
+        elif proxy_url in self.recent_proxies:  # fallback for very old entries
             self.recent_proxies.remove(proxy_url)
-        self.recent_proxies.insert(0, proxy_url)
+
+        self.recent_proxies.insert(0, normalized)  # Store clean normalized version
         self.recent_proxies = self.recent_proxies[:10]
         self._save_recent_proxies(history_file)
 

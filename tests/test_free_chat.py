@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Test free chat mode functionality."""
+
 import sys
 import os
 import tempfile
 import shutil
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import config
 from session_logger import SessionLogger
+
 
 def test_session_logger_free_chat():
     """Test SessionLogger with root_dir=None (free chat mode)."""
@@ -15,7 +18,7 @@ def test_session_logger_free_chat():
     original = config.CONVERSATIONS_DIR
     temp_dir = tempfile.mkdtemp()
     config.CONVERSATIONS_DIR = temp_dir
-    
+
     try:
         # Create SessionLogger with root_dir=None
         logger = SessionLogger(script_directory="/tmp", root_dir=None)
@@ -28,7 +31,7 @@ def test_session_logger_free_chat():
         # Save a dummy session
         dummy_history = [
             {"role": "user", "content": "hello", "timestamp": "2025-01-01T00:00:00"},
-            {"role": "assistant", "content": "hi", "timestamp": "2025-01-01T00:00:01"}
+            {"role": "assistant", "content": "hi", "timestamp": "2025-01-01T00:00:01"},
         ]
         saved_path = logger.save_session(dummy_history)
         assert saved_path is not None
@@ -44,6 +47,7 @@ def test_session_logger_free_chat():
     finally:
         config.CONVERSATIONS_DIR = original
         shutil.rmtree(temp_dir, ignore_errors=True)
+
 
 if __name__ == "__main__":
     test_session_logger_free_chat()
