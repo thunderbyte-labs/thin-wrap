@@ -4,8 +4,10 @@ from textual.widgets import Header, Footer, DirectoryTree, ListView, ListItem, S
 from textual.containers import Horizontal, Vertical
 from textual.binding import Binding
 
+
 class FileMenuApp(App):
     """Three-column file context menu."""
+
     ENABLE_COMMAND_PALETTE = False
     BINDINGS = [
         Binding("ctrl+b", "quit", "Quit", key_display="Ctrl+B", show=True),
@@ -24,7 +26,9 @@ class FileMenuApp(App):
     DirectoryTree { border: tall $primary; }
     """
 
-    def __init__(self, editable_files: list[str], readable_files: list[str], root_dir: str):
+    def __init__(
+        self, editable_files: list[str], readable_files: list[str], root_dir: str
+    ):
         super().__init__()
         self.editable_files = editable_files
         self.readable_files = readable_files
@@ -42,7 +46,9 @@ class FileMenuApp(App):
                 yield Static("Readable Files\n(d: delete, e: move to editable)")
                 yield ListView(id="readable")
             with Vertical():
-                yield Static("Navigator (Project Files)\nr: readable\ne: editable\nd: remove")
+                yield Static(
+                    "Navigator (Project Files)\nr: readable\ne: editable\nd: remove"
+                )
                 yield DirectoryTree(self.root_dir, id="navigator")
         yield Footer()
 
@@ -52,12 +58,13 @@ class FileMenuApp(App):
 
     def refresh_lists(self) -> None:
         """Refresh left and middle columns with sorted relative paths."""
+
         def populate_list(view_id: str, paths: list[str]):
             view = self.query_one(f"#{view_id}", ListView)
             view.clear()
             for path in sorted(paths):
                 item = ListItem(Static(path))
-                setattr(item, 'custom_path', path)
+                setattr(item, "custom_path", path)
                 view.append(item)
 
         populate_list("editable", self.editable_files)
@@ -67,7 +74,7 @@ class FileMenuApp(App):
         """Global 'd': delete/remove selected item or from navigator."""
         focused = self.focused
         if isinstance(focused, ListView) and focused.highlighted_child:
-            path = getattr(focused.highlighted_child, 'custom_path', None)
+            path = getattr(focused.highlighted_child, "custom_path", None)
             if path is None:
                 return
             if focused.id == "editable":
@@ -95,7 +102,7 @@ class FileMenuApp(App):
         """Global 'r': move from editable to readable or add from navigator."""
         focused = self.focused
         if focused and focused.id == "editable" and focused.highlighted_child:
-            path = getattr(focused.highlighted_child, 'custom_path', None)
+            path = getattr(focused.highlighted_child, "custom_path", None)
             if path is None:
                 return
             self.editable_files.remove(path)
@@ -110,7 +117,10 @@ class FileMenuApp(App):
             node = focused.cursor_node
             if node and node.data and os.path.isfile(node.data.path):
                 rel_path = os.path.relpath(node.data.path, self.root_dir)
-                if rel_path not in self.editable_set and rel_path not in self.readable_set:
+                if (
+                    rel_path not in self.editable_set
+                    and rel_path not in self.readable_set
+                ):
                     self.readable_files.append(rel_path)
                     self.readable_set.add(rel_path)
                     self.refresh_lists()
@@ -119,7 +129,7 @@ class FileMenuApp(App):
         """Global 'e': move from readable to editable or add from navigator."""
         focused = self.focused
         if focused and focused.id == "readable" and focused.highlighted_child:
-            path = getattr(focused.highlighted_child, 'custom_path', None)
+            path = getattr(focused.highlighted_child, "custom_path", None)
             if path is None:
                 return
             self.readable_files.remove(path)
@@ -134,7 +144,10 @@ class FileMenuApp(App):
             node = focused.cursor_node
             if node and node.data and os.path.isfile(node.data.path):
                 rel_path = os.path.relpath(node.data.path, self.root_dir)
-                if rel_path not in self.editable_set and rel_path not in self.readable_set:
+                if (
+                    rel_path not in self.editable_set
+                    and rel_path not in self.readable_set
+                ):
                     self.editable_files.append(rel_path)
                     self.editable_set.add(rel_path)
                     self.refresh_lists()

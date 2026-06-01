@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Test edge cases for draft navigation."""
+
 import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from input_handler import InputHandler
+
 
 def test_empty_state():
     """Test with empty state."""
@@ -15,6 +18,7 @@ def test_empty_state():
     # Page Down should do nothing
     print("OK - empty state handled")
 
+
 def test_only_sent_messages():
     """Test navigation with only sent messages, no drafts."""
     ih = InputHandler()
@@ -22,10 +26,11 @@ def test_only_sent_messages():
     ih.add_to_history("sent2")
     print("\n=== Test: Only sent messages ===")
     print(f"history: {ih.history}")
-    
+
     # Buffer empty, Page Up should show sent2 (most recent)
     # Buffer empty, Page Down should do nothing (not start navigation)
     print("OK - sent messages loaded")
+
 
 def test_draft_management():
     """Test draft stack management."""
@@ -43,7 +48,8 @@ def test_draft_management():
         if len(ih.draft_stack) > 20:
             ih.draft_stack.pop()
     print(f"After adding with limit: {len(ih.draft_stack)} (should be 20)")
-    
+
+
 def test_navigation_after_modification():
     """Test navigation after modifying a historical message."""
     ih = InputHandler()
@@ -60,6 +66,7 @@ def test_navigation_after_modification():
     print(f"draft_stack after modification: {ih.draft_stack}")
     print("Should have ['modified', 'original']")
 
+
 def test_add_to_history_clears_drafts():
     """Test that sending a message clears draft stack."""
     ih = InputHandler()
@@ -68,9 +75,12 @@ def test_add_to_history_clears_drafts():
     print("\n=== Test: add_to_history clears drafts ===")
     print(f"Before: draft_stack={ih.draft_stack}, history={ih.history}")
     ih.add_to_history("new_sent")
-    print(f"After: draft_stack={ih.draft_stack} (should be empty), history={ih.history}")
+    print(
+        f"After: draft_stack={ih.draft_stack} (should be empty), history={ih.history}"
+    )
     assert len(ih.draft_stack) == 0, "Draft stack should be cleared"
     print("OK - drafts cleared")
+
 
 def test_history_limit():
     """Test that history is limited to 100 messages."""
@@ -83,6 +93,7 @@ def test_history_limit():
     print(f"Oldest message: {ih.history[0]} (should be message5)")
     print(f"Newest message: {ih.history[-1]} (should be message104)")
     print("OK - history limit works")
+
 
 if __name__ == "__main__":
     test_empty_state()
