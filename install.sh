@@ -1,5 +1,6 @@
 #!/bin/sh
 # Universal installer for thin-wrap (Linux & macOS)
+# XDG mode only (modern default)
 # POSIX-compliant, no bash required
 # Usage: curl -fsSL .../install.sh | sh
 
@@ -10,13 +11,12 @@ API_URL="https://api.github.com/repos/${REPO}/releases/latest"
 
 # Helper: Fetch latest version and download URL
 fetch_latest_info() {
-    # Try curl first, fallback to wget
     if command -v curl >/dev/null 2>&1; then
         JSON=$(curl -fsSL "$API_URL" 2>/dev/null) || true
     elif command -v wget >/dev/null 2>&1; then
         JSON=$(wget -qO- "$API_URL" 2>/dev/null) || true
     fi
-    
+
     if [ -z "$JSON" ]; then
         echo "ERROR: Failed to fetch release info from GitHub API."
         echo "This may be due to API rate limits (60 requests/hour per IP)."
@@ -24,13 +24,10 @@ fetch_latest_info() {
         echo "  https://github.com/${REPO}/releases"
         exit 1
     fi
-    
-    # Extract tag_name (e.g., "v1.2.3")
+
     VERSION=$(echo "$JSON" | grep '"tag_name":' | sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
-    
-    # Construct download URL
     DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${ARCHIVE}"
-    
+
     if [ -z "$VERSION" ]; then
         echo "ERROR: Could not parse latest version from GitHub API."
         exit 1
@@ -71,7 +68,6 @@ if [ "$PLATFORM" = "Linux" ]; then
     if command -v ldd >/dev/null 2>&1; then
         GLIBC_VERSION=$(ldd --version 2>/dev/null | head -n 1 | grep -oE '[0-9]+\.[0-9]+' | head -n 1)
         if [ -n "$GLIBC_VERSION" ]; then
-            # Pre-built Linux binaries now target glibc >= 2.35 (built on ubuntu-22.04)
             MAJOR=$(echo "$GLIBC_VERSION" | cut -d. -f1)
             MINOR=$(echo "$GLIBC_VERSION" | cut -d. -f2)
             if [ "$MAJOR" -lt 2 ] || { [ "$MAJOR" -eq 2 ] && [ "$MINOR" -lt 35 ]; }; then
@@ -117,36 +113,13 @@ echo "=== thin-wrap ${VERSION} Installer (${PLATFORM}/${ARCH}) ==="
 # Check for existing installation (update mode)
 if [ -d "$APP_DIR" ] && [ -f "${APP_DIR}/thin-wrap" ]; then
     UPDATE_MODE=1
-    if [ -f "${APP_DIR}/.config_location" ]; then
-        CONFIG_MODE=$(cat "${APP_DIR}/.config_location")
-    else
-        CONFIG_MODE="portable"
-    fi
 else
     UPDATE_MODE=0
-    CONFIG_MODE=""
 fi
 
-# Config location selection
-if [ -z "$CONFIG_MODE" ]; then
-    if [ $INTERACTIVE -eq 1 ]; then
-        printf "Select config location [1=portable (default), 2=XDG]: "
-        read -r choice
-        case "$choice" in
-            2) CONFIG_MODE="xdg" ;;
-            *) CONFIG_MODE="portable" ;;
-        esac
-    else
-        CONFIG_MODE="portable"
-    fi
-fi
-
-# Set config target
-if [ "$CONFIG_MODE" = "xdg" ]; then
-    CONFIG_TARGET="$CONFIG_DIR_XDG"
-else
-    CONFIG_TARGET="$APP_DIR"
-fi
+# === XDG mode only (new default) ===
+CONFIG_MODE="xdg"
+CONFIG_TARGET="$CONFIG_DIR_XDG"
 
 # Download
 if command -v curl >/dev/null 2>&1; then
@@ -196,10 +169,10 @@ if [ ! -x "${APP_DIR}/thin-wrap" ]; then
     exit 1
 fi
 
-# Store config mode for future updates
+# Store config mode marker (useful for uninstaller)
 echo "$CONFIG_MODE" > "${APP_DIR}/.config_location"
 
-# Create wrapper script with --help enhancement and environment variables
+# Create wrapper script
 cat > "${BINDIR}/thin-wrap" << EOF
 #!/bin/sh
 # thin-wrap wrapper – provides environment variables for consistent path reporting
@@ -209,7 +182,7 @@ exec "${APP_DIR}/thin-wrap" "\$@"
 EOF
 chmod +x "${BINDIR}/thin-wrap"
 
-# Copy default config if missing
+# Copy default config if missing (XDG location)
 if [ ! -f "${CONFIG_TARGET}/config.json" ]; then
     mkdir -p "${CONFIG_TARGET}"
     if [ -f "${APP_DIR}/config.json" ]; then
@@ -217,24 +190,17 @@ if [ ! -f "${CONFIG_TARGET}/config.json" ]; then
     fi
 fi
 
-# Cleanup
+# Cleanup temp dir
 cd - >/dev/null 2>&1 || true
 rm -rf "$TMPDIR"
 
 # ---- PATH configuration ----
-# On Linux: add to ~/.bashrc (interactive non-login shells) and ~/.profile (login shells)
-# On macOS: add to ~/.bash_profile (login shells) and also ~/.bashrc if bash is the shell
-
 add_path_to_file() {
     FILE="$1"
     PATH_LINE="export PATH=\"${BINDIR}:\$PATH\""
-    # Skip if line already present
     if grep -qsF "$PATH_LINE" "$FILE" 2>/dev/null; then
         return 0
     fi
-    # Skip if already in current PATH (important for update mode where user might have already sourced)
-    # but we still want the line in the file for future sessions.
-    # So we always add if not already in file.
     echo "" >> "$FILE"
     echo "# thin-wrap install - added by installer" >> "$FILE"
     echo "$PATH_LINE" >> "$FILE"
@@ -242,14 +208,10 @@ add_path_to_file() {
 }
 
 if [ "$PLATFORM" = "Linux" ]; then
-    # Primary: ~/.bashrc (for interactive non-login shells, which is most common)
     add_path_to_file "${HOME}/.bashrc"
-    # Secondary: ~/.profile (for login shells, e.g., SSH)
     add_path_to_file "${HOME}/.profile"
 elif [ "$PLATFORM" = "Darwin" ]; then
-    # macOS: ~/.bash_profile is standard for login shells
     add_path_to_file "${HOME}/.bash_profile"
-    # Also add to ~/.bashrc if bash is the current shell (common for Terminal)
     if basename "$SHELL" 2>/dev/null | grep -q bash; then
         add_path_to_file "${HOME}/.bashrc"
     fi
@@ -265,6 +227,7 @@ if [ $UPDATE_MODE -eq 1 ]; then
 else
     echo "Installation complete!"
 fi
+
 echo "Run: thin-wrap --help"
 echo ""
 echo "NOTE: To use thin-wrap in this terminal, run:"
