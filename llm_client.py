@@ -235,7 +235,7 @@ class LLMClient:
         return url, headers
 
     def _build_request_params(self, messages: list, max_tokens: int = 0):
-        """Now uses configurable input_key and deep-merges extra_arguments."""
+        """Build request payload. For DeepSeek, full messages list is used → prefix caching benefits from stable early turns."""
         model_config = self.current_model_config
         _, input_key = self._get_endpoint_and_input_key()
 
@@ -243,9 +243,7 @@ class LLMClient:
             "model": model_config.get("model", self.current_model),
         }
 
-        # Handle input vs messages (DashScope Responses API uses "input")
-        if input_key == "input":
-            # For chat-style usage, use the last user message (or concatenate history if desired)
+        if input_key == "input":  # currently, this path is only used by qwen
             last_user_content = next(
                 (m["content"] for m in reversed(messages) if m.get("role") == "user"),
                 messages[-1]["content"] if messages else "",
@@ -259,9 +257,7 @@ class LLMClient:
 
         extra_arguments = model_config.get("extra_arguments", {})
         if extra_arguments and isinstance(extra_arguments, dict):
-            request_params.update(
-                extra_arguments
-            )  # already deep enough for your use case
+            request_params.update(extra_arguments)
 
         return request_params
 
@@ -348,7 +344,15 @@ class LLMClient:
         response.raise_for_status()
         data = response.json()
 
-        # Use the new universal extractor
+        usage = data.get("usage", {})
+        if isinstance(usage, dict) and "prompt_cache_hit_tokens" in usage:
+            hit = usage.get("prompt_cache_hit_tokens", 0)
+            total = usage.get("prompt_tokens", 0)  # total prompt tokens
+
+            if total > 0:
+                hit_ratio = (hit / total) * 100
+                print(f"[DeepSeek Cache] {hit:,} / {total:,} tokens ({hit_ratio:.1f}%)")
+
         return self._extract_response_content(data)
 
     def send_message(self, message: str) -> str:
