@@ -669,8 +669,8 @@ class LLMChat:
         query = clean_text(query)
 
         # Send message to LLM client (which handles automatic session saving)
-        response = self.llm_client.send_message(query)
-        self._report_token_usage(query, response)
+        response, usage = self.llm_client.send_message(query)
+        self._report_token_usage(query, response, usage)
 
         assert response is not None
         comments = response_parser(response)
@@ -685,20 +685,26 @@ class LLMChat:
         print()
         logger.debug("Message sent and response processed successfully")
 
-    def _report_token_usage(self, query, response):
-        """Report token usage"""
+    def _report_token_usage(self, query: str, response: str, usage: Optional[dict] = None):
+        """Affiche les vrais tokens de l'API quand disponibles, sinon fallback sur estimation."""
         try:
-            input_tokens = estimate_tokens(query)
-            output_tokens = estimate_tokens(response)
+            if usage and isinstance(usage, dict):
+                input_tokens = usage.get("prompt_tokens", 0)
+                output_tokens = usage.get("completion_tokens", 0)
+                source = "API"
+            else:
+                # Fallback (pour les providers qui ne renvoient pas usage)
+                input_tokens = estimate_tokens(query)
+                output_tokens = estimate_tokens(response)
+                source = "estimated"
 
-            print(f"\n? Response's tokens statistics:")
+            print(f"\n? Response's tokens statistics ({source}):")
             print(f"   Input      | Output")
             print(f"   {input_tokens:<10} | {output_tokens:<10}")
             print(f"{UI.colorize('-' * 65, 'GREEN')}")
 
         except Exception as e:
-            print(f"   ?? Could not estimate token usage: {e}")
-
+            print(f"   ?? Could not get token usage: {e}")
 
 def get_location_info() -> str:
     """

@@ -327,81 +327,75 @@ class LLMClient:
     # MESSAGE SENDING & CONVERSATION MANAGEMENT
     # ===================================================================
 
-    def _send_message_via_httpx(self):
-        """Send conversation to LLM using raw httpx (core request method)."""
-        print("⏳ Sending request to LLM client... (Press Ctrl+C to interrupt)")
+    def _send_message_via_httpx(self) -> tuple[str, Optional[dict]]:
+            """Send to LLM and return (text, usage_dict)."""
+            print("⏳ Sending request to LLM client... (Press Ctrl+C to interrupt)")
 
-        messages = [
-            {"role": msg["role"], "content": msg["content"]}
-            for msg in self.conversation_history
-        ]
+            messages = [
+                {"role": msg["role"], "content": msg["content"]}
+                for msg in self.conversation_history
+            ]
 
-        payload = self._build_request_params(messages=messages)
+            payload = self._build_request_params(messages=messages)
+            url, headers = self._get_request_url_and_headers()
 
-        url, headers = self._get_request_url_and_headers()
+            response = self._http_client.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            data = response.json()
 
-        response = self._http_client.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        data = response.json()
+            # Extract usage if present (DeepSeek, OpenAI, OpenRouter, DashScope, Gemini, etc.)
+            usage = data.get("usage")
 
-        usage = data.get("usage", {})
-        if isinstance(usage, dict) and "prompt_cache_hit_tokens" in usage:
-            hit = usage.get("prompt_cache_hit_tokens", 0)
-            total = usage.get("prompt_tokens", 0)  # total prompt tokens
+            # Extract response text
+            text = self._extract_response_content(data)
 
-            if total > 0:
-                hit_ratio = (hit / total) * 100
-                print(f"[DeepSeek Cache] {hit:,} / {total:,} tokens ({hit_ratio:.1f}%)")
+            return text, usage
 
-        return self._extract_response_content(data)
+    def send_message(self, message: str) -> tuple[str, Optional[dict]]:
+            """
+            Send a message and return (response_text, usage_dict).
+            usage_dict contient les vrais tokens de l'API (prompt_tokens, completion_tokens, etc.)
+            """
+            try:
+                # Append user message
+                self.conversation_history.append(
+                    {
+                        "role": "user",
+                        "content": message,
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
 
-    def send_message(self, message: str) -> str:
-        """Send user message, call LLM, save session before/after, return cleaned response."""
-        try:
-            self.conversation_history.append(
-                {
-                    "role": "user",
-                    "content": message,
-                    "timestamp": datetime.now().isoformat(),
-                }
-            )
-
-            if self.session_logger:
-                self.session_logger.save_session(self.conversation_history)
-
-            response = self._send_message_via_httpx()
-            response = text_utils.clean_text(response)
-
-            self.conversation_history.append(
-                {
-                    "role": "assistant",
-                    "content": response,
-                    "timestamp": datetime.now().isoformat(),
-                }
-            )
-
-            if self.session_logger:
-                self.session_logger.save_session(self.conversation_history)
-
-            return response
-
-        except KeyboardInterrupt:
-            print(
-                f"\n{UI.colorize('Request interrupted by user (Ctrl+C)', 'BRIGHT_YELLOW')}"
-            )
-            if (
-                self.conversation_history
-                and self.conversation_history[-1]["role"] == "user"
-            ):
-                self.conversation_history.pop()
                 if self.session_logger:
                     self.session_logger.save_session(self.conversation_history)
-            return ""
 
-        except Exception as e:
-            if self.session_logger:
-                self.session_logger.save_session(self.conversation_history)
-            return f"Error communicating with {self.current_model}: {e}"
+                # Get response + usage from API
+                response_text, usage = self._send_message_via_httpx()
+
+                # Append assistant response
+                self.conversation_history.append(
+                    {
+                        "role": "assistant",
+                        "content": response_text,
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+
+                if self.session_logger:
+                    self.session_logger.save_session(self.conversation_history)
+
+                return response_text, usage
+
+            except KeyboardInterrupt:
+                # Remove the last user message if interrupted
+                if self.conversation_history and self.conversation_history[-1]["role"] == "user":
+                    self.conversation_history.pop()
+                if self.session_logger:
+                    self.session_logger.save_session(self.conversation_history)
+                raise
+            except Exception as e:
+                logger.error(f"Error in send_message: {e}")
+                raise
 
     def clear_conversation(self):
         """Clear conversation history and save empty session."""
