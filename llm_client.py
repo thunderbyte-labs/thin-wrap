@@ -387,18 +387,22 @@ class LLMClient:
             return response_text, usage
 
         except KeyboardInterrupt:
-            # Remove the last user message if interrupted
+            print(
+                f"\n{UI.colorize('Request interrupted by user (Ctrl+C)', 'BRIGHT_YELLOW')}"
+            )
             if (
                 self.conversation_history
                 and self.conversation_history[-1]["role"] == "user"
             ):
                 self.conversation_history.pop()
+                if self.session_logger:
+                    self.session_logger.save_session(self.conversation_history)
+            return "", None
+
+        except Exception as e:
             if self.session_logger:
                 self.session_logger.save_session(self.conversation_history)
-            raise
-        except Exception as e:
-            logger.error(f"Error in send_message: {e}")
-            raise
+            return f"Error communicating with {self.current_model}: {e}", None
 
     def clear_conversation(self):
         """Clear conversation history and save empty session."""
