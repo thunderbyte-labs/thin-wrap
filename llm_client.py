@@ -328,74 +328,77 @@ class LLMClient:
     # ===================================================================
 
     def _send_message_via_httpx(self) -> tuple[str, Optional[dict]]:
-            """Send to LLM and return (text, usage_dict)."""
-            print("⏳ Sending request to LLM client... (Press Ctrl+C to interrupt)")
+        """Send to LLM and return (text, usage_dict)."""
+        print("⏳ Sending request to LLM client... (Press Ctrl+C to interrupt)")
 
-            messages = [
-                {"role": msg["role"], "content": msg["content"]}
-                for msg in self.conversation_history
-            ]
+        messages = [
+            {"role": msg["role"], "content": msg["content"]}
+            for msg in self.conversation_history
+        ]
 
-            payload = self._build_request_params(messages=messages)
-            url, headers = self._get_request_url_and_headers()
+        payload = self._build_request_params(messages=messages)
+        url, headers = self._get_request_url_and_headers()
 
-            response = self._http_client.post(url, json=payload, headers=headers)
-            response.raise_for_status()
-            data = response.json()
+        response = self._http_client.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
 
-            # Extract usage if present (DeepSeek, OpenAI, OpenRouter, DashScope, Gemini, etc.)
-            usage = data.get("usage")
+        # Extract usage if present (DeepSeek, OpenAI, OpenRouter, DashScope, Gemini, etc.)
+        usage = data.get("usage")
 
-            # Extract response text
-            text = self._extract_response_content(data)
+        # Extract response text
+        text = self._extract_response_content(data)
 
-            return text, usage
+        return text, usage
 
     def send_message(self, message: str) -> tuple[str, Optional[dict]]:
-            """
-            Send a message and return (response_text, usage_dict).
-            usage_dict contient les vrais tokens de l'API (prompt_tokens, completion_tokens, etc.)
-            """
-            try:
-                # Append user message
-                self.conversation_history.append(
-                    {
-                        "role": "user",
-                        "content": message,
-                        "timestamp": datetime.now().isoformat(),
-                    }
-                )
+        """
+        Send a message and return (response_text, usage_dict).
+        usage_dict contient les vrais tokens de l'API (prompt_tokens, completion_tokens, etc.)
+        """
+        try:
+            # Append user message
+            self.conversation_history.append(
+                {
+                    "role": "user",
+                    "content": message,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
 
-                if self.session_logger:
-                    self.session_logger.save_session(self.conversation_history)
+            if self.session_logger:
+                self.session_logger.save_session(self.conversation_history)
 
-                # Get response + usage from API
-                response_text, usage = self._send_message_via_httpx()
+            # Get response + usage from API
+            response_text, usage = self._send_message_via_httpx()
 
-                # Append assistant response
-                self.conversation_history.append(
-                    {
-                        "role": "assistant",
-                        "content": response_text,
-                        "timestamp": datetime.now().isoformat(),
-                    }
-                )
+            # Append assistant response
+            self.conversation_history.append(
+                {
+                    "role": "assistant",
+                    "content": response_text,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
 
-                if self.session_logger:
-                    self.session_logger.save_session(self.conversation_history)
+            if self.session_logger:
+                self.session_logger.save_session(self.conversation_history)
 
-                return response_text, usage
+            return response_text, usage
 
-            except KeyboardInterrupt:
-                # Remove the last user message if interrupted
-                if self.conversation_history and self.conversation_history[-1]["role"] == "user":
-                    self.conversation_history.pop()
-                if self.session_logger:
-                    self.session_logger.save_session(self.conversation_history)
-                raise
-            except Exception as e:
-                logger.error(f"Error in send_message: {e}")
-                raise
+        except KeyboardInterrupt:
+            # Remove the last user message if interrupted
+            if (
+                self.conversation_history
+                and self.conversation_history[-1]["role"] == "user"
+            ):
+                self.conversation_history.pop()
+            if self.session_logger:
+                self.session_logger.save_session(self.conversation_history)
+            raise
+        except Exception as e:
+            logger.error(f"Error in send_message: {e}")
+            raise
 
     def clear_conversation(self):
         """Clear conversation history and save empty session."""

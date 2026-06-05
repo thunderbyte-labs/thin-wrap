@@ -685,26 +685,42 @@ class LLMChat:
         print()
         logger.debug("Message sent and response processed successfully")
 
-    def _report_token_usage(self, query: str, response: str, usage: Optional[dict] = None):
-        """Affiche les vrais tokens de l'API quand disponibles, sinon fallback sur estimation."""
+    def _report_token_usage(
+        self, query: str, response: str, usage: Optional[dict] = None
+    ):
+        """Affiche un tableau clair avec Input, Output et Cache Hit."""
         try:
             if usage and isinstance(usage, dict):
                 input_tokens = usage.get("prompt_tokens", 0)
                 output_tokens = usage.get("completion_tokens", 0)
+
+                # Cache hit (compatible DeepSeek + OpenAI/OpenRouter/Gemini)
+                cached_tokens = usage.get("prompt_cache_hit_tokens", 0) or usage.get(
+                    "prompt_tokens_details", {}
+                ).get("cached_tokens", 0)
                 source = "API"
             else:
-                # Fallback (pour les providers qui ne renvoient pas usage)
                 input_tokens = estimate_tokens(query)
                 output_tokens = estimate_tokens(response)
+                cached_tokens = 0
                 source = "estimated"
 
-            print(f"\n? Response's tokens statistics ({source}):")
-            print(f"   Input      | Output")
-            print(f"   {input_tokens:<10} | {output_tokens:<10}")
-            print(f"{UI.colorize('-' * 65, 'GREEN')}")
+            print(f"\n? Token Usage ({source})")
+            print("   Input      | Output     | Cache Hit")
+            print("   ───────────|────────────|──────────────────────")
+
+            if cached_tokens > 0 and input_tokens > 0:
+                ratio = (cached_tokens / input_tokens) * 100
+                cache_display = f"{cached_tokens} / {input_tokens} ({ratio:.1f}%)"
+            else:
+                cache_display = "-"
+
+            print(f"   {input_tokens:<10} | {output_tokens:<10} | {cache_display}")
+            print(f"{UI.colorize('─' * 65, 'GREEN')}")
 
         except Exception as e:
             print(f"   ?? Could not get token usage: {e}")
+
 
 def get_location_info() -> str:
     """
