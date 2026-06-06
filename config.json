@@ -6,6 +6,12 @@
       "api_base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
       "proxy": true
     },
+    "pro-gemini-2.5-flash": {
+      "model": "gemini-2.5-flash",
+      "api_key": "GOOGLE_PRO_API_KEY",
+      "api_base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+      "proxy": true
+    },
     "deepseek-chat": {
       "model": "deepseek-chat",
       "api_key": "DEEPSEEK_API_KEY",
