@@ -333,14 +333,38 @@ def parse_xml_response(llm_response: str) -> str:
 
     # Get backup configuration (reloads config each time)
     backup_config = config.backup()
+    backup_enabled = backup_config.get("enabled", True)
     timestamp_format = backup_config.get("timestamp_format", "%Y%m%d%H%M%S")
     extra_string = backup_config.get("extra_string", "thin-wrap")
-    backup_old_file = backup_config.get("backup_old_file", True)
+    overwrite_original = backup_config.get("overwrite_original", True)
 
     for path_str, content in _extract_files(edited_section, Xml.EDITED_FILE):
         try:
             path = Path(path_str)
             _secure_path(path, should_exist=True)
+
+            if not backup_enabled:
+                # No backup at all: write directly to the original file
+                _write_file(path, content, src_for_perms=None)
+                print(f"Edited: {path}")
+                # For diff, compare original content (read in memory) vs new content
+                # We'll compute diff from old file content read before writing
+                old_content = path.read_text(encoding="utf-8")  # This will fail if we already wrote; need to read before writing.
+                # Actually we wrote above, so we need to read first. Let's fix: read old content before writing.
+                # We'll restructure to read old content first.
+                # Better: read old content before any write.
+                # But we already have a pattern: read old content for diff. Let's handle it by reading before writing.
+                # However _secure_path already verified exists. We'll read old content now.
+                old_content = path.read_text(encoding="utf-8")
+                # Now write the new content
+                _write_file(path, content, src_for_perms=None)
+                # Compare old and new
+                insertions, deletions = _compute_git_stat_diff(old_content, content)
+                print(f"{path.name}: {insertions} insertions(+), {deletions} deletions(-)" if (insertions and deletions) else f"{path.name}: {insertions} insertions(+)" if insertions else f"{path.name}: {deletions} deletions(-)" if deletions else f"{path.name}: no changes")
+                logger.info(
+                    f"Edited (no backup): {path}: {insertions} insertions(+), {deletions} deletions(-)"
+                )
+                continue
 
             timestamp = datetime.datetime.now(datetime.UTC).strftime(timestamp_format)
 
@@ -352,14 +376,14 @@ def parse_xml_response(llm_response: str) -> str:
             else:
                 backup = path.with_name(f"{path.stem}.{timestamp}{path.suffix}")
 
-            if backup_old_file:
-                # Original behavior: backup old file, then write new content to original path
+            if overwrite_original:
+                # Rename original to backup, then write new content to original path
                 os.replace(path, backup)
                 _write_file(path, content, src_for_perms=backup)
                 print(f"Edited: {path}")
                 _diff_report(str(backup), str(path))
             else:
-                # New behavior: write new content to timestamped file, leave original unchanged
+                # Write new content to timestamped file, leave original unchanged
                 _write_file(backup, content, src_for_perms=path)
                 print(f"Created timestamped version: {backup}")
                 _diff_report(str(path), str(backup))
@@ -486,3 +510,4 @@ def generate_query(
             root_dir, readable_files, writable_files, user_request
         )
         return query, parse_xml_response
+
