@@ -193,29 +193,38 @@ def _load_config_internal(config_path: str | None = None) -> dict:
         config_data["backup"] = {}
 
     backup_config = config_data["backup"]
-    # New master switch: enabled (default true)
+
+    # enabled defaults to True when backup section is present
     if "enabled" in backup_config:
         if not isinstance(backup_config["enabled"], bool):
-            raise ValueError("backup.enabled must be a boolean")
+            raise ValueError(
+                f"backup.enabled must be a boolean.\nConfig file: {_CONFIG_PATH}"
+            )
     else:
-        backup_config.setdefault("enabled", True)
+        backup_config["enabled"] = True
 
-    backup_config.setdefault("timestamp_format", "%Y%m%d%H%M%S")
-    backup_config.setdefault("extra_string", "thin-wrap")
+    # When backup is enabled, the three fields are mandatory (no automatic defaults)
+    if backup_config["enabled"]:
+        for field in ("timestamp_format", "extra_string", "overwrite_original"):
+            if field not in backup_config:
+                raise ValueError(
+                    f"backup.{field} is required when backup.enabled is true.\n"
+                    f"Config file: {_CONFIG_PATH}"
+                )
 
-    # Renamed: overwrite_original replaces backup_old_file.
-    # Backward compatibility: if overwrite_original is not set, use backup_old_file (if present) else default True.
+        if not isinstance(backup_config["overwrite_original"], bool):
+            raise ValueError(
+                f"backup.overwrite_original must be a boolean.\nConfig file: {_CONFIG_PATH}"
+            )
+
+    # Legacy support: backup_old_file -> overwrite_original (only if overwrite_original missing)
     if "overwrite_original" not in backup_config:
         if "backup_old_file" in backup_config:
-            # Support legacy configs that still use the old key name
             if not isinstance(backup_config["backup_old_file"], bool):
-                raise ValueError("backup.backup_old_file must be a boolean")
+                raise ValueError(
+                    f"backup.backup_old_file must be a boolean.\nConfig file: {_CONFIG_PATH}"
+                )
             backup_config["overwrite_original"] = backup_config.pop("backup_old_file")
-        else:
-            backup_config["overwrite_original"] = True
-    else:
-        if not isinstance(backup_config["overwrite_original"], bool):
-            raise ValueError("backup.overwrite_original must be a boolean")
 
     return config_data
 
@@ -244,18 +253,15 @@ def backup() -> dict:
 
     Returns:
         dict: Backup configuration dictionary with keys:
-            - enabled: bool, master switch to disable all backup creation (default True)
-            - timestamp_format: str, format for datetime timestamp
-            - extra_string: str or None, extra string to include in backup filename
-            - overwrite_original: bool, whether to rename the original file to a timestamped backup
-              before writing the new content (default True). If False, new content is written to a
-              separate timestamped file and the original is left unchanged.
-              Only meaningful when enabled is True.
+            - enabled: bool, master switch (default True when backup section exists)
+            - timestamp_format: str (required when enabled is True)
+            - extra_string: str (required when enabled is True)
+            - overwrite_original: bool (required when enabled is True)
 
     Raises:
         FileNotFoundError: If config.json cannot be found
         json.JSONDecodeError: If config.json is invalid
-        ValueError: If config.json is missing required sections
+        ValueError: If config.json is missing required sections or invalid backup configuration
     """
     config_data = _load_config_internal()
     return config_data.get("backup", {})
@@ -291,4 +297,3 @@ COMMANDS = {
     "/files": "Handle Ctrl+B file context menu",
     "/proxy": "Manage proxy (off to disable, number for previous, or new URL like socks5://127.0.0.1:1080)",
 }
-

@@ -80,21 +80,23 @@ The `plugins` field lets you attach API-level plugins (e.g., web search, code ex
 
 Controls file backup behaviour during intelligent editing.
 
+When `"enabled": true`, the three fields `timestamp_format`, `extra_string` and `overwrite_original` **are mandatory**.
+
 ```json
 "backup": {
   "enabled": true,
-  "overwrite_original": true,
   "timestamp_format": "%Y%m%d%H%M%S",
-  "extra_string": "thin-wrap"
+  "extra_string": "thin-wrap",
+  "overwrite_original": true
 }
 ```
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | bool | `true` | Master switch. Set to `false` to disable all backup creation; files are overwritten directly. |
-| `overwrite_original` | bool | `true` | Only meaningful when `enabled` is true. If `true`, the original file is renamed to a timestamped backup before writing the new content to the original path. If `false`, the new content is written to a separate timestamped file and the original is left untouched. |
-| `timestamp_format` | string | `"%Y%m%d%H%M%S"` | strftime format for timestamps in backup filenames. |
-| `extra_string` | string | `"thin-wrap"` | String inserted before the timestamp (e.g., `file.thin-wrap.202501301511.py`). |
+| Field              | Type   | Description |
+|--------------------|--------|-------------|
+| `enabled`          | bool   | Master switch. `false` disables all backups (direct overwrite). |
+| `overwrite_original` | bool | If `true`: rename original to timestamped backup, then write new content to original path.<br>If `false`: write new content to a separate timestamped file, leave original untouched. |
+| `timestamp_format` | string | strftime format used in backup filenames. |
+| `extra_string`     | string | String inserted before the timestamp in backup filename. |
 
 ## Usage
 
@@ -159,4 +161,3 @@ Maintain cross-platform compat, PEP 8, add tests for new features. PRs to `main`
 ## License
 
 AGPL-3.0
-

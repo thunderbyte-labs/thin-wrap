@@ -4,8 +4,9 @@ import datetime
 import logging
 import re
 import shutil
-import subprocess
+import tempfile
 import difflib
+from typing import Optional
 from tags import Xml
 from pathlib import Path
 
@@ -308,6 +309,49 @@ def _diff_report(old_path: str | None, new_path: str) -> None:
         print(f"{filename}: error computing diff")
 
 
+def _safe_atomic_write(
+    target_path: Path,
+    new_content: str,
+    *,
+    preserve_permissions_from: Optional[Path] = None,
+    encoding: str = "utf-8",
+) -> None:
+    """
+    Écrit de façon atomique dans target_path.
+    - Crée un fichier temporaire dans le même répertoire.
+    - Copie les permissions si demandé.
+    - Remplace atomiquement le fichier cible (os.replace).
+    - Nettoie le temporaire en cas d'erreur.
+    """
+    target_path = Path(target_path)
+    parent_dir = target_path.parent
+
+    # Création du fichier temporaire dans le même dossier (important pour l'atomicité)
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding=encoding,
+        dir=parent_dir,
+        delete=False,
+        prefix=".thinwrap-",
+        suffix=".tmp",
+    ) as tmp_file:
+        tmp_path = Path(tmp_file.name)
+        tmp_file.write(new_content)
+
+    try:
+        # Préservation des permissions (mode)
+        if preserve_permissions_from and preserve_permissions_from.exists():
+            shutil.copymode(preserve_permissions_from, tmp_path)
+
+        # Remplacement atomique (Linux, macOS, Windows)
+        os.replace(tmp_path, target_path)
+
+    except Exception:
+        # Nettoyage en cas d'échec
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+
 def parse_plain_response(llm_response: str) -> str:
     """
     Simple parser for plain text LLM responses.
@@ -344,23 +388,29 @@ def parse_xml_response(llm_response: str) -> str:
             _secure_path(path, should_exist=True)
 
             if not backup_enabled:
-                # No backup at all: write directly to the original file
-                _write_file(path, content, src_for_perms=None)
-                print(f"Edited: {path}")
-                # For diff, compare original content (read in memory) vs new content
-                # We'll compute diff from old file content read before writing
-                old_content = path.read_text(encoding="utf-8")  # This will fail if we already wrote; need to read before writing.
-                # Actually we wrote above, so we need to read first. Let's fix: read old content before writing.
-                # We'll restructure to read old content first.
-                # Better: read old content before any write.
-                # But we already have a pattern: read old content for diff. Let's handle it by reading before writing.
-                # However _secure_path already verified exists. We'll read old content now.
+                # No backup: direct atomic overwrite with permission preservation
                 old_content = path.read_text(encoding="utf-8")
-                # Now write the new content
-                _write_file(path, content, src_for_perms=None)
-                # Compare old and new
+
+                _safe_atomic_write(
+                    target_path=path,
+                    new_content=content,
+                    preserve_permissions_from=path,
+                )
+
+                print(f"Edited: {path}")
+
                 insertions, deletions = _compute_git_stat_diff(old_content, content)
-                print(f"{path.name}: {insertions} insertions(+), {deletions} deletions(-)" if (insertions and deletions) else f"{path.name}: {insertions} insertions(+)" if insertions else f"{path.name}: {deletions} deletions(-)" if deletions else f"{path.name}: no changes")
+                if insertions == 0 and deletions == 0:
+                    print(f"{path.name}: no changes")
+                elif deletions == 0:
+                    print(f"{path.name}: {insertions} insertions(+)")
+                elif insertions == 0:
+                    print(f"{path.name}: {deletions} deletions(-)")
+                else:
+                    print(
+                        f"{path.name}: {insertions} insertions(+), {deletions} deletions(-)"
+                    )
+
                 logger.info(
                     f"Edited (no backup): {path}: {insertions} insertions(+), {deletions} deletions(-)"
                 )
@@ -510,4 +560,3 @@ def generate_query(
             root_dir, readable_files, writable_files, user_request
         )
         return query, parse_xml_response
-
