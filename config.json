@@ -87,7 +87,7 @@
     }
   },
   "backup": {
-    "enabled": true,
+    "enabled": false,
     "timestamp_format": "%Y%m%d%H%M%S",
     "extra_string": "thin-wrap",
     "overwrite_original": true
