@@ -194,7 +194,7 @@ def _load_config_internal(config_path: str | None = None) -> dict:
 
     backup_config = config_data["backup"]
 
-    # enabled defaults to True when backup section is present
+    # enabled defaults to True when the backup section is present
     if "enabled" in backup_config:
         if not isinstance(backup_config["enabled"], bool):
             raise ValueError(
@@ -203,8 +203,8 @@ def _load_config_internal(config_path: str | None = None) -> dict:
     else:
         backup_config["enabled"] = True
 
-    # When backup is enabled, the three fields are mandatory (no automatic defaults)
     if backup_config["enabled"]:
+        # Strict validation: the 3 fields are mandatory when enabled=True
         for field in ("timestamp_format", "extra_string", "overwrite_original"):
             if field not in backup_config:
                 raise ValueError(
@@ -217,14 +217,13 @@ def _load_config_internal(config_path: str | None = None) -> dict:
                 f"backup.overwrite_original must be a boolean.\nConfig file: {_CONFIG_PATH}"
             )
 
-    # Legacy support: backup_old_file -> overwrite_original (only if overwrite_original missing)
-    if "overwrite_original" not in backup_config:
-        if "backup_old_file" in backup_config:
-            if not isinstance(backup_config["backup_old_file"], bool):
-                raise ValueError(
-                    f"backup.backup_old_file must be a boolean.\nConfig file: {_CONFIG_PATH}"
-                )
-            backup_config["overwrite_original"] = backup_config.pop("backup_old_file")
+    # Legacy support: backup_old_file → overwrite_original (only if overwrite_original is missing)
+    if "overwrite_original" not in backup_config and "backup_old_file" in backup_config:
+        if not isinstance(backup_config["backup_old_file"], bool):
+            raise ValueError(
+                f"backup.backup_old_file must be a boolean.\nConfig file: {_CONFIG_PATH}"
+            )
+        backup_config["overwrite_original"] = backup_config.pop("backup_old_file")
 
     return config_data
 
@@ -252,16 +251,14 @@ def backup() -> dict:
     Re-reads the file every time it's called to pick up changes.
 
     Returns:
-        dict: Backup configuration dictionary with keys:
-            - enabled: bool, master switch (default True when backup section exists)
-            - timestamp_format: str (required when enabled is True)
-            - extra_string: str (required when enabled is True)
-            - overwrite_original: bool (required when enabled is True)
+        dict: Backup configuration with keys:
+            - enabled: bool (defaults to True when backup section exists)
+            - timestamp_format: str (required when enabled=True)
+            - extra_string: str (required when enabled=True)
+            - overwrite_original: bool (required when enabled=True)
 
     Raises:
-        FileNotFoundError: If config.json cannot be found
-        json.JSONDecodeError: If config.json is invalid
-        ValueError: If config.json is missing required sections or invalid backup configuration
+        FileNotFoundError, json.JSONDecodeError, ValueError
     """
     config_data = _load_config_internal()
     return config_data.get("backup", {})
