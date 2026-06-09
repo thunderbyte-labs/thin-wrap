@@ -1,232 +1,163 @@
-# Thin Wrap - LLM Terminal Chat
+# Thin Wrap
 
-**A thin terminal chat for wrapping any Large Language Model (LLM) API endpoint**  
-*Simplicity for people needing to **control** the code : it is not pure coding but also not vibe-coding, it is in between*
-
-It features:  
--cross-platform compatibility  
--strict file context management  
--proxy support (to bypass geopolitical walls without VPN)  
--session logging  
+A terminal chat for any LLM API endpoint -- bridging pure coding and vibe-coding.
 
 ## Installation
 
-### Linux & macOS
-
-**Requirements:** `curl` or `wget`, `unzip` (usually pre-installed)
-
+**Linux/macOS** (curl/wget + unzip required):
 ```bash
 curl -fsSL https://raw.githubusercontent.com/thunderbyte-labs/thin-wrap/main/install.sh | sh
 ```
+Installs to `~/.local/bin` / `~/.local/lib/thin-wrap/`, config at `~/.config/thin-wrap/`, updates PATH.
 
-Or with `wget`:
-```bash
-wget -qO- https://raw.githubusercontent.com/thunderbyte-labs/thin-wrap/main/install.sh | sh
-```
+**Windows:** Download `.zip` from [Releases](https://github.com/thunderbyte-labs/thin-wrap/releases), extract, add to PATH manually.
 
-**What it does:**
-- Installs to `~/.local/bin` and `~/.local/lib/thin-wrap/` (no root required, root is blocked)
-- Asks where to store config: portable (with binary) or `~/.config/thin-wrap/`
-- Adds to your login shell PATH (`.profile` on Linux, `.bash_profile` on macOS)
-- Detects your architecture automatically (x86_64, ARM64, Apple Silicon)
-
-**macOS Security Note:** If you see "developer cannot be verified" warnings after manual install, run:
-```bash
-xattr -d com.apple.quarantine ~/.local/lib/thin-wrap/thin-wrap
-```
-Or install via Homebrew (when available) to avoid this: `brew install thunderbyte-labs/tap/thin-wrap`
-
-### Windows (Manual)
-
-1. Download `thin-wrap-Windows-x86_64.zip` from the [Releases page](https://github.com/thunderbyte-labs/thin-wrap/releases)
-2. Extract to a directory of your choice (e.g., `C:\Program Files\thin-wrap\` or `C:\Users\YourName\bin\`)
-3. Add the directory to your PATH manually:
-   - Search "Environment Variables" in Start Menu
-   - Edit "Path" under User variables
-   - Add your extraction directory
-4. Run `thin-wrap.exe` from Command Prompt or PowerShell
-
-### Uninstall (Linux & macOS)
-
+**Uninstall:**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/thunderbyte-labs/thin-wrap/main/uninstall.sh | sh
 ```
 
-Removes binary and wrapper, preserves config by default (asks before deleting API keys).
+## Features
 
-### Supported Platforms
-
-| OS | Architecture | Download |
-|----|-------------|----------|
-| Linux | x86_64 | `thin-wrap-Linux-x86_64.zip` |
-| Linux | ARM64 | `thin-wrap-Linux-aarch64.zip` |
-| macOS | Intel | `thin-wrap-Darwin-x86_64.zip` |
-| macOS | Apple Silicon | `thin-wrap-Darwin-arm64.zip` |
-| Windows | x86_64 | `thin-wrap-Windows-x86_64.zip` |
-
-**Note:** If the installer reports "unsupported architecture," download manually and extract to `~/.local/bin/` (Linux/macOS) or `C:\Windows\` (Windows, not recommended).
-
-## Security Features
-
-- **No root execution:** The application refuses to run as root (Linux/macOS) to prevent accidental file permission changes
-- **Config precedence:** `--config /path/to/config.json` overrides any auto-detected configuration
-- **XDG compliance:** Follows XDG Base Directory Specification for config storage when available
+- **Multi-LLM:** Switch providers via `/model` (DeepSeek, Gemini, OpenRouter, custom endpoints).
+- **File Context:** `Ctrl+B` opens a 3-column browser (editable / readable / navigator). `r`/`e`/`d` moves files; `Ctrl+D` clears all.
+- **Proxy:** Use any SOCKS5/HTTP proxy (`--proxy` or `/proxy`). Per-model proxy hints via `"proxy": true` in config.
+- **Intelligent Editing:** LLM-recommended edits get timestamped backups (`file.thin-wrap.20250130.py`) with Python-native diff stats. Backup can be disabled entirely via `backup.enabled` (see Configuration).
+- **Session Logging:** Conversations auto-saved as `.toml.zip` with metadata (message count, preview). Reload with `/reload`.
+- **Free Chat:** Choose "No root directory" at startup to chat without file context.
+- **History:** `PageUp`/`PageDown` navigates sent messages and temporary drafts.
 
 ## Configuration
 
-The application uses a `config.json` file located in the same directory as the executable.
+`config.json` is resolved in order: `--config` arg → `$THIN_WRAP_CONFIG_DIR` → `~/.config/thin-wrap/` → executable directory.
 
-A sample `config.json` is provided with the release. It contains two main sections:
+### Models
 
-### models
-A dictionary defining available LLM models. Each entry uses a unique model identifier as the key, with:
-- **api_key**: The name of the environment variable that holds the actual API key (recommended for security). Direct API key strings may also be used, though this is discouraged.
-- **api_base_url**: The base URL for the model's API endpoint.
-- **proxy** (optional): Boolean flag indicating whether this model recommends using a proxy. If `true` and no proxy is configured via command line, the application will prompt for proxy selection when this model is chosen. Defaults to `false`.
+Each entry requires `model`, `api_key` (env var name), `api_base_url`.  
+Optional fields:
 
-Example entries (from the sample):
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `proxy` | bool | `false` | Prompt for proxy when selecting this model |
+| `endpoint` | string | `/chat/completions` | Custom API endpoint path |
+| `input_key` | string | `"messages"` | Payload key for input (e.g., `"input"` for DashScope) |
+| `extra_arguments` | object | `{}` | Additional JSON fields sent in request body |
+| `plugins` | list or dict | `[]` | Define API plugins/tools (see Plugins section) |
+
+Example:
 ```json
-"gemini-2.5-flash": {
-  "api_key": "GOOGLE_API_KEY",
-  "api_base_url": "https://generativelanguage.googleapis.com/v1beta/openai/"
-},
-"deepseek-chat": {
-  "api_key": "DEEPSEEK_API_KEY",
-  "api_base_url": "https://api.deepseek.com/v1"
-},
-"anthropic/claude-sonnet-4.5": {
-  "api_key": "OPENROUTER_API_KEY",
-  "api_base_url": "https://openrouter.ai/api/v1",
-  "proxy": true
+{
+  "gemini-2.5-flash": {
+    "model": "gemini-2.5-flash",
+    "api_key": "GOOGLE_API_KEY",
+    "api_base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "proxy": true
+  }
 }
 ```
 
-Set the corresponding environment variables before running the application (e.g., `export GOOGLE_API_KEY=your_actual_key`).
+### Plugins
 
-### backup
-Configuration for file backup behavior during intelligent code editing:
-- **timestamp_format**: strftime format used for timestamps in backup filenames (default: `"%Y%m%d%H%M%S"`).
-- **extra_string**: Additional string appended to backup filenames (default: `"thin-wrap"`).
-- **backup_old_file**: Boolean controlling whether the original file is backed up before changes are applied (default: `false`).
+The `plugins` field lets you attach API-level plugins (e.g., web search, code execution) to a model. Plugins are merged into the request payload and are provider-dependent.
 
-Users may edit `config.json` to add, remove, or modify models and backup settings as needed.
+- **List form:** Simple list of plugin names or type objects. Currently only tested on OpenRouter.  
+  ```json
+  "plugins": ["web_search", "web_extractor"]
+  ```
+- **Dict form:** Full plugin definitions with options. Currently only tested on Qwen-Plus 3.6.  
+  ```json
+  "plugins": {
+    "tools": [
+      { "type": "web_search", "search_strategy": "agent" },
+      { "type": "web_extractor" }
+    ]
+  }
+  ```
 
-If `config.json` is missing or invalid, the application will raise an error with guidance.
+**Note:** Plugins functionality depends on the API provider. For OpenAI-compatible endpoints, equivalent behaviour can be achieved via `extra_arguments` with a `tools` key. The `plugins` field provides a more abstract, model-centric way to declare them.
 
-## Features
+### Backup
 
-- **Multi-LLM Support**: Seamlessly switch between providers like Claude, DeepSeek, Grok, Gemini, and others via the `/model` command.
-- **File Context Management**: Interactive three-column file browser (activated with **Ctrl+B**) for selecting editable and readable files, with a new file insertion flow and Ctrl+D shortcut to clear selected files.
-- **Proxy Support**: Configure SOCKS5 or HTTP proxies to bypass geographic restrictions (e.g., for Anthropic or Gemini in restricted regions). Recommended providers: [Webshare](https://www.webshare.io/) (tested), [IPRoyal](https://iproyal.com/) (untested), [Proxy-Seller](https://proxy-seller.com/) (untested). Use the `--proxy` flag (e.g., `--proxy socks5://127.0.0.1:1080`). Models can be configured with `"proxy": true` to automatically prompt for proxy selection when chosen.
-- **Intelligent Code Editing**:
-  - Automatic file versioning with timestamped backups (e.g., `file.py` becomes `file.202601301511.py`).
-  - Git-style diff reporting for changes using `git diff`.
-  - Preservation of file permissions and formatting.
-- **Project Root Selection**: Interactive selection of project root directory with history, Tab autocompletion, and support for `~` (home directory). Change via `/rootdir` command.
-- **Multi-line Input**: Compose messages across multiple lines; send with **Alt+Enter**.
-- **Message History Navigation**: Navigate through previously sent messages and temporary drafts with **Page Up/Down** keys.
-- **Session Logging**: Automatic saving of chat sessions as timestamped text files (e.g., `llm_session_20260130_151145.txt`) in the project root or user data directory.
-- **Token Estimation**: Built-in token estimator for input and output messages to monitor usage.
-- **Colorized UI Elements**: Enhanced help menu and outputs with colorization for better readability.
-- **Improved Reloading**: Debugged `/reload` command for loading previous conversations from the project root.
-- **Cross-Platform Compatibility**: Fully functional on Windows, macOS, and Linux, with platform-specific editors (Notepad on Windows, vim/nano on Unix) and path handling.
+Controls file backup behaviour during intelligent editing.
+
+When `"enabled": true`, the three fields `timestamp_format`, `extra_string` and `overwrite_original` **are mandatory**.
+
+```json
+"backup": {
+  "enabled": true,
+  "timestamp_format": "%Y%m%d%H%M%S",
+  "extra_string": "thin-wrap",
+  "overwrite_original": true
+}
+```
+
+| Field              | Type   | Description |
+|--------------------|--------|-------------|
+| `enabled`          | bool   | Master switch. `false` disables all backups (direct overwrite). |
+| `overwrite_original` | bool | If `true`: rename original to timestamped backup, then write new content to original path.<br>If `false`: write new content to a separate timestamped file, leave original untouched. |
+| `timestamp_format` | string | strftime format used in backup filenames. |
+| `extra_string`     | string | String inserted before the timestamp in backup filename. |
 
 ## Usage
 
-1. Launch the application as described in the Installation section.
-2. Select a project root directory (if not specified via `--root-dir`). You can choose "No root directory - Free chatting without file context" to enable free chat mode without file context.
-3. Choose an LLM model from the available options.
-4. Enter your message and press **Alt+Enter** to send.
-5. Use commands starting with `/` for additional functionality (see Commands below).
-6. Manage file contexts with **Ctrl+B** to open the file browser menu. In free chat mode, Ctrl+B allows you to select a root directory and switch to file context mode.
+1. Run `thin-wrap` (or `python thin_wrap.py` from source).
+2. Select a project root (or free chat mode).
+3. Choose a model (proxy prompt appears if needed).
+4. Type message, press **Alt+Enter** to send.
+5. Use **Ctrl+B** to manage files, **PageUp/Down** for history.
 
-Sessions are automatically saved upon exit or after each exchange.
+### CLI Arguments
 
-**Navigation**: Use **Page Up** and **Page Down** to navigate through message history (sent messages and temporary drafts).
+```
+--root-dir <path>      Project root
+--read <files>         Readable files (space-separated)
+--edit <files>         Editable files
+--message <text>       First message to send
+--proxy <url>          Proxy URL
+--config <path>        Config file path
+--help                 Show help with data locations
+```
 
-### Command-Line Arguments
+### Commands
 
-- `--root-dir <path>`: Specify the project root directory.
-- `--read <files>`: List of readable files (space-separated).
-- `--edit <files>`: List of editable files (space-separated).
-- `--message <text>`: Initial message to send to the LLM.
-- `--proxy <url>`: Proxy URL (e.g., `socks5://127.0.0.1:1080`).
-## Commands
-
-Available in-chat commands:
-
-- `/clear`: Clear the current session context.
-- `/bye`: Exit the application (auto-saves the session).
-- `/help` or `/?`: Display help for commands.
-- `/model`: Switch to a different LLM model.
-- `/reload`: Load a previous conversation from available sessions in the project root.
-- `/rootdir`: Show or change the current project root directory.
-- `/files`: Open the file context management menu (equivalent to Ctrl+B).
-- `/proxy`: Manage proxy (off to disable, number for previous, or new URL like socks5://127.0.0.1:1080).
+| Command | Description |
+|---------|-------------|
+| `/help` `/`?` | Show command help |
+| `/clear` | Clear conversation |
+| `/bye` | Exit (saves session) |
+| `/model` | Switch model (interactive or `name`) |
+| `/reload` | Load a previous session |
+| `/rootdir` | Change root directory (option 0 = free chat) |
+| `/files` | Open file context menu |
+| `/proxy` | Configure proxy (`off` to disable) |
 
 ## Architecture
 
-The application is modular, with key components:
+| Module | Role |
+|--------|------|
+| `thin_wrap.py` | Entry point, chat loop |
+| `config.py` | Config loading and validation |
+| `llm_client.py` | Raw `httpx`-based API calls |
+| `file_processor.py` | Query generation, XML parsing, file editing |
+| `input_handler.py` | Multi-line input, history, command completion |
+| `command_handler.py` | Slash command dispatch |
+| `menu.py` | Textual-based file browser |
+| `proxy_wrapper.py` | Proxy validation, SOCKS/HTTP |
+| `session_logger.py` | TOML+ZIP session persistence |
+| `tags.py` | XML tag utilities |
+| `text_utils.py` | Text cleaning, token estimation |
+| `ui.py` | Banners, colors, interactive selectors |
 
-- `thin_wrap.py`: Main entry point and chat loop.
-- `config.py`: Configuration settings and model loading.
-- `llm_client.py`: Unified LLM API wrapper using the OpenAI library.
-- `file_processor.py`: Handles file queries, versioning, and diff generation.
-- `input_handler.py`: Manages user input with editing capabilities.
-- `menu.py`: Interactive menus for file browsing and selections.
-- `proxy_wrapper.py`: Proxy configuration and validation.
-- `session_logger.py`: Session saving and reloading.
-- `text_utils.py`: Text cleaning and token estimation.
-- `ui.py`: User interface elements like banners and colorized outputs.
-- Other utilities: `command_handler.py`, `tags.py`.
+## Security
 
-## Troubleshooting
-- Verify environment variables for API keys.
-- Ensure proxy format is correct if used.
-- Check file permissions for editing.
-- Adjust `config.json` backup settings if needed.
-
-## Testing
-
-The project includes comprehensive tests to protect key functionalities:
-
-### Running Tests
-```bash
-# Install test dependencies
-pip install -r requirements.txt
-
-# Run all tests
-python -m pytest tests/ -v
-
-# Run specific test suites
-python -m pytest tests/test_config_validation.py -v
-python -m pytest tests/test_proxy_suggestion.py -v
-python -m pytest tests/test_session_metadata.py -v
-```
-
-### Test Coverage
-Tests protect critical functionality including:
-- Configuration validation and loading
-- Proxy suggestion for models requiring proxies  
-- Session metadata and preview generation
-- Command handling and error management
-- File context and free chat modes
-- Input handling and draft navigation
-
-### CI/CD Pipeline
-GitHub Actions runs tests automatically on:
-- Push to main, develop, and feature branches
-- Pull requests targeting main branch
-
-See [TESTING.md](TESTING.md) for detailed testing guidelines and CI/CD setup.
+- Refuses root execution.
+- API keys via environment variables (strongly recommended).
+- XDG-compliant config storage.
 
 ## Contributing
-Contributions are welcome! Please follow these guidelines:
 
-- Maintain cross-platform compatibility.
-- Adhere to Python style (PEP 8).
-- Update documentation for new features.
-- Test on multiple platforms.
-- Submit pull requests to the `main` branch.
+Maintain cross-platform compat, PEP 8, add tests for new features. PRs to `main`. Read TESTING.md.
+
 ## License
-This project is licensed under the AGPL-3.0 License. See the [LICENSE](LICENSE) file for details.
+
+AGPL-3.0
