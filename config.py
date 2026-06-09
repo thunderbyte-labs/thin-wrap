@@ -190,21 +190,21 @@ def _load_config_internal(config_path: str | None = None) -> dict:
             model_config["plugins"] = []
 
     if "backup" not in config_data:
-        config_data["backup"] = {}
+        config_data["backup"] = {"enabled": False}
 
     backup_config = config_data["backup"]
 
-    # enabled defaults to True when the backup section is present
-    if "enabled" in backup_config:
-        if not isinstance(backup_config["enabled"], bool):
-            raise ValueError(
-                f"backup.enabled must be a boolean.\nConfig file: {_CONFIG_PATH}"
-            )
-    else:
-        backup_config["enabled"] = True
+    # Si "enabled" n'est pas explicitement présent → False par défaut
+    if "enabled" not in backup_config:
+        backup_config["enabled"] = False
+
+    if not isinstance(backup_config["enabled"], bool):
+        raise ValueError(
+            f"backup.enabled must be a boolean.\nConfig file: {_CONFIG_PATH}"
+        )
 
     if backup_config["enabled"]:
-        # Strict validation: the 3 fields are mandatory when enabled=True
+        # Strict: les 3 champs sont obligatoires uniquement quand enabled=True
         for field in ("timestamp_format", "extra_string", "overwrite_original"):
             if field not in backup_config:
                 raise ValueError(
@@ -217,7 +217,7 @@ def _load_config_internal(config_path: str | None = None) -> dict:
                 f"backup.overwrite_original must be a boolean.\nConfig file: {_CONFIG_PATH}"
             )
 
-    # Legacy support: backup_old_file → overwrite_original (only if overwrite_original is missing)
+    # Support legacy backup_old_file → overwrite_original
     if "overwrite_original" not in backup_config and "backup_old_file" in backup_config:
         if not isinstance(backup_config["backup_old_file"], bool):
             raise ValueError(
