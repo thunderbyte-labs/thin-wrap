@@ -235,7 +235,7 @@ class LLMClient:
         return url, headers
 
     def _build_request_params(self, messages: list, max_tokens: int = 0):
-        """Now uses configurable input_key and deep-merges extra_arguments."""
+        """Build request payload. For DeepSeek, full messages list is used → prefix caching benefits from stable early turns."""
         model_config = self.current_model_config
         _, input_key = self._get_endpoint_and_input_key()
 
@@ -243,9 +243,7 @@ class LLMClient:
             "model": model_config.get("model", self.current_model),
         }
 
-        # Handle input vs messages (DashScope Responses API uses "input")
-        if input_key == "input":
-            # For chat-style usage, use the last user message (or concatenate history if desired)
+        if input_key == "input":  # currently, this path is only used by qwen
             last_user_content = next(
                 (m["content"] for m in reversed(messages) if m.get("role") == "user"),
                 messages[-1]["content"] if messages else "",
@@ -259,9 +257,7 @@ class LLMClient:
 
         extra_arguments = model_config.get("extra_arguments", {})
         if extra_arguments and isinstance(extra_arguments, dict):
-            request_params.update(
-                extra_arguments
-            )  # already deep enough for your use case
+            request_params.update(extra_arguments)
 
         return request_params
 
@@ -331,8 +327,8 @@ class LLMClient:
     # MESSAGE SENDING & CONVERSATION MANAGEMENT
     # ===================================================================
 
-    def _send_message_via_httpx(self):
-        """Send conversation to LLM using raw httpx (core request method)."""
+    def _send_message_via_httpx(self) -> tuple[str, Optional[dict]]:
+        """Send to LLM and return (text, usage_dict)."""
         print("⏳ Sending request to LLM client... (Press Ctrl+C to interrupt)")
 
         messages = [
@@ -341,19 +337,27 @@ class LLMClient:
         ]
 
         payload = self._build_request_params(messages=messages)
-
         url, headers = self._get_request_url_and_headers()
 
         response = self._http_client.post(url, json=payload, headers=headers)
         response.raise_for_status()
         data = response.json()
 
-        # Use the new universal extractor
-        return self._extract_response_content(data)
+        # Extract usage if present (DeepSeek, OpenAI, OpenRouter, DashScope, Gemini, etc.)
+        usage = data.get("usage")
 
-    def send_message(self, message: str) -> str:
-        """Send user message, call LLM, save session before/after, return cleaned response."""
+        # Extract response text
+        text = self._extract_response_content(data)
+
+        return text, usage
+
+    def send_message(self, message: str) -> tuple[str, Optional[dict]]:
+        """
+        Send a message and return (response_text, usage_dict).
+        usage_dict contient les vrais tokens de l'API (prompt_tokens, completion_tokens, etc.)
+        """
         try:
+            # Append user message
             self.conversation_history.append(
                 {
                     "role": "user",
@@ -365,13 +369,14 @@ class LLMClient:
             if self.session_logger:
                 self.session_logger.save_session(self.conversation_history)
 
-            response = self._send_message_via_httpx()
-            response = text_utils.clean_text(response)
+            # Get response + usage from API
+            response_text, usage = self._send_message_via_httpx()
 
+            # Append assistant response
             self.conversation_history.append(
                 {
                     "role": "assistant",
-                    "content": response,
+                    "content": response_text,
                     "timestamp": datetime.now().isoformat(),
                 }
             )
@@ -379,7 +384,7 @@ class LLMClient:
             if self.session_logger:
                 self.session_logger.save_session(self.conversation_history)
 
-            return response
+            return response_text, usage
 
         except KeyboardInterrupt:
             print(
@@ -392,12 +397,12 @@ class LLMClient:
                 self.conversation_history.pop()
                 if self.session_logger:
                     self.session_logger.save_session(self.conversation_history)
-            return ""
+            return "", None
 
         except Exception as e:
             if self.session_logger:
                 self.session_logger.save_session(self.conversation_history)
-            return f"Error communicating with {self.current_model}: {e}"
+            return f"Error communicating with {self.current_model}: {e}", None
 
     def clear_conversation(self):
         """Clear conversation history and save empty session."""
