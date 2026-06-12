@@ -12,13 +12,13 @@
       "api_base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
       "proxy": true
     },
-    "deepseek-chat": {
-      "model": "deepseek-chat",
+    "deepseek-v4-flash": {
+      "model": "deepseek-v4-flash",
       "api_key": "DEEPSEEK_API_KEY",
       "api_base_url": "https://api.deepseek.com/v1"
     },
-    "deepseek-reasoner": {
-      "model": "deepseek-reasoner",
+    "deepseek-v4-pro": {
+      "model": "deepseek-v4-pro",
       "api_key": "DEEPSEEK_API_KEY",
       "api_base_url": "https://api.deepseek.com/v1"
     },
