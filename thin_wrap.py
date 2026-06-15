@@ -8,7 +8,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import cast
+from typing import cast, Optional
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import PathCompleter
