@@ -1,4 +1,3 @@
 *.pyc
-*.thin-wrap.*.py
 .venv
 .idea
