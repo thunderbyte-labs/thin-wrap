@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Offline tests for proxy command functionality (adapted from test_proxy_simple.py)."""
+"""Offline tests for proxy command functionality (adapted from test_proxy_simple.py).
+
+These tests verify that the set_proxy method works correctly at the LLMChat level,
+using mocked proxy_wrapper and validate_proxy_url to avoid network calls.
+They complement the other proxy test files by testing the actual integration of
+set_proxy with LLMChat, rather than command parsing or suggestion logic.
+"""
 
 import sys
 import os
@@ -27,7 +33,7 @@ def mock_proxy_wrapper():
 
 @pytest.fixture
 def temp_config():
-    """Create a temporary config directory and config file."""
+    """Create a temporary config directory and config file with a valid model entry."""
     temp_dir = tempfile.mkdtemp()
     config_dir = os.path.join(temp_dir, "config")
     os.makedirs(config_dir, exist_ok=True)
@@ -35,6 +41,7 @@ def temp_config():
     config_data = {
         "models": {
             "test-model": {
+                "model": "test-model",
                 "api_key": "TEST_KEY",
                 "api_base_url": "https://example.com/v1",
             }
@@ -59,10 +66,15 @@ def test_set_proxy_with_valid_url(mock_proxy_wrapper, temp_config):
     root_dir, config_path = temp_config
     chat = LLMChat(root_dir=root_dir, config_path=config_path)
 
+    # Clear existing proxy history to ensure a clean test state
+    chat.recent_proxies.clear()
+
     result = chat.set_proxy("socks5://127.0.0.1:1080")
     assert result is True, "set_proxy should succeed with mocked wrapper"
-    # Check that proxy was added to history
-    assert chat.recent_proxies[-1] == "socks5://127.0.0.1:1080"
+
+    # New proxy is prepended to the list, so it should be at index 0
+    assert chat.recent_proxies[0] == "socks5://127.0.0.1:1080"
+    assert len(chat.recent_proxies) == 1
 
 
 def test_set_proxy_with_off(mock_proxy_wrapper, temp_config):
@@ -83,6 +95,11 @@ def test_proxy_history_updated(mock_proxy_wrapper, temp_config):
     root_dir, config_path = temp_config
     chat = LLMChat(root_dir=root_dir, config_path=config_path)
 
+    # Clear any preloaded history to isolate the test
+    chat.recent_proxies.clear()
+
     chat.set_proxy("socks5://127.0.0.1:1080")
+
+    # The proxy we just set should be the only entry, at the front
     assert len(chat.recent_proxies) == 1
     assert chat.recent_proxies[0] == "socks5://127.0.0.1:1080"
