@@ -779,9 +779,9 @@ def get_location_info() -> str:
     return f"""  ===============================
   |  APPLICATION DATA LOCATION  |
   ===============================
-  
+
 binary: {binary_path}
-  
+
 config: {config_desc}
 
 project roots and proxies history: {history_file}
@@ -804,7 +804,7 @@ def parse_arguments():
   thin-wrap
   thin-wrap --proxy socks5://127.0.0.1:1080
   thin-wrap --config /path/to/config.json
-  
+
 """ + locations,
     )
 
