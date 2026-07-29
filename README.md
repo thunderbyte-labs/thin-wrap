@@ -2,6 +2,9 @@
 
 A terminal chat for any LLM API endpoint -- bridging pure coding and vibe-coding.
 
+## Live Demo
+At Hong-Kong Open-Source Conference 2026 ("[HKOSCon 2026](https://hkoscon.org/2026/topic/thin-wrap-my-python-version-of-opencode/)")  
+[![Thin-Wrap Demo: Python CLI Connecting to Any LLM API](https://markdown-videos-api.jorgenkh.no/youtube/j3pqtV_p4xQ)](https://youtu.be/j3pqtV_p4xQ)
 ## Installation
 
 **Linux/macOS** (curl/wget + unzip required):
