@@ -13,7 +13,7 @@ import config
 
 def test_config_validation():
     """Test that config validation works correctly."""
-    # Valid config with proxy fields
+    # Valid config with proxy fields + full backup section (required when enabled)
     valid_config = {
         "models": {
             "model-with-proxy": {
@@ -35,9 +35,10 @@ def test_config_validation():
             },
         },
         "backup": {
+            "enabled": True,
             "timestamp_format": "%Y%m%d%H%M%S",
             "extra_string": "test",
-            "backup_old_file": True,
+            "overwrite_original": True,
         },
     }
 
@@ -46,26 +47,24 @@ def test_config_validation():
         config_path = f.name
 
     try:
-        # Set config path and load
         config.set_config_path(config_path)
         models = config.get_models()
 
-        # Verify all models loaded
         assert len(models) == 3
         assert "model-with-proxy" in models
         assert "model-without-proxy" in models
         assert "model-no-proxy-field" in models
 
-        # Verify proxy field values
         assert models["model-with-proxy"]["proxy"] == True
         assert models["model-without-proxy"]["proxy"] == False
-        assert models["model-no-proxy-field"]["proxy"] == False  # default
+        assert models["model-no-proxy-field"]["proxy"] == False
 
         # Verify backup config
         backup_conf = config.backup()
+        assert backup_conf["enabled"] == True
         assert backup_conf["timestamp_format"] == "%Y%m%d%H%M%S"
         assert backup_conf["extra_string"] == "test"
-        assert backup_conf["backup_old_file"] == True
+        assert backup_conf["overwrite_original"] == True
 
         print("Config validation with proxy fields works")
 
@@ -74,14 +73,13 @@ def test_config_validation():
 
 
 def test_config_missing_required_fields():
-    """Test that config validation catches missing required fields (now includes 'model')."""
-    # Missing 'model' field (new requirement)
+    """Test that config validation catches missing required fields."""
+    # Missing 'model' field
     invalid_config = {
         "models": {
             "bad-model": {
                 "api_key": "TEST_KEY",
                 "api_base_url": "https://example.com/v1",
-                # 'model' intentionally omitted
             }
         }
     }
@@ -114,7 +112,7 @@ def test_config_invalid_proxy_type():
                 "model": "test-bad-model",
                 "api_key": "KEY",
                 "api_base_url": "https://example.com/v1",
-                "proxy": "yes",  # string instead of bool
+                "proxy": "yes",
             }
         }
     }
@@ -137,39 +135,46 @@ def test_config_invalid_proxy_type():
         os.unlink(config_path)
 
 
-def test_config_backup_defaults():
-    """Test that backup section gets proper defaults."""
-    config_without_backup = {
+def test_config_backup_strict_validation():
+    """Test new strict backup validation (enabled=true requires all 3 fields)."""
+    # Missing required backup fields when enabled=true
+    invalid_backup = {
         "models": {
             "test-model": {
                 "model": "test-model",
                 "api_key": "TEST_KEY",
                 "api_base_url": "https://example.com/v1",
             }
-        }
-        # No backup section
+        },
+        "backup": {
+            "enabled": True,
+            # missing timestamp_format, extra_string, overwrite_original
+        },
     }
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        json.dump(config_without_backup, f)
+        json.dump(invalid_backup, f)
         config_path = f.name
 
     try:
         config.set_config_path(config_path)
-        backup_conf = config.backup()
-
-        # Should have defaults
-        assert backup_conf["timestamp_format"] == "%Y%m%d%H%M%S"
-        assert backup_conf["extra_string"] == "thin-wrap"
-        assert backup_conf["backup_old_file"] == True
-
-        print("Backup defaults applied correctly")
+        try:
+            backup_conf = config.backup()
+            assert False, "Should have raised ValueError for missing backup fields"
+        except ValueError as e:
+            if any(
+                field in str(e)
+                for field in ("timestamp_format", "extra_string", "overwrite_original")
+            ):
+                print("Correctly enforces required backup fields when enabled=true")
+            else:
+                raise
     finally:
         os.unlink(config_path)
 
 
 def test_config_reloading():
-    """Test that config is reloaded each time get_models() is called."""
+    """Test that config is reloaded each time."""
     initial_config = {
         "models": {
             "model1": {
@@ -178,7 +183,12 @@ def test_config_reloading():
                 "api_base_url": "https://example.com/v1",
             }
         },
-        "backup": {},
+        "backup": {
+            "enabled": True,
+            "timestamp_format": "%Y%m%d%H%M%S",
+            "extra_string": "thin-wrap",
+            "overwrite_original": True,
+        },
     }
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
@@ -188,11 +198,10 @@ def test_config_reloading():
     try:
         config.set_config_path(config_path)
 
-        # First load
         models1 = config.get_models()
         assert len(models1) == 1
 
-        # Modify config file
+        # Modify config
         updated_config = {
             "models": {
                 "model1": {
@@ -206,18 +215,23 @@ def test_config_reloading():
                     "api_base_url": "https://example.com/v2",
                 },
             },
-            "backup": {},
+            "backup": {
+                "enabled": True,
+                "timestamp_format": "%Y%m%d%H%M%S",
+                "extra_string": "thin-wrap",
+                "overwrite_original": True,
+            },
         }
 
         with open(config_path, "w") as f:
             json.dump(updated_config, f)
 
-        # Second load should pick up changes
         models2 = config.get_models()
         assert len(models2) == 2
         assert "model2" in models2
 
         print("Config reloading works correctly")
+
     finally:
         os.unlink(config_path)
 
@@ -271,7 +285,7 @@ if __name__ == "__main__":
     test_config_validation()
     test_config_missing_required_fields()
     test_config_invalid_proxy_type()
-    test_config_backup_defaults()
+    test_config_backup_strict_validation()
     test_config_reloading()
     test_config_advanced_model_fields()
     print("\nAll config validation tests passed!")

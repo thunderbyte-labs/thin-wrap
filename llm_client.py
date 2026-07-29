@@ -67,17 +67,29 @@ class LLMClient:
             except Exception as e:
                 logger.error(f"Proxy configuration failed: {e}")
                 print("Attempting direct connection without proxy...")
-                self._cleanup_http_client()
-                self._initialize_http_client()  # direct mode
+                # Fully disconnect proxy: clean up context + clear wrapper
+                self._cleanup_proxy_context()
+                self.proxy_wrapper = None
+                self._initialize_http_client()  # direct mode (no proxy)
                 try:
                     self._test_connection()
                     print("✓ Direct connection established successfully!")
                 except Exception as e2:
-                    print(f"✗ Direct connection also failed: {e2}")
-                    raise ConnectionError("Failed to establish API connection")
+                    print(
+                        f"\n{UI.colorize('Warning:', 'BRIGHT_YELLOW')} "
+                        f"Direct connection also failed: {e2}"
+                    )
+                    print("You can continue and try sending messages - errors may occur.")
         else:
             self._initialize_http_client()
-            self._test_connection()
+            try:
+                self._test_connection()
+            except Exception as e:
+                print(
+                    f"\n{UI.colorize('Warning:', 'BRIGHT_YELLOW')} "
+                    f"API connection test failed: {e}"
+                )
+                print("You can continue and try sending messages - errors may occur.")
 
     def choose_model(self):
         """Display interactive model selection menu and return selected model key."""
@@ -423,3 +435,4 @@ class LLMClient:
     def __del__(self):
         """Ensure resources are cleaned up when object is destroyed."""
         self._cleanup_proxy_context()
+

@@ -190,12 +190,40 @@ def _load_config_internal(config_path: str | None = None) -> dict:
             model_config["plugins"] = []
 
     if "backup" not in config_data:
-        config_data["backup"] = {}
+        config_data["backup"] = {"enabled": False}
 
     backup_config = config_data["backup"]
-    backup_config.setdefault("timestamp_format", "%Y%m%d%H%M%S")
-    backup_config.setdefault("extra_string", "thin-wrap")
-    backup_config.setdefault("backup_old_file", True)
+
+    # Si "enabled" n'est pas explicitement présent → False par défaut
+    if "enabled" not in backup_config:
+        backup_config["enabled"] = False
+
+    if not isinstance(backup_config["enabled"], bool):
+        raise ValueError(
+            f"backup.enabled must be a boolean.\nConfig file: {_CONFIG_PATH}"
+        )
+
+    if backup_config["enabled"]:
+        # Strict: les 3 champs sont obligatoires uniquement quand enabled=True
+        for field in ("timestamp_format", "extra_string", "overwrite_original"):
+            if field not in backup_config:
+                raise ValueError(
+                    f"backup.{field} is required when backup.enabled is true.\n"
+                    f"Config file: {_CONFIG_PATH}"
+                )
+
+        if not isinstance(backup_config["overwrite_original"], bool):
+            raise ValueError(
+                f"backup.overwrite_original must be a boolean.\nConfig file: {_CONFIG_PATH}"
+            )
+
+    # Support legacy backup_old_file → overwrite_original
+    if "overwrite_original" not in backup_config and "backup_old_file" in backup_config:
+        if not isinstance(backup_config["backup_old_file"], bool):
+            raise ValueError(
+                f"backup.backup_old_file must be a boolean.\nConfig file: {_CONFIG_PATH}"
+            )
+        backup_config["overwrite_original"] = backup_config.pop("backup_old_file")
 
     return config_data
 
@@ -223,15 +251,14 @@ def backup() -> dict:
     Re-reads the file every time it's called to pick up changes.
 
     Returns:
-        dict: Backup configuration dictionary with keys:
-            - timestamp_format: str, format for datetime timestamp
-            - extra_string: str or None, extra string to include in backup filename
-            - backup_old_file: bool, whether to backup old file before editing
+        dict: Backup configuration with keys:
+            - enabled: bool (defaults to True when backup section exists)
+            - timestamp_format: str (required when enabled=True)
+            - extra_string: str (required when enabled=True)
+            - overwrite_original: bool (required when enabled=True)
 
     Raises:
-        FileNotFoundError: If config.json cannot be found
-        json.JSONDecodeError: If config.json is invalid
-        ValueError: If config.json is missing required sections
+        FileNotFoundError, json.JSONDecodeError, ValueError
     """
     config_data = _load_config_internal()
     return config_data.get("backup", {})

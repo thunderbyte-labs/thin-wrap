@@ -7,8 +7,9 @@ import json
 import logging
 import os
 import sys
+import time
 from pathlib import Path
-from typing import cast
+from typing import cast, Optional
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import PathCompleter
@@ -668,9 +669,13 @@ class LLMChat:
         assert query is not None
         query = clean_text(query)
 
-        # Send message to LLM client (which handles automatic session saving)
+        # Measure time taken for LLM client interaction
+        start_time_ns = time.perf_counter_ns()
         response, usage = self.llm_client.send_message(query)
-        self._report_token_usage(query, response, usage)
+        end_time_ns = time.perf_counter_ns()
+        duration_ms = (end_time_ns - start_time_ns) / 1_000_000.0  # Millisecond precision
+
+        self._report_token_usage(query, response, usage, duration_ms=duration_ms)
 
         assert response is not None
         comments = response_parser(response)
@@ -686,9 +691,9 @@ class LLMChat:
         logger.debug("Message sent and response processed successfully")
 
     def _report_token_usage(
-        self, query: str, response: str, usage: Optional[dict] = None
+        self, query: str, response: str, usage: Optional[dict] = None, duration_ms: Optional[float] = None
     ):
-        """Affiche un tableau clair avec Input, Output et Cache Hit."""
+        """Affiche un tableau clair avec Input, Output, Cache Hit, Time (s), et Output/s."""
         try:
             if usage and isinstance(usage, dict):
                 input_tokens = usage.get("prompt_tokens", 0)
@@ -705,17 +710,32 @@ class LLMChat:
                 cached_tokens = 0
                 source = "estimated"
 
-            print(f"\n? Token Usage ({source})")
-            print("   Input      | Output     | Cache Hit")
-            print("   ───────────|────────────|──────────────────────")
+            duration_seconds = 0.0
+            output_tokens_per_second = 0.0
+            duration_display = "-"
+            ops_display = "-"
+
+            if duration_ms is not None and duration_ms > 0:
+                duration_seconds = duration_ms / 1000.0
+                duration_display = f"{duration_seconds:.1f}"
+                if output_tokens > 0:
+                    output_tokens_per_second = 1000.0 * output_tokens / duration_ms
+                    ops_display = f"{output_tokens_per_second:.1f}"
+
+            print(f"\nToken Usage ({source})")
+            # Headers for 5 columns, total width (excluding '   ' prefix) is 62 characters
+            # This aligns the table's content width with the '─' * 65 line when considering the '   ' prefix
+            print("   Input       | Output      | Cache Hit    | Time (s)    | Output/s    ")
+            print("   ────────────|─────────────|──────────────|─────────────|────────────")
 
             if cached_tokens > 0 and input_tokens > 0:
                 ratio = (cached_tokens / input_tokens) * 100
-                cache_display = f"{cached_tokens} / {input_tokens} ({ratio:.1f}%)"
+                # Compacted to fit 12 characters: e.g., '12345 (100%)'
+                cache_display = f"{cached_tokens} ({ratio:.0f}%)"
             else:
                 cache_display = "-"
 
-            print(f"   {input_tokens:<10} | {output_tokens:<10} | {cache_display}")
+            print(f"   {input_tokens:<11} | {output_tokens:<11} | {cache_display:<12} | {duration_display:<11} | {ops_display:<12}")
             print(f"{UI.colorize('─' * 65, 'GREEN')}")
 
         except Exception as e:
@@ -729,7 +749,7 @@ def get_location_info() -> str:
     This is the single source of truth for both the installed binary
     and direct 'python thin_wrap.py' execution.
     """
-    # Binary location – respects wrapper environment variable when present
+    # Binary location - respects wrapper environment variable when present
     app_dir = os.environ.get("THIN_WRAP_APP_DIR")
     if app_dir and Path(app_dir).is_dir():
         binary_path = str(Path(app_dir) / "thin-wrap")
@@ -737,7 +757,7 @@ def get_location_info() -> str:
         # Direct Python execution (git clone / development)
         binary_path = os.path.realpath(sys.argv[0])
 
-    # Config location – reuses the exact same logic as the rest of the application
+    # Config location - reuses the exact same logic as the rest of the application
     config_path_obj = resolve_config_path()
     if config_path_obj:
         config_desc = str(config_path_obj)
@@ -759,9 +779,9 @@ def get_location_info() -> str:
     return f"""  ===============================
   |  APPLICATION DATA LOCATION  |
   ===============================
-  
+
 binary: {binary_path}
-  
+
 config: {config_desc}
 
 project roots and proxies history: {history_file}
@@ -784,7 +804,7 @@ def parse_arguments():
   thin-wrap
   thin-wrap --proxy socks5://127.0.0.1:1080
   thin-wrap --config /path/to/config.json
-  
+
 """ + locations,
     )
 
@@ -857,3 +877,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -4,8 +4,9 @@ import datetime
 import logging
 import re
 import shutil
-import subprocess
+import tempfile
 import difflib
+from typing import Optional
 from tags import Xml
 from pathlib import Path
 
@@ -308,6 +309,49 @@ def _diff_report(old_path: str | None, new_path: str) -> None:
         print(f"{filename}: error computing diff")
 
 
+def _safe_atomic_write(
+    target_path: Path,
+    new_content: str,
+    *,
+    preserve_permissions_from: Optional[Path] = None,
+    encoding: str = "utf-8",
+) -> None:
+    """
+    Écrit de façon atomique dans target_path.
+    - Crée un fichier temporaire dans le même répertoire.
+    - Copie les permissions si demandé.
+    - Remplace atomiquement le fichier cible (os.replace).
+    - Nettoie le temporaire en cas d'erreur.
+    """
+    target_path = Path(target_path)
+    parent_dir = target_path.parent
+
+    # Création du fichier temporaire dans le même dossier (important pour l'atomicité)
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding=encoding,
+        dir=parent_dir,
+        delete=False,
+        prefix=".thinwrap-",
+        suffix=".tmp",
+    ) as tmp_file:
+        tmp_path = Path(tmp_file.name)
+        tmp_file.write(new_content)
+
+    try:
+        # Préservation des permissions (mode)
+        if preserve_permissions_from and preserve_permissions_from.exists():
+            shutil.copymode(preserve_permissions_from, tmp_path)
+
+        # Remplacement atomique (Linux, macOS, Windows)
+        os.replace(tmp_path, target_path)
+
+    except Exception:
+        # Nettoyage en cas d'échec
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+
 def parse_plain_response(llm_response: str) -> str:
     """
     Simple parser for plain text LLM responses.
@@ -333,14 +377,44 @@ def parse_xml_response(llm_response: str) -> str:
 
     # Get backup configuration (reloads config each time)
     backup_config = config.backup()
+    backup_enabled = backup_config.get("enabled", True)
     timestamp_format = backup_config.get("timestamp_format", "%Y%m%d%H%M%S")
     extra_string = backup_config.get("extra_string", "thin-wrap")
-    backup_old_file = backup_config.get("backup_old_file", True)
+    overwrite_original = backup_config.get("overwrite_original", True)
 
     for path_str, content in _extract_files(edited_section, Xml.EDITED_FILE):
         try:
             path = Path(path_str)
             _secure_path(path, should_exist=True)
+
+            if not backup_enabled:
+                # No backup: direct atomic overwrite with permission preservation
+                old_content = path.read_text(encoding="utf-8")
+
+                _safe_atomic_write(
+                    target_path=path,
+                    new_content=content,
+                    preserve_permissions_from=path,
+                )
+
+                print(f"Edited: {path}")
+
+                insertions, deletions = _compute_git_stat_diff(old_content, content)
+                if insertions == 0 and deletions == 0:
+                    print(f"{path.name}: no changes")
+                elif deletions == 0:
+                    print(f"{path.name}: {insertions} insertions(+)")
+                elif insertions == 0:
+                    print(f"{path.name}: {deletions} deletions(-)")
+                else:
+                    print(
+                        f"{path.name}: {insertions} insertions(+), {deletions} deletions(-)"
+                    )
+
+                logger.info(
+                    f"Edited (no backup): {path}: {insertions} insertions(+), {deletions} deletions(-)"
+                )
+                continue
 
             timestamp = datetime.datetime.now(datetime.UTC).strftime(timestamp_format)
 
@@ -352,14 +426,14 @@ def parse_xml_response(llm_response: str) -> str:
             else:
                 backup = path.with_name(f"{path.stem}.{timestamp}{path.suffix}")
 
-            if backup_old_file:
-                # Original behavior: backup old file, then write new content to original path
+            if overwrite_original:
+                # Rename original to backup, then write new content to original path
                 os.replace(path, backup)
                 _write_file(path, content, src_for_perms=backup)
                 print(f"Edited: {path}")
                 _diff_report(str(backup), str(path))
             else:
-                # New behavior: write new content to timestamped file, leave original unchanged
+                # Write new content to timestamped file, leave original unchanged
                 _write_file(backup, content, src_for_perms=path)
                 print(f"Created timestamped version: {backup}")
                 _diff_report(str(path), str(backup))
