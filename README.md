@@ -125,7 +125,7 @@ When `"enabled": true`, the three fields `timestamp_format`, `extra_string` and 
 
 | Command | Description |
 |---------|-------------|
-| `/help` `/`?` | Show command help |
+| `/help` `/?` | Show command help |
 | `/clear` | Clear conversation |
 | `/bye` | Exit (saves session) |
 | `/model` | Switch model (interactive or `name`) |

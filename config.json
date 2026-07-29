@@ -6,13 +6,19 @@
       "api_base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
       "proxy": true
     },
-    "deepseek-chat": {
-      "model": "deepseek-chat",
+    "pro-gemini-2.5-flash": {
+      "model": "gemini-2.5-flash",
+      "api_key": "GOOGLE_PRO_API_KEY",
+      "api_base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+      "proxy": true
+    },
+    "deepseek-v4-flash": {
+      "model": "deepseek-v4-flash",
       "api_key": "DEEPSEEK_API_KEY",
       "api_base_url": "https://api.deepseek.com/v1"
     },
-    "deepseek-reasoner": {
-      "model": "deepseek-reasoner",
+    "deepseek-v4-pro": {
+      "model": "deepseek-v4-pro",
       "api_key": "DEEPSEEK_API_KEY",
       "api_base_url": "https://api.deepseek.com/v1"
     },
@@ -81,7 +87,7 @@
     }
   },
   "backup": {
-    "enabled": true,
+    "enabled": false,
     "timestamp_format": "%Y%m%d%H%M%S",
     "extra_string": "thin-wrap",
     "overwrite_original": true
