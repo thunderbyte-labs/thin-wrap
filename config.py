@@ -25,7 +25,7 @@ SESSION_BASE_DIR = user_data_dir(APP_NAME, appauthor=False, ensure_exists=True)
 CONVERSATIONS_DIR = os.path.join(SESSION_BASE_DIR, "conversations")
 
 # Logging Configuration
-LOG_LEVEL = logging.INFO
+LOG_LEVEL = logging.WARNING
 
 # LOG_FORMAT = '%(asctime)s|%(levelname)s|%(filename)s:%(lineno)d|%(message)s' #for non rich.logging.RichHandler's handler
 LOG_FORMAT = "%(message)s"  # for RichHandler

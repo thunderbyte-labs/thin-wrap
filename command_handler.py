@@ -48,13 +48,13 @@ class CommandHandler:
         if args:
             cmd = args[0]
             if cmd in config.COMMANDS:
-                print(f"{UI.colorize(cmd, 'BRIGHT_YELLOW')}: {config.COMMANDS[cmd]}")
+                print(f"{t('commands.cmd_highlight', value=cmd)}: {config.COMMANDS[cmd]}")
             else:
                 print(t("commands.no_help", cmd=cmd))
         else:
             print(t("commands.available_commands"))
             for cmd, desc in config.COMMANDS.items():
-                print(f"  {UI.colorize(cmd, 'BRIGHT_YELLOW')} - {desc}")
+                print(f"  {t('commands.cmd_highlight', value=cmd)} - {desc}")
             print(t("commands.help_ctrl_b", shortcut=t("keys.ctrl_b")))
             print(
                 t(
@@ -125,14 +125,15 @@ class CommandHandler:
             print(
                 t(
                     "sessions.project_root",
-                    root=UI.colorize(root_display, "BRIGHT_CYAN"),
+                    root=t("sessions.root_value", value=root_display),
                 )
             )
             print(
                 t(
                     "sessions.conversation_dir",
-                    dir=UI.colorize(
-                        self.session_logger.conversation_dir, "BRIGHT_CYAN"
+                    dir=t(
+                        "sessions.dir_value",
+                        value=self.session_logger.conversation_dir,
                     ),
                 )
             )
@@ -190,11 +191,16 @@ class CommandHandler:
             if self.chat_app.root_dir is not None
             else t("sessions.free_chat_display")
         )
-        print(t("sessions.project_root", root=UI.colorize(root_display, "BRIGHT_CYAN")))
+        print(
+            t(
+                "sessions.project_root",
+                root=t("sessions.root_value", value=root_display),
+            )
+        )
         print(
             t(
                 "sessions.conversation_dir",
-                dir=UI.colorize(self.session_logger.conversation_dir, "BRIGHT_CYAN"),
+                dir=t("sessions.dir_value", value=self.session_logger.conversation_dir),
             )
         )
         print()

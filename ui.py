@@ -29,7 +29,6 @@ class UI:
         "BRIGHT_YELLOW": "\033[93m",
         "BRIGHT_BLUE": "\033[94m",
         "BRIGHT_MAGENTA": "\033[95m",
-        "BRIGHT_CYAN": "\033[96m",
         "BRIGHT_WHITE": "\033[97m",
         "BOLD": "\033[1m",
         "UNDERLINE": "\033[4m",
@@ -50,7 +49,7 @@ class UI:
         if os.path.exists(banner_file):
             with open(banner_file, "r", encoding="utf-8") as f:
                 banner_content = f.read()
-            print(UI.colorize(banner_content, "BRIGHT_GREEN"))
+            print(t("startup.banner_content", value=banner_content))
         else:
             print(t("separators.banner_line"))
             print(t("startup.banner_title"))
@@ -109,12 +108,12 @@ class UI:
 
         while True:
             if items:
-                print(UI.colorize(prompt_title, "BRIGHT_CYAN"))
+                print(t("prompts.title_value", value=prompt_title))
                 for i, item in enumerate(items, 1):
                     print(t("menus.item_format", index=i, item=item_formatter(item)))
                 print(prompt_message)
             else:
-                print(UI.colorize(no_items_message, "BRIGHT_CYAN"))
+                print(t("prompts.no_items_value", value=no_items_message))
                 if allow_new:
                     print(t("prompts.enter_item_path"))
 
@@ -136,7 +135,9 @@ class UI:
                     print(f"{t('common.selected_prefix')} {item_formatter(chosen)}")
                     return chosen
                 else:
-                    print(f"{t('common.error_prefix')} {t('common.number_out_of_range')}")
+                    print(
+                        f"{t('common.error_prefix')} {t('common.number_out_of_range')}"
+                    )
                     continue
 
             # Manual entry (only if allow_new is True)
@@ -150,8 +151,12 @@ class UI:
                         )
                         return resolved_str
                     else:
-                        print(f"{t('common.error_prefix')} {new_item_error}: {user_input}")
+                        print(
+                            f"{t('common.error_prefix')} {new_item_error}: {user_input}"
+                        )
                 except Exception as e:
-                    print(f"{t('common.error_prefix')} {t('common.invalid_input', error=e)}")
+                    print(
+                        f"{t('common.error_prefix')} {t('common.invalid_input', error=e)}"
+                    )
             else:
                 print(f"{t('common.error_prefix')} {t('prompts.enter_valid_number')}")

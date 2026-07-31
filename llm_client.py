@@ -11,7 +11,6 @@ import os
 from typing import Optional
 import config
 import logging
-from ui import UI
 from proxy_wrapper import ProxyWrapper
 from datetime import datetime
 import httpx
@@ -99,7 +98,7 @@ class LLMClient:
             endpoint = (
                 endpoint.removeprefix("https://").removeprefix("http://").rstrip("/")
             )
-            print(f"{i}. {UI.colorize(model_key, 'BRIGHT_GREEN')}@{endpoint}")
+            print(f"{i}. {t('menus.model_entry', value=model_key)}@{endpoint}")
 
         while True:
             try:
