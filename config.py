@@ -15,6 +15,7 @@ from platformdirs import user_data_dir
 import json
 from pathlib import Path
 import sys
+from strings import t
 
 # Application Configuration
 APP_NAME = "thin-wrap"
@@ -24,7 +25,7 @@ SESSION_BASE_DIR = user_data_dir(APP_NAME, appauthor=False, ensure_exists=True)
 CONVERSATIONS_DIR = os.path.join(SESSION_BASE_DIR, "conversations")
 
 # Logging Configuration
-LOG_LEVEL = logging.INFO
+LOG_LEVEL = logging.WARNING
 
 # LOG_FORMAT = '%(asctime)s|%(levelname)s|%(filename)s:%(lineno)d|%(message)s' #for non rich.logging.RichHandler's handler
 LOG_FORMAT = "%(message)s"  # for RichHandler
@@ -119,21 +120,21 @@ def _load_config_internal(config_path: str | None = None) -> dict:
             try:
                 from ui import UI
 
-                print(f"{UI.colorize('Config file not found.', 'BRIGHT_YELLOW')}")
-                print(f"Searched in:")
+                print(t("errors.config_not_found"))
+                print(t("errors.searched_in"))
                 print(f"  - {script_dir / 'config.json'}")
                 print(f"  - {Path.cwd() / 'config.json'}")
 
                 config_file_path = UI.interactive_selection(
-                    prompt_title="Config file selection:",
-                    prompt_message="Enter path to config.json file (Tab for completion, ~ for home):",
-                    no_items_message="No config file found.",
+                    prompt_title=t("prompts.config_selection_title"),
+                    prompt_message=t("prompts.config_selection_prompt"),
+                    no_items_message=t("prompts.no_config_found"),
                     items=[],
                     item_formatter=lambda x: x,
                     allow_new=True,
                     new_item_validator=lambda p: p.is_file()
                     and p.name == "config.json",
-                    new_item_error="Not a valid config.json file",
+                    new_item_error=t("prompts.config_new_item_error"),
                 )
 
                 if not config_file_path:
@@ -284,13 +285,13 @@ TERMINAL_WIDTH_FALLBACK = 120
 
 # Commands
 COMMANDS = {
-    "/clear": "Clear session context",
-    "/bye": "Exit (auto-saves session log)",
-    "/?": "Help for a command",
-    "/help": "Help for a command",
-    "/model": "Switch AI model",
-    "/reload": "Reload a previous conversation",
-    "/rootdir": "Show or set project root directory (option 0 for free chat mode)",
-    "/files": "Handle Ctrl+B file context menu",
-    "/proxy": "Manage proxy (off to disable, number for previous, or new URL like socks5://127.0.0.1:1080)",
+    "/clear": t("commands.descriptions.clear"),
+    "/bye": t("commands.descriptions.bye"),
+    "/?": t("commands.descriptions.help"),
+    "/help": t("commands.descriptions.help"),
+    "/model": t("commands.descriptions.model"),
+    "/reload": t("commands.descriptions.reload"),
+    "/rootdir": t("commands.descriptions.rootdir"),
+    "/files": t("commands.descriptions.files"),
+    "/proxy": t("commands.descriptions.proxy"),
 }

@@ -1,0 +1,242 @@
+{
+  "common": {
+    "error_prefix": {"text": "Error:", "color": "RED"},
+    "success_prefix": {"text": "Success:", "color": "GREEN"},
+    "info_prefix": {"text": "·", "color": "GREEN"},
+    "selected_prefix": {"text": "→", "color": "GREEN"},
+    "using_prefix": {"text": "Using:", "color": "GREEN"},
+    "note_prefix": {"text": "Note:", "color": "GREEN"},
+    "warning_prefix": {"text": "Warning:", "color": "BRIGHT_YELLOW"},
+    "selection_cancelled": "\nSelection cancelled.",
+    "empty_input": "Empty input - please try again.",
+    "number_out_of_range": "Number out of range.",
+    "invalid_input": "Invalid input: {error}",
+    "not_valid_directory": "Not a valid directory: {input}",
+    "invalid_proxy_url": "Invalid proxy URL: {error}",
+    "goodbye": {"text": "Goodbye!", "color": "GREEN"},
+    "prompt_arrow": "> "
+  },
+
+  "errors": {
+    "root_refusal": "ERROR: thin-wrap refuses to run as root.",
+    "root_refusal_hint": "Run as a regular user, or use sudo -u $USER if file permissions require it.",
+    "models_config_load": {"text": "Error loading models configuration:", "color": "RED"},
+    "api_key_not_found": "{env_key} not found.",
+    "unknown_model": "Error: Unknown model '{model}'. Available: {available}",
+    "failed_to_switch_model": "✗ Failed to switch to {model}: {error}",
+    "failed_to_update_proxy": "✗ Failed to update proxy: {error}",
+    "api_error": "\n❌ API Error {status} from {model}",
+    "api_error_url": "URL: {url}",
+    "api_error_details": "Error details returned by the provider:",
+    "api_error_raw": "Raw error body:",
+    "unexpected_connection_error": "Unexpected error during connection test: {error}",
+    "error_communicating": "Error communicating with {model}: {error}",
+    "disable_proxy_failed": "Failed to disable proxy",
+    "create_proxy_wrapper_failed": "Failed to create proxy wrapper",
+    "llm_update_proxy_failed": "Failed to update LLM client with new proxy",
+    "proxy_connection_test_failed": "Proxy connection test failed: {error}",
+    "config_not_found": {"text": "Config file not found.", "color": "BRIGHT_YELLOW"},
+    "searched_in": "Searched in:",
+    "error_saving_session": "⚠️  Error saving session: {error}",
+    "session_file_not_found": "⚠️  Session file not found: {path}",
+    "error_loading_session": "⚠️  Error loading session: {error}",
+    "error_opening_file_menu": "Error opening file menu: {error}",
+    "error_computing_diff": "{filename}: error computing diff",
+    "invalid_input_yni": "Invalid input. Please enter 'y', 'n', or 'i' (or press Enter for default 'y').",
+    "root_arg_not_valid": "{root} is not a valid directory"
+  },
+
+  "warnings": {
+    "direct_connection_failed": "Direct connection also failed: {error}",
+    "api_test_failed": "API connection test failed: {error}",
+    "continue_despite_errors": "You can continue and try sending messages - errors may occur.",
+    "model_selection_cancelled": {"text": "Model selection cancelled.", "color": "BRIGHT_YELLOW"},
+    "proxy_selection_cancelled": {"text": "Proxy selection cancelled.", "color": "BRIGHT_YELLOW"},
+    "proxy_setup_cancelled": {"text": "Proxy setup cancelled, continuing without proxy.", "color": "BRIGHT_YELLOW"},
+    "continuing_without_proxy": {"text": "Continuing without proxy.", "color": "BRIGHT_YELLOW"},
+    "clear_cancelled": {"text": "Clear cancelled.", "color": "BRIGHT_YELLOW"},
+    "history_preserved": {"text": "Conversation history preserved.", "color": "BRIGHT_YELLOW"},
+    "no_previous_convs_project": {"text": "No previous conversations found for this project root.", "color": "BRIGHT_YELLOW"},
+    "no_previous_convs_free_chat": {"text": "No previous conversations found in free chat mode.", "color": "BRIGHT_YELLOW"}
+  },
+
+  "info": {
+    "using_project_root": "Using specified project root: {path}",
+    "note_convs_found": "Found {count} conversation(s) in the new project root.",
+    "use_reload": "Use {cmd} to load one of these conversations.",
+    "proxy_disabling": {"text": "Disabling proxy...", "color": "GREEN"},
+    "proxy_testing": {"text": "Testing proxy connection...", "color": "GREEN"},
+    "proxy_disabled": "Proxy disabled",
+    "proxy_switched": "Proxy switched to: {url}",
+    "proxy_mode_enabled": {"text": "PROXY MODE ENABLED", "color": "GREEN"},
+    "proxy_url": "Proxy URL: {url}",
+    "proxy_suggested_title": {"text": "Proxy suggested for this model:", "color": "BRIGHT_YELLOW"},
+    "proxy_suggested_model": "Model '{model}' recommends using a proxy for optimal connectivity.",
+    "proxy_configure_now": "Would you like to configure a proxy now?",
+    "exiting_during_setup": {"text": "Exiting during setup...", "color": "BRIGHT_WHITE"},
+    "direct_without_proxy": "Attempting direct connection without proxy...",
+    "direct_connected": "✓ Direct connection established successfully!",
+    "current_model": "Current model: {model}",
+    "keeping_current_model": {"text": "Keeping current model:", "color": "GREEN"},
+    "returning_to_conversation": {"text": "Returning to conversation...", "color": "GREEN"},
+    "already_using": "Already using {model}",
+    "switching_model": "Switching from {current} to {new}...",
+    "switched_model": {"text": "✓ Successfully switched to {model}", "color": "GREEN"},
+    "llm_explanation": {"text": "===================== Reply ======================\n", "color": "GREEN"},
+    "no_explanation": "\nNo explanation provided by the LLM.",
+    "request_sending": "⏳ Thinking... (Press Ctrl+C to interrupt)",
+    "request_interrupted": {"text": "Request interrupted by user (Ctrl+C)", "color": "BRIGHT_YELLOW"},
+    "empty_message_hint": {"text": "Empty message or KeyboardInterrupt. Type /help to see command or /bye (then Alt+Enter) to quit.\n\n", "color": "BOLD"},
+    "free_chat_mode_active": "Free chat mode active. Selecting a root directory will enable file context."
+  },
+
+  "prompts": {
+    "root_enter": "Enter a number to select, or type a new path (Tab for completion, ~ for home, ./ for current dir):",
+    "api_key_prompt": "Please enter your {model} API key: ",
+    "model_choose": "\nChoose model (1-{count}): ",
+    "model_range_error": "Please enter a number between 1 and {count}",
+    "proxy_enter": "Enter a number to select, or type a new proxy URL:",
+    "enter_item_path": "Enter item path:",
+    "clear_confirm": {"text": "Clear conversation history? (y/N): ", "color": "GREEN"},
+    "config_selection_title": "Config file selection:",
+    "config_selection_prompt": "Enter path to config.json file (Tab for completion, ~ for home):",
+    "no_config_found": "No config file found.",
+    "config_new_item_error": "Not a valid config.json file",
+    "title_value": {"text": "{value}", "color": "GREEN"},
+    "no_items_value": {"text": "{value}", "color": "GREEN"},
+    "available_conversations": "Available conversations:",
+    "conversation_enter_number": "Enter a number to select:",
+    "no_conversations_available": "No conversations available",
+    "no_files_in_context": "No files are currently included in the context. What would you like to do?\n  [Y] - Send a plain message (without file context and file creation)\n  [n] - Send with file context (allow thin-wrap to create files)\n  [i] - Insert a file into the context (returns to text editor)\n",
+    "yni_prompt": "[Y/n/i]: ",
+    "returning_to_editor": "Returning to text editor. Use Ctrl+B to add files before sending.",
+    "enter_valid_number": "Please enter a valid number or enable new item entry.",
+    "new_item_error": "Invalid item",
+    "input_hint": {"text": "-------------------- Message ---------------------\n\n" , "color": "BRIGHT_GREEN"}
+  },
+
+  "menus": {
+    "previous_project_roots": {"text": "Previous project roots:", "color": "GREEN"},
+    "free_chat_label": "Free chat (no project / no file context)",
+    "proxy_management": {"text": "Proxy management:", "color": "GREEN"},
+    "disable_proxy_label": "Disable proxy (turn off)",
+    "available_models": "Available LLM Models:",
+    "model_entry": {"text": "{value}", "color": "GREEN"},
+    "option_zero": "  0. {label}",
+    "item_format": "  {index}. {item}",
+    "editable_files_menu": "Editable Files\n(d: delete, r: move to readable)",
+    "readable_files_menu": "Readable Files\n(d: delete, e: move to editable)",
+    "navigator_menu": "Navigator (Project Files)\nr: readable\ne: editable\nd: remove",
+    "shortcuts": {
+      "quit": "Quit",
+      "readable": "Readable",
+      "editable": "Editable",
+      "delete": "Delete",
+      "clear_all": "Clear All"
+    }
+  },
+
+  "files": {
+    "edited": "Edited: {path}",
+    "created": "Created: {path}",
+    "created_timestamped": "Created timestamped version: {path}",
+    "error_editing": "ERROR editing {path}: {error}",
+    "error_creating": "ERROR creating {path}: {error}",
+    "no_changes": "{filename}: no changes",
+    "insertions": "{filename}: {count} insertions(+)",
+    "deletions": "{filename}: {count} deletions(-)",
+    "insertions_deletions": "{filename}: {insertions} insertions(+), {deletions} deletions(-)",
+    "label_editable": "Editable",
+    "label_readable": "Readable",
+    "none": "{label}: None",
+    "list": "{label} ({count}): {files}",
+    "and_more": " ... and {count} more"
+  },
+
+  "sessions": {
+    "project_root": "Project root: {root}",
+    "conversation_dir": "Conversation directory: {dir}",
+    "root_value": {"text": "{value}", "color": "GREEN"},
+    "dir_value": {"text": "{value}", "color": "GREEN"},
+    "free_chat_display": "Free chat mode",
+    "loaded_conversation": "Loaded conversation from {session}",
+    "contains_messages": "Contains {count} messages",
+    "loaded_into_history": "Loaded {count} user messages into history",
+    "failed_to_load_conversation": "Failed to load conversation.",
+    "reload_cancelled": "\nReload cancelled.",
+    "format_with_preview": "{timestamp} ({count} messages) - {preview}",
+    "format": "{timestamp} ({count} messages)"
+  },
+
+  "commands": {
+    "unknown_command": "Unknown command: {cmd}. Type /help for available commands.",
+    "no_help": "No help available for '{cmd}'",
+    "available_commands": "Available commands:",
+    "cmd_highlight": {"text": "{value}", "color": "BRIGHT_YELLOW"},
+    "help_ctrl_b": "\nPress {shortcut} to open file context menu.",
+    "help_alt_enter": "Use {send_key} to send message, {newline_key} for new line.",
+    "help_pageup": "{shortcut} for message history (sent messages and temporary drafts).",
+    "clear_history": {"text": "Conversation history cleared.", "color": "GREEN"},
+    "switched_free_chat": "Switched to free chat mode (no file context)",
+    "root_changed": "Project root changed from '{old}' to '{new}'",
+    "descriptions": {
+      "clear": "Clear session context",
+      "bye": "Exit (auto-saves session log)",
+      "help": "Help for a command",
+      "model": "Switch AI model",
+      "reload": "Reload a previous conversation",
+      "rootdir": "Show or set project root directory (option 0 for free chat mode)",
+      "files": "Handle Ctrl+B file context menu",
+      "proxy": "Manage proxy (off to disable, number for previous, or new URL like socks5://127.0.0.1:1080)"
+    }
+  },
+
+  "keys": {
+    "alt_enter": {"text": "Alt+Enter", "color": "BRIGHT_YELLOW"},
+    "enter": {"text": "Enter", "color": "BRIGHT_YELLOW"},
+    "ctrl_b": {"text": "Ctrl+B", "color": "BRIGHT_YELLOW"},
+    "page_up_down": {"text": "Page Up/Down", "color": "BRIGHT_YELLOW"},
+    "reload": {"text": "/reload", "color": "BRIGHT_YELLOW"},
+    "slash_help": {"text": "/help", "color": "BRIGHT_YELLOW"}
+  },
+
+  "startup": {
+    "banner_title": {"text": "Thin Wrap - LLM Terminal Chat", "color": "GREEN"},
+    "banner_content": {"text": "{value}", "color": "GREEN"},
+    "welcome": {"text": "Thin Wrap ready", "color": "GREEN"},
+    "send_part1": { "text": "Message → ", "color": "BRIGHT_WHITE" },
+    "send_part2": { "text": " to send", "color": "BRIGHT_WHITE" },
+    "files_part1": { "text": " · ", "color": "BRIGHT_WHITE" },
+    "files_part2": { "text": " for file context", "color": "BRIGHT_WHITE" },
+    "help_part1": { "text": " · ", "color": "BRIGHT_WHITE" },
+    "help_part2": { "text": " for help", "color": "BRIGHT_WHITE" },
+    "session_log_saved": {"text": "Session saved ·", "color": "GREEN"}
+  },
+
+  "separators": {
+    "banner_line": {"text":  "==================================================", "color": "GREEN"},
+    "startup_line": {"text": "--------------------------------------------------", "color": "GREEN"},
+    "message_line": {"text": "\n--------------------------------------------------", "color": "BRIGHT_GREEN"},
+    "response_line": {"text":"\n==================================================", "color": "GREEN"}
+  },
+
+  "tokens": {
+    "token_usage_title": "\nUsage ({source}):",
+    "token_header": "Input       | Output      | Cache Hit    | Time (s)    | Output/s    ",
+    "token_separator": "────────────|─────────────|──────────────|─────────────|────────────",
+    "token_error": "?? Could not get token usage: {error}"
+  },
+
+  "help": {
+    "app_description": "LLM Terminal Chat connected with most of LLM API",
+    "examples": "examples:\n  thin-wrap\n  thin-wrap --proxy socks5://127.0.0.1:1080\n  thin-wrap --config /path/to/config.json\n\n",
+    "arg_proxy": "Proxy URL (e.g., socks5://127.0.0.1:1080)",
+    "arg_config": "Path to config.json configuration file",
+    "arg_root_dir": "Root directory of the code project.",
+    "arg_read": "List of readable files",
+    "arg_edit": "List of editable files",
+    "arg_message": "First message ready to send to the assistant",
+    "location_block": "  ===============================\n  |  APPLICATION DATA LOCATION  |\n  ===============================\n\nbinary: {binary}\n\nconfig: {config}\n\nproject roots and proxies history: {history_file}\n\npast conversations: {conversations_base}\n\nfile backups: inside the active project root directory (only if the 'backup' feature is enabled in config.json)",
+    "location_config_default": "default searched locations:\n  - $THIN_WRAP_CONFIG_DIR/config.json\n  - ~/.config/thin-wrap/config.json\n  - (same directory as binary)"
+  }
+}

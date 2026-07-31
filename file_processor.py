@@ -9,6 +9,7 @@ import difflib
 from typing import Optional
 from tags import Xml
 from pathlib import Path
+from strings import t
 
 logger = logging.getLogger(__name__)
 
@@ -296,17 +297,19 @@ def _diff_report(old_path: str | None, new_path: str) -> None:
 
         # Format output similar to git diff --stat
         if insertions == 0 and deletions == 0:
-            print(f"{filename}: no changes")
+            print(t("files.no_changes", filename=filename))
         elif deletions == 0:
-            print(f"{filename}: {insertions} insertions(+)")
+            print(t("files.insertions", filename=filename, count=insertions))
         elif insertions == 0:
-            print(f"{filename}: {deletions} deletions(-)")
+            print(t("files.deletions", filename=filename, count=deletions))
         else:
-            print(f"{filename}: {insertions} insertions(+), {deletions} deletions(-)")
+            print(
+                t("files.insertions_deletions", filename=filename, insertions=insertions, deletions=deletions)
+            )
 
     except Exception as e:
         logger.error(f"Error computing diff for {filename}: {e}")
-        print(f"{filename}: error computing diff")
+        print(t("errors.error_computing_diff", filename=filename))
 
 
 def _safe_atomic_write(
@@ -397,18 +400,18 @@ def parse_xml_response(llm_response: str) -> str:
                     preserve_permissions_from=path,
                 )
 
-                print(f"Edited: {path}")
+                print(t("files.edited", path=path))
 
                 insertions, deletions = _compute_git_stat_diff(old_content, content)
                 if insertions == 0 and deletions == 0:
-                    print(f"{path.name}: no changes")
+                    print(t("files.no_changes", filename=path.name))
                 elif deletions == 0:
-                    print(f"{path.name}: {insertions} insertions(+)")
+                    print(t("files.insertions", filename=path.name, count=insertions))
                 elif insertions == 0:
-                    print(f"{path.name}: {deletions} deletions(-)")
+                    print(t("files.deletions", filename=path.name, count=deletions))
                 else:
                     print(
-                        f"{path.name}: {insertions} insertions(+), {deletions} deletions(-)"
+                        t("files.insertions_deletions", filename=path.name, insertions=insertions, deletions=deletions)
                     )
 
                 logger.info(
@@ -430,17 +433,17 @@ def parse_xml_response(llm_response: str) -> str:
                 # Rename original to backup, then write new content to original path
                 os.replace(path, backup)
                 _write_file(path, content, src_for_perms=backup)
-                print(f"Edited: {path}")
+                print(t("files.edited", path=path))
                 _diff_report(str(backup), str(path))
             else:
                 # Write new content to timestamped file, leave original unchanged
                 _write_file(backup, content, src_for_perms=path)
-                print(f"Created timestamped version: {backup}")
+                print(t("files.created_timestamped", path=backup))
                 _diff_report(str(path), str(backup))
 
         except Exception as e:
             logger.error(f"Failed to edit {path_str}: {e}")
-            print(f"ERROR editing {path_str}: {e}")
+            print(t("files.error_editing", path=path_str, error=e))
 
     for path_str, content in _extract_files(new_section, Xml.NEW_FILE):
         try:
@@ -448,11 +451,11 @@ def parse_xml_response(llm_response: str) -> str:
             _secure_path(path, should_exist=False)
 
             _write_file(path, content, src_for_perms=None)
-            print(f"Created: {path}")
+            print(t("files.created", path=path))
             _diff_report(None, str(path))
         except Exception as e:
             logger.error(f"Failed to create {path_str}: {e}")
-            print(f"ERROR creating {path_str}: {e}")
+            print(t("files.error_creating", path=path_str, error=e))
 
     clean = llm_response
     for tag in [Xml.EDITED_FILES, Xml.NEW_FILES, Xml.COMMENTS]:
@@ -490,17 +493,11 @@ def should_generate_plain_query(
     if len(readable_files) + len(writable_files) > 0:
         return ("send_with_files", False)
 
-    print(
-        "No files are currently included in the context. "
-        "What would you like to do?\n"
-        "  [Y] - Send a plain message (without file context and file creation)\n"
-        "  [n] - Send with file context (allow thin-wrap to create files)\n"
-        "  [i] - Insert a file into the context (returns to text editor)\n"
-    )
+    print(t("prompts.no_files_in_context"))
 
     while True:
         try:
-            response = input("[Y/n/i]: ").strip().lower()
+            response = input(t("prompts.yni_prompt")).strip().lower()
         except KeyboardInterrupt:
             # Ctrl+C should behave like choosing 'i' to insert files
             print()  # Add a newline after ^C
@@ -513,9 +510,7 @@ def should_generate_plain_query(
         if response in {"i", "insert"}:
             return ("insert_files", False)
 
-        print(
-            "Invalid input. Please enter 'y', 'n', or 'i' (or press Enter for default 'y')."
-        )
+        print(t("errors.invalid_input_yni"))
 
 
 def generate_plain_query(user_request: str) -> str:
@@ -550,7 +545,7 @@ def generate_query(
 
     if action == "insert_files":
         # User chose to insert files - abort send and return to text editor
-        print("Returning to text editor. Use Ctrl+B to add files before sending.")
+        print(t("prompts.returning_to_editor"))
         return None, None
     elif should_generate_plain:
         query = generate_plain_query(user_request)

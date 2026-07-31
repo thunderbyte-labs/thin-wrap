@@ -10,12 +10,11 @@ This class provides a clean abstraction over raw HTTP calls while preserving:
 import os
 from typing import Optional
 import config
-import text_utils
 import logging
-from ui import UI
 from proxy_wrapper import ProxyWrapper
 from datetime import datetime
 import httpx
+from strings import t
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +53,8 @@ class LLMClient:
         self.api_base_url = model_config["api_base_url"].rstrip("/")
 
         if not self.api_key:
-            print(f"{model_config['api_key']} not found.")
-            self.api_key = input(f"Please enter your {model} API key: ").strip()
+            print(t("errors.api_key_not_found", env_key=model_config["api_key"]))
+            self.api_key = input(t("prompts.api_key_prompt", model=model)).strip()
             if not self.api_key:
                 raise ValueError("No API key provided")
 
@@ -66,55 +65,49 @@ class LLMClient:
                 logger.info("Proxy-enabled API connection established successfully!")
             except Exception as e:
                 logger.error(f"Proxy configuration failed: {e}")
-                print("Attempting direct connection without proxy...")
+                print(t("info.direct_without_proxy"))
                 # Fully disconnect proxy: clean up context + clear wrapper
                 self._cleanup_proxy_context()
                 self.proxy_wrapper = None
                 self._initialize_http_client()  # direct mode (no proxy)
                 try:
                     self._test_connection()
-                    print("✓ Direct connection established successfully!")
+                    print(t("info.direct_connected"))
                 except Exception as e2:
                     print(
-                        f"\n{UI.colorize('Warning:', 'BRIGHT_YELLOW')} "
-                        f"Direct connection also failed: {e2}"
+                        f"\n{t('common.warning_prefix')} {t('warnings.direct_connection_failed', error=e2)}"
                     )
-                    print("You can continue and try sending messages - errors may occur.")
+                    print(t("warnings.continue_despite_errors"))
         else:
             self._initialize_http_client()
             try:
                 self._test_connection()
             except Exception as e:
                 print(
-                    f"\n{UI.colorize('Warning:', 'BRIGHT_YELLOW')} "
-                    f"API connection test failed: {e}"
+                    f"\n{t('common.warning_prefix')} {t('warnings.api_test_failed', error=e)}"
                 )
-                print("You can continue and try sending messages - errors may occur.")
+                print(t("warnings.continue_despite_errors"))
 
     def choose_model(self):
         """Display interactive model selection menu and return selected model key."""
         models = config.get_models()
-        print("Available LLM Models:")
+        print(t("menus.available_models"))
 
         for i, (model_key, details) in enumerate(models.items(), 1):
             endpoint = details.get("api_base_url", "")
             endpoint = (
                 endpoint.removeprefix("https://").removeprefix("http://").rstrip("/")
             )
-            print(f"{i}. {UI.colorize(model_key, 'BRIGHT_GREEN')}@{endpoint}")
+            print(f"{i}. {t('menus.model_entry', value=model_key)}@{endpoint}")
 
         while True:
             try:
-                choice = input(f"\nChoose model (1-{len(models)}): ").strip()
+                choice = input(t("prompts.model_choose", count=len(models))).strip()
             except KeyboardInterrupt:
                 if self.current_model is not None:
                     print()
-                    print(
-                        f"{UI.colorize('Model selection cancelled.', 'BRIGHT_YELLOW')}"
-                    )
-                    print(
-                        f"{UI.colorize('Keeping current model:', 'BRIGHT_CYAN')} {self.current_model}"
-                    )
+                    print(t("warnings.model_selection_cancelled"))
+                    print(f"{t('info.keeping_current_model')} {self.current_model}")
                     return None
                 else:
                     raise
@@ -125,31 +118,33 @@ class LLMClient:
                     return list(models.keys())[choice_idx]
             except ValueError:
                 pass
-            print(f"Please enter a number between 1 and {len(models)}")
+            print(t("prompts.model_range_error", count=len(models)))
 
     def switch_model(self, new_model: str) -> bool:
         """Switch to a different model while preserving conversation history."""
         models = config.get_models()
         if new_model not in models:
             print(
-                f"Error: Unknown model '{new_model}'. Available: {', '.join(models.keys())}"
+                t(
+                    "errors.unknown_model",
+                    model=new_model,
+                    available=", ".join(models.keys()),
+                )
             )
             return False
 
         if new_model == self.current_model:
-            print(f"Already using {new_model}")
+            print(t("info.already_using", model=new_model))
             return True
 
-        print(f"Switching from {self.current_model} to {new_model}...")
+        print(t("info.switching_model", current=self.current_model, new=new_model))
 
         try:
             self.setup_api_key(new_model)
-            print(
-                f"✓ Successfully switched to {new_model}. Conversation history preserved."
-            )
+            print(t("info.switched_model", model=new_model))
             return True
         except Exception as e:
-            print(f"✗ Failed to switch to {new_model}: {e}")
+            print(t("errors.failed_to_switch_model", model=new_model, error=e))
             return False
 
     def update_proxy(self, proxy_wrapper: ProxyWrapper) -> bool:
@@ -160,7 +155,7 @@ class LLMClient:
                 self.setup_api_key(self.current_model)
                 return True
             except Exception as e:
-                print(f"✗ Failed to update proxy: {e}")
+                print(t("errors.failed_to_update_proxy", error=e))
                 return False
         return True
 
@@ -319,20 +314,26 @@ class LLMClient:
                 f"{self.current_model} API key validated successfully! Sample reply: {content[:60]}..."
             )
         except httpx.HTTPStatusError as e:
-            print(f"\n❌ API Error {e.response.status_code} from {self.current_model}")
-            print(f"URL: {url}")
+            print(
+                t(
+                    "errors.api_error",
+                    status=e.response.status_code,
+                    model=self.current_model,
+                )
+            )
+            print(t("errors.api_error_url", url=url))
             try:
                 error_detail = e.response.json()
-                print("Error details returned by the provider:")
+                print(t("errors.api_error_details"))
                 import json
 
                 print(json.dumps(error_detail, indent=2))
             except Exception:
-                print("Raw error body:")
+                print(t("errors.api_error_raw"))
                 print(e.response.text)
             raise
         except Exception as e:
-            print(f"Unexpected error during connection test: {e}")
+            print(t("errors.unexpected_connection_error", error=e))
             raise
 
     # ===================================================================
@@ -341,7 +342,7 @@ class LLMClient:
 
     def _send_message_via_httpx(self) -> tuple[str, Optional[dict]]:
         """Send to LLM and return (text, usage_dict)."""
-        print("⏳ Sending request to LLM client... (Press Ctrl+C to interrupt)")
+        print(t("info.request_sending"))
 
         messages = [
             {"role": msg["role"], "content": msg["content"]}
@@ -399,9 +400,7 @@ class LLMClient:
             return response_text, usage
 
         except KeyboardInterrupt:
-            print(
-                f"\n{UI.colorize('Request interrupted by user (Ctrl+C)', 'BRIGHT_YELLOW')}"
-            )
+            print(f"\n{t('info.request_interrupted')}")
             if (
                 self.conversation_history
                 and self.conversation_history[-1]["role"] == "user"
@@ -414,7 +413,10 @@ class LLMClient:
         except Exception as e:
             if self.session_logger:
                 self.session_logger.save_session(self.conversation_history)
-            return f"Error communicating with {self.current_model}: {e}", None
+            return (
+                t("errors.error_communicating", model=self.current_model, error=e),
+                None,
+            )
 
     def clear_conversation(self):
         """Clear conversation history and save empty session."""
@@ -435,4 +437,3 @@ class LLMClient:
     def __del__(self):
         """Ensure resources are cleaned up when object is destroyed."""
         self._cleanup_proxy_context()
-
