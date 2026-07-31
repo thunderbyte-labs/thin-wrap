@@ -9,6 +9,7 @@ import difflib
 from typing import Optional
 from tags import Xml
 from pathlib import Path
+from path_utils import resolve_path
 from strings import t
 
 logger = logging.getLogger(__name__)
@@ -25,13 +26,7 @@ def _resolve_file_path(path: str, root_dir: str) -> str:
     Returns:
         Absolute file path
     """
-    path_obj = Path(path)
-    if path_obj.is_absolute():
-        return str(path_obj)
-    else:
-        # Resolve relative to root directory
-        resolved = (Path(root_dir) / path).resolve()
-        return str(resolved)
+    return resolve_path(path, root_dir)
 
 
 def _read_file_content(full_path: str, root_dir: str) -> str:
@@ -304,7 +299,12 @@ def _diff_report(old_path: str | None, new_path: str) -> None:
             print(t("files.deletions", filename=filename, count=deletions))
         else:
             print(
-                t("files.insertions_deletions", filename=filename, insertions=insertions, deletions=deletions)
+                t(
+                    "files.insertions_deletions",
+                    filename=filename,
+                    insertions=insertions,
+                    deletions=deletions,
+                )
             )
 
     except Exception as e:
@@ -411,7 +411,12 @@ def parse_xml_response(llm_response: str) -> str:
                     print(t("files.deletions", filename=path.name, count=deletions))
                 else:
                     print(
-                        t("files.insertions_deletions", filename=path.name, insertions=insertions, deletions=deletions)
+                        t(
+                            "files.insertions_deletions",
+                            filename=path.name,
+                            insertions=insertions,
+                            deletions=deletions,
+                        )
                     )
 
                 logger.info(

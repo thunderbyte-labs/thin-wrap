@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from ui import UI
 import config
+from path_utils import resolve_path
 from proxy_wrapper import validate_proxy_url
 from strings import t
 
@@ -15,8 +16,12 @@ class CommandHandler:
         self.input_handler = input_handler
         self.chat_app = chat_app
 
-    def handle_command(self, command):
-        """Handle user commands starting with '/'"""
+    def handle_command(self, command: str) -> bool:
+        """Handle user commands starting with '/'.
+
+        Returns:
+            True if the application should quit (e.g. /bye), False otherwise.
+        """
         command = command.strip()
         parts = command.split()
         cmd = parts[0].lower()
@@ -271,7 +276,7 @@ class CommandHandler:
         """Show or set project root directory using interactive selection with free chat option"""
         if args:
             # Direct path argument provided
-            new_root = Path(args[0]).expanduser().resolve()
+            new_root = resolve_path(args[0])
             if new_root.is_dir():
                 try:
                     self.chat_app.set_root_dir(str(new_root))
@@ -328,9 +333,8 @@ class CommandHandler:
 
                 # Manual path entry
                 try:
-                    new_item = Path(user_input).expanduser().resolve(strict=False)
-                    if new_item.is_dir():
-                        resolved_str = str(new_item)
+                    resolved_str = resolve_path(user_input)
+                    if Path(resolved_str).is_dir():
                         print(f"{t('common.using_prefix')} {resolved_str}")
                         self.chat_app.set_root_dir(resolved_str)
                         return
