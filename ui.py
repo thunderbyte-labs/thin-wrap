@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 from pathlib import Path
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import PathCompleter
@@ -10,6 +11,21 @@ from rich.console import Console
 from strings import t
 
 logger = logging.getLogger(__name__)
+
+# Matches inline markdown links "[label](url)" while excluding images "![alt](src)"
+MARKDOWN_LINK_RE = re.compile(r"(?<!!)\[([^\]]+)\]\((https?://[^)\s]+)\)")
+
+
+def make_links_visible(text: str) -> str:
+    """Make link targets visible as plain text for terminals without OSC 8 support.
+
+    Transforms "[label](url)" into "[label](url) (url)" so the URL can be
+    auto-detected and Ctrl+Clicked (or copied) in any terminal, including those
+    that fail to honor OSC 8 hyperlinks (e.g. Konsole).
+    """
+    return MARKDOWN_LINK_RE.sub(
+        lambda m: f"[{m.group(1)}]({m.group(2)}) ({m.group(2)})", text
+    )
 
 
 class UI:
@@ -79,12 +95,12 @@ class UI:
             return
         try:
             console = Console()
-            md = Markdown(text)
+            md = Markdown(make_links_visible(text))
             console.print(md)
         except Exception as e:
             # Log error with traceback and fallback to plain print if markdown rendering fails
             logger.exception("Failed to render markdown")
-            print(text)
+            print(make_links_visible(text))
 
     @staticmethod
     def interactive_selection(
