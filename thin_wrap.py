@@ -26,6 +26,7 @@ from input_handler import InputHandler
 from llm_client import LLMClient
 from proxy_wrapper import create_proxy_wrapper, validate_proxy_url, normalize_proxy_url
 from session_logger import SessionLogger
+from strings import t
 from text_utils import clean_text, estimate_tokens
 from ui import UI
 
@@ -36,11 +37,8 @@ def enforce_non_root():
     """Block root execution for security (Dilemma F)."""
     try:
         if os.geteuid() == 0:
-            print("ERROR: thin-wrap refuses to run as root.", file=sys.stderr)
-            print(
-                "Run as a regular user, or use sudo -u $USER if file permissions require it.",
-                file=sys.stderr,
-            )
+            print(t("errors.root_refusal"), file=sys.stderr)
+            print(t("errors.root_refusal_hint"), file=sys.stderr)
             sys.exit(1)
     except AttributeError:
         pass  # Non-POSIX systems (Windows) don't have geteuid
@@ -94,7 +92,7 @@ class LLMChat:
             models = config.get_models()
             logger.debug(f"Loaded {len(models)} models from configuration")
         except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
-            print(f"{UI.colorize('Error loading models configuration:', 'RED')} {e}")
+            print(f"{t('errors.models_config_load')} {e}")
             sys.exit(1)
 
         config_dir = Path(platformdirs.user_config_dir(config.APP_NAME))
@@ -115,7 +113,7 @@ class LLMChat:
             self.free_chat_mode = False
             self._add_to_recent_roots(history_file, self.root_dir)
             print(
-                f"{UI.colorize('Info:', 'BRIGHT_CYAN')} Using specified project root: {self.root_dir}"
+                f"{t('common.info_prefix')} {t('info.using_project_root', path=self.root_dir)}"
             )
         else:
             self.root_dir = self._interactive_root_selection()
@@ -123,9 +121,7 @@ class LLMChat:
             if self.root_dir == self.FREE_CHAT_MODE:
                 self.free_chat_mode = True
                 self.root_dir = None
-                print(
-                    f"{UI.colorize('Info:', 'BRIGHT_CYAN')} Free chat mode enabled (no file context)"
-                )
+                print(f"{t('common.info_prefix')} {t('info.free_chat_enabled')}")
             else:
                 self.free_chat_mode = False
                 self._add_to_recent_roots(history_file, self.root_dir)
@@ -260,60 +256,58 @@ class LLMChat:
 
     def _interactive_root_selection(self) -> str:
         """Interactive prompt for root selection with history, Tab autocompletion, and free chat option."""
-        from prompt_toolkit import PromptSession
-        from prompt_toolkit.completion import PathCompleter
 
         completer = PathCompleter(expanduser=True)
         session = PromptSession(completer=completer)
 
-        free_chat_label = "No root directory - Free chatting without file context"
+        free_chat_label = t("menus.free_chat_label")
 
         while True:
-            print(f"{UI.colorize('Previous project roots:', 'BRIGHT_CYAN')}")
-            print(f"  0. {free_chat_label}")
+            print(t("menus.previous_project_roots"))
+            print(t("menus.option_zero", label=free_chat_label))
             for i, item in enumerate(self.recent_roots, 1):
-                print(f"  {i}. {item}")
-            print(
-                "Enter a number to select, or type a new path (Tab for completion, ~ for home):"
-            )
+                print(t("menus.item_format", index=i, item=item))
+            print(t("prompts.root_enter"))
             try:
-                user_input = session.prompt("> ").strip()
+                user_input = session.prompt(t("common.prompt_arrow")).strip()
             except (KeyboardInterrupt, EOFError):
-                print("\nSelection cancelled.")
+                print(t("common.selection_cancelled"))
                 raise
 
             if not user_input:
-                print(f"{UI.colorize('Error:', 'RED')} Empty input - please try again.")
+                print(f"{t('common.error_prefix')} {t('common.empty_input')}")
                 continue
 
             # Numeric selection
             if user_input.isdigit():
                 idx = int(user_input)
                 if idx == 0:
-                    print(
-                        f"{UI.colorize('Selected:', 'BRIGHT_CYAN')} {free_chat_label}"
-                    )
+                    print(f"{t('common.selected_prefix')} {free_chat_label}")
                     return self.FREE_CHAT_MODE
                 elif 1 <= idx <= len(self.recent_roots):
                     chosen = self.recent_roots[idx - 1]
-                    print(f"{UI.colorize('Selected:', 'BRIGHT_CYAN')} {chosen}")
+                    print(f"{t('common.selected_prefix')} {chosen}")
                     return chosen
                 else:
-                    print(f"{UI.colorize('Error:', 'RED')} Number out of range.")
+                    print(
+                        f"{t('common.error_prefix')} {t('common.number_out_of_range')}"
+                    )
                     continue
             # Manual path entry
             try:
                 new_item = Path(user_input).expanduser().resolve(strict=False)
                 if new_item.is_dir():
                     resolved_str = str(new_item)
-                    print(f"{UI.colorize('Using:', 'BRIGHT_CYAN')} {resolved_str}")
+                    print(f"{t('common.using_prefix')} {resolved_str}")
                     return resolved_str
                 else:
                     print(
-                        f"{UI.colorize('Error:', 'RED')} Not a valid directory: {user_input}"
+                        f"{t('common.error_prefix')} {t('common.not_valid_directory', input=user_input)}"
                     )
             except Exception as e:
-                print(f"{UI.colorize('Error:', 'RED')} Invalid input: {e}")
+                print(
+                    f"{t('common.error_prefix')} {t('common.invalid_input', error=e)}"
+                )
 
     def set_root_dir(self, new_root: str, ask_to_reload: bool = True) -> None:
         """
@@ -334,9 +328,7 @@ class LLMChat:
             self.session_logger = SessionLogger(self.script_directory, self.root_dir)
             self.llm_client.session_logger = self.session_logger
 
-            print(
-                f"{UI.colorize('Success:', 'BRIGHT_GREEN')} Switched to free chat mode (no file context)"
-            )
+            print(f"{t('common.success_prefix')} {t('commands.switched_free_chat')}")
             return
 
         # Otherwise, it's a directory path
@@ -373,7 +365,7 @@ class LLMChat:
         self.llm_client.session_logger = self.session_logger
 
         print(
-            f"{UI.colorize('Success:', 'BRIGHT_GREEN')} Project root changed from '{old_root}' to '{self.root_dir}'"
+            f"{t('common.success_prefix')} {t('commands.root_changed', old=old_root, new=self.root_dir)}"
         )
 
         # If there are sessions available in the new root, ask if user wants to reload
@@ -381,11 +373,9 @@ class LLMChat:
             sessions = self.session_logger.list_available_sessions()
             if sessions:
                 print(
-                    f"\n{UI.colorize('Note:', 'BRIGHT_CYAN')} Found {len(sessions)} conversation(s) in the new project root."
+                    f"\n{t('common.note_prefix')} {t('info.note_convs_found', count=len(sessions))}"
                 )
-                print(
-                    f"Use {UI.colorize('/reload', 'BRIGHT_YELLOW')} to load one of these conversations."
-                )
+                print(t("info.use_reload", cmd=t("keys.reload")))
 
     def set_proxy(self, proxy_url: str | None, ask_to_reload: bool = True) -> bool:
         """
@@ -402,31 +392,35 @@ class LLMChat:
 
         # Handle disable proxy
         if proxy_url is None or proxy_url.lower() == "off":
-            print(f"{UI.colorize('Disabling proxy...', 'BRIGHT_CYAN')}")
+            print(t("info.proxy_disabling"))
             # Clean up existing proxy wrapper
             old_proxy = self.proxy_wrapper
             self.proxy_wrapper = None
             # Update LLM client
             if self.llm_client.update_proxy(None):
-                print(f"{UI.colorize('Success:', 'BRIGHT_GREEN')} Proxy disabled")
+                print(f"{t('common.success_prefix')} {t('info.proxy_disabled')}")
                 return True
             else:
                 # Restore old proxy on failure
                 self.proxy_wrapper = old_proxy
-                print(f"{UI.colorize('Error:', 'RED')} Failed to disable proxy")
+                print(f"{t('common.error_prefix')} {t('errors.disable_proxy_failed')}")
                 return False
         # Validate proxy URL format
         error_msg = validate_proxy_url(proxy_url)
         if error_msg:
-            print(f"{UI.colorize('Error:', 'RED')} Invalid proxy URL: {error_msg}")
+            print(
+                f"{t('common.error_prefix')} {t('common.invalid_proxy_url', error=error_msg)}"
+            )
             return False
         # Test proxy connection
-        print(f"{UI.colorize('Testing proxy connection...', 'BRIGHT_CYAN')}")
+        print(t("info.proxy_testing"))
         try:
             # Create temporary proxy wrapper to test
             test_wrapper = create_proxy_wrapper(proxy_url)
             if test_wrapper is None:
-                print(f"{UI.colorize('Error:', 'RED')} Failed to create proxy wrapper")
+                print(
+                    f"{t('common.error_prefix')} {t('errors.create_proxy_wrapper_failed')}"
+                )
                 return False
 
             # Try to enter proxy context (which tests connection)
@@ -440,18 +434,20 @@ class LLMChat:
                 # Add to recent proxies history
                 self._add_to_recent_proxies(self.history_file, proxy_url)
                 print(
-                    f"{UI.colorize('Success:', 'BRIGHT_GREEN')} Proxy switched to: {proxy_url}"
+                    f"{t('common.success_prefix')} {t('info.proxy_switched', url=proxy_url)}"
                 )
                 return True
             else:
                 # Restore old proxy on failure
                 self.proxy_wrapper = old_proxy
                 print(
-                    f"{UI.colorize('Error:', 'RED')} Failed to update LLM client with new proxy"
+                    f"{t('common.error_prefix')} {t('errors.llm_update_proxy_failed')}"
                 )
                 return False
         except Exception as e:
-            print(f"{UI.colorize('Error:', 'RED')} Proxy connection test failed: {e}")
+            print(
+                f"{t('common.error_prefix')} {t('errors.proxy_connection_test_failed', error=e)}"
+            )
             return False
 
     def _print_files_summary(self):
@@ -461,7 +457,7 @@ class LLMChat:
 
         def format_files(file_list, label):
             if not file_list:
-                return f"{label}: None"
+                return t("files.none", label=label)
             # Convert to relative paths
             rel_paths = []
             for f in file_list:
@@ -474,17 +470,21 @@ class LLMChat:
             max_show = 5
             if len(rel_paths) <= max_show:
                 files_str = ", ".join(rel_paths)
-                return f"{label} ({len(rel_paths)}): {files_str}"
+                return t(
+                    "files.list", label=label, count=len(rel_paths), files=files_str
+                )
             else:
                 shown = rel_paths[:max_show]
-                files_str = (
-                    ", ".join(shown) + f" ... and {len(rel_paths)-max_show} more"
+                files_str = ", ".join(shown) + t(
+                    "files.and_more", count=len(rel_paths) - max_show
                 )
-                return f"{label} ({len(rel_paths)}): {files_str}"
+                return t(
+                    "files.list", label=label, count=len(rel_paths), files=files_str
+                )
 
         print()
-        print(format_files(self.editable_files, "Editable"))
-        print(format_files(self.readable_files, "Readable"))
+        print(format_files(self.editable_files, t("files.label_editable")))
+        print(format_files(self.readable_files, t("files.label_readable")))
         print()
 
     def _prompt_for_proxy_if_needed(self, selected_model: str) -> bool:
@@ -511,16 +511,14 @@ class LLMChat:
             return True
 
         # Model suggests proxy but none configured - prompt user
-        print(f"\n{UI.colorize('Proxy suggested for this model:', 'BRIGHT_YELLOW')}")
-        print(
-            f"Model '{selected_model}' recommends using a proxy for optimal connectivity."
-        )
-        print("Would you like to configure a proxy now?")
+        print(f"\n{t('info.proxy_suggested_title')}")
+        print(t("info.proxy_suggested_model", model=selected_model))
+        print(t("info.proxy_configure_now"))
         # Use the existing command handler for proxy selection
         try:
             self.command_handler._handle_proxy([])
         except KeyboardInterrupt:
-            print(f"\n{UI.colorize('Proxy selection cancelled.', 'BRIGHT_YELLOW')}")
+            print(f"\n{t('warnings.proxy_selection_cancelled')}")
             return False
         # Return True regardless - if user selected "No proxy", proxy_wrapper remains None
         return True
@@ -542,17 +540,17 @@ class LLMChat:
         logger.debug("Printed application banner")
 
         if self.proxy_wrapper:
-            print(f"{UI.colorize('PROXY MODE ENABLED', 'BRIGHT_GREEN')}")
+            print(t("info.proxy_mode_enabled"))
             proxy_info = self.proxy_wrapper.get_connection_info()
             if proxy_info.get("proxy_url"):
-                print(f"Proxy URL: {proxy_info['proxy_url']}")
+                print(t("info.proxy_url", url=proxy_info["proxy_url"]))
             print()
             logger.debug("Displayed proxy information")
 
         try:
             model = self.llm_client.choose_model()
         except KeyboardInterrupt as e:
-            print(f"\n{UI.colorize('Exiting during setup...', 'BRIGHT_WHITE')}")
+            print(f"\n{t('info.exiting_during_setup')}")
             self._save_and_exit()
             return
         # Prompt for proxy if model suggests it and no proxy configured
@@ -563,27 +561,21 @@ class LLMChat:
             try:
                 if not self._prompt_for_proxy_if_needed(model):
                     # User cancelled proxy selection, continue without proxy
-                    print(
-                        f"{UI.colorize('Continuing without proxy.', 'BRIGHT_YELLOW')}"
-                    )
+                    print(t("warnings.continuing_without_proxy"))
             except KeyboardInterrupt:
-                print(
-                    f"\n{UI.colorize('Proxy setup cancelled, continuing without proxy.', 'BRIGHT_YELLOW')}"
-                )
+                print(f"\n{t('warnings.proxy_setup_cancelled')}")
         # Now set up API key (may fail if proxy still needed but not configured)
         try:
             self.llm_client.setup_api_key(model)
             logger.debug("Set up API key successfully")
         except KeyboardInterrupt as e:
-            print(f"\n{UI.colorize('Exiting during setup...', 'BRIGHT_WHITE')}")
+            print(f"\n{t('info.exiting_during_setup')}")
             self._save_and_exit()
             return
 
         UI.show_startup_message()
         if self.free_chat_mode:
-            print(
-                f"{UI.colorize('Free chat mode enabled - no file context.', 'BRIGHT_CYAN')}"
-            )
+            print(t("info.free_chat_enabled_dot"))
         self._print_files_summary()
         logger.debug("Showed startup message")
 
@@ -601,12 +593,7 @@ class LLMChat:
 
             if not user_input:
                 logger.debug("Empty user input, continuing")
-                print(
-                    UI.colorize(
-                        "Empty message or KeyboardInterrupt. Type /help to see command or /bye (then Alt+Enter) to quit.\n\n",
-                        "BOLD",
-                    )
-                )
+                print(t("info.empty_message_hint"))
                 continue
 
             logger.debug(f"Processing user input: {user_input[:50]}...")
@@ -650,7 +637,7 @@ class LLMChat:
         model = self.llm_client.get_current_model()
         logger.debug(f"Using model: {model}")
 
-        print(f"{UI.colorize('-' * 65, 'GREEN')}")
+        print(t("separators.message_line"))
 
         if self.free_chat_mode:
             # Free chat mode: plain message without file context
@@ -673,7 +660,9 @@ class LLMChat:
         start_time_ns = time.perf_counter_ns()
         response, usage = self.llm_client.send_message(query)
         end_time_ns = time.perf_counter_ns()
-        duration_ms = (end_time_ns - start_time_ns) / 1_000_000.0  # Millisecond precision
+        duration_ms = (
+            end_time_ns - start_time_ns
+        ) / 1_000_000.0  # Millisecond precision
 
         self._report_token_usage(query, response, usage, duration_ms=duration_ms)
 
@@ -681,17 +670,21 @@ class LLMChat:
         comments = response_parser(response)
 
         if comments:
-            print("\n" + UI.colorize("LLM Explanation / Reasoning:", "BRIGHT_CYAN"))
+            print("\n" + t("info.llm_explanation"))
             UI.render_markdown(comments)
         else:
-            print("\nNo explanation provided by the LLM.")
+            print(t("info.no_explanation"))
 
-        print(f"{UI.colorize('=' * 65, 'BRIGHT_GREEN')}")
+        print(t("separators.response_line"))
         print()
         logger.debug("Message sent and response processed successfully")
 
     def _report_token_usage(
-        self, query: str, response: str, usage: Optional[dict] = None, duration_ms: Optional[float] = None
+        self,
+        query: str,
+        response: str,
+        usage: Optional[dict] = None,
+        duration_ms: Optional[float] = None,
     ):
         """Affiche un tableau clair avec Input, Output, Cache Hit, Time (s), et Output/s."""
         try:
@@ -722,11 +715,11 @@ class LLMChat:
                     output_tokens_per_second = 1000.0 * output_tokens / duration_ms
                     ops_display = f"{output_tokens_per_second:.1f}"
 
-            print(f"\nToken Usage ({source})")
+            print(t("tokens.token_usage_title", source=source))
             # Headers for 5 columns, total width (excluding '   ' prefix) is 62 characters
             # This aligns the table's content width with the '─' * 65 line when considering the '   ' prefix
-            print("   Input       | Output      | Cache Hit    | Time (s)    | Output/s    ")
-            print("   ────────────|─────────────|──────────────|─────────────|────────────")
+            print(t("tokens.token_header"))
+            print(t("tokens.token_separator"))
 
             if cached_tokens > 0 and input_tokens > 0:
                 ratio = (cached_tokens / input_tokens) * 100
@@ -735,11 +728,13 @@ class LLMChat:
             else:
                 cache_display = "-"
 
-            print(f"   {input_tokens:<11} | {output_tokens:<11} | {cache_display:<12} | {duration_display:<11} | {ops_display:<12}")
-            print(f"{UI.colorize('─' * 65, 'GREEN')}")
+            print(
+                f"   {input_tokens:<11} | {output_tokens:<11} | {cache_display:<12} | {duration_display:<11} | {ops_display:<12}"
+            )
+            print(t("separators.token_line"))
 
         except Exception as e:
-            print(f"   ?? Could not get token usage: {e}")
+            print(t("tokens.token_error", error=e))
 
 
 def get_location_info() -> str:
@@ -762,12 +757,7 @@ def get_location_info() -> str:
     if config_path_obj:
         config_desc = str(config_path_obj)
     else:
-        config_desc = (
-            "default searched locations:\n"
-            "  - $THIN_WRAP_CONFIG_DIR/config.json\n"
-            "  - ~/.config/thin-wrap/config.json\n"
-            "  - (same directory as binary)"
-        )
+        config_desc = t("help.location_config_default")
 
     # Data locations (using the same platformdirs logic as the application)
     config_dir = Path(platformdirs.user_config_dir(config.APP_NAME))
@@ -776,19 +766,13 @@ def get_location_info() -> str:
     history_file = config_dir / "history.json"
     conversations_base = data_dir / "conversations"
 
-    return f"""  ===============================
-  |  APPLICATION DATA LOCATION  |
-  ===============================
-
-binary: {binary_path}
-
-config: {config_desc}
-
-project roots and proxies history: {history_file}
-
-past conversations: {conversations_base}
-
-file backups: inside the active project root directory (only if the 'backup' feature is enabled in config.json)"""
+    return t(
+        "help.location_block",
+        binary=binary_path,
+        config=config_desc,
+        history_file=history_file,
+        conversations_base=conversations_base,
+    )
 
 
 def parse_arguments():
@@ -798,34 +782,27 @@ def parse_arguments():
     locations = get_location_info()
 
     parser = argparse.ArgumentParser(
-        description="LLM Terminal Chat connected with most of LLM API",
+        description=t("help.app_description"),
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""examples:
-  thin-wrap
-  thin-wrap --proxy socks5://127.0.0.1:1080
-  thin-wrap --config /path/to/config.json
-
-""" + locations,
+        epilog=t("help.examples") + locations,
     )
 
     parser.add_argument(
         "-p",
         "--proxy",
         metavar="PROXY_URL",
-        help="Proxy URL (e.g., socks5://127.0.0.1:1080)",
+        help=t("help.arg_proxy"),
     )
     parser.add_argument(
         "-c",
         "--config",
         metavar="CONFIG_PATH",
-        help="Path to config.json configuration file",
+        help=t("help.arg_config"),
     )
-    parser.add_argument("-rd", "--root-dir", help="Root directory of the code project.")
-    parser.add_argument("-r", "--read", nargs="+", help="List of readable files")
-    parser.add_argument("-e", "--edit", nargs="+", help="List of editable files")
-    parser.add_argument(
-        "-m", "--message", help="First message ready to send to the assistant"
-    )
+    parser.add_argument("-rd", "--root-dir", help=t("help.arg_root_dir"))
+    parser.add_argument("-r", "--read", nargs="+", help=t("help.arg_read"))
+    parser.add_argument("-e", "--edit", nargs="+", help=t("help.arg_edit"))
+    parser.add_argument("-m", "--message", help=t("help.arg_message"))
 
     return parser.parse_args()
 
@@ -843,7 +820,9 @@ def main():
             proxy_url = args.proxy.rstrip("/")
             error_msg = validate_proxy_url(proxy_url)
             if error_msg:
-                print(f"{UI.colorize('Error:', 'RED')} Invalid proxy URL: {error_msg}")
+                print(
+                    f"{t('common.error_prefix')} {t('common.invalid_proxy_url', error=error_msg)}"
+                )
                 logger.error(f"Invalid proxy URL provided: {args.proxy} -- {error_msg}")
                 sys.exit(1)
             logger.debug(f"Proxy enabled: {proxy_url}")
@@ -870,11 +849,10 @@ def main():
         chat.run()
 
     except KeyboardInterrupt:
-        print(f"\n{UI.colorize('Goodbye!', 'BRIGHT_GREEN')}")
+        print(f"\n{t('common.goodbye')}")
         logger.debug("Exiting due to KeyboardInterrupt")
         sys.exit(0)
 
 
 if __name__ == "__main__":
     main()
-

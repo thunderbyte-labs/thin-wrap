@@ -7,6 +7,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import PathCompleter
 from rich.markdown import Markdown
 from rich.console import Console
+from strings import t
 
 logger = logging.getLogger(__name__)
 
@@ -51,42 +52,27 @@ class UI:
                 banner_content = f.read()
             print(UI.colorize(banner_content, "BRIGHT_GREEN"))
         else:
-            print(UI.colorize("=" * 70, "BRIGHT_GREEN"))
-            print(UI.colorize("Thin Wrap - LLM Terminal Chat", "BRIGHT_GREEN"))
-            print(UI.colorize("=" * 70, "BRIGHT_GREEN"))
+            print(t("separators.banner_line"))
+            print(t("startup.banner_title"))
+            print(t("separators.banner_line"))
 
     @staticmethod
     def show_startup_message():
         """Show startup help message"""
-        print(
-            "\n"
-            + UI.colorize("Welcome to Thin Wrap - LLM Terminal Chat!", "BRIGHT_CYAN")
-        )
-        print(UI.colorize("-" * 50, "GREEN"))
-        print(
-            UI.colorize("Type your message and press ", "BRIGHT_WHITE")
-            + UI.colorize("Alt+Enter", "BRIGHT_YELLOW")
-            + UI.colorize(" to send.", "BRIGHT_WHITE")
-        )
-        print(
-            UI.colorize("Press ", "BRIGHT_WHITE")
-            + UI.colorize("Ctrl+B", "BRIGHT_YELLOW")
-            + UI.colorize(" to manage file context.", "BRIGHT_WHITE")
-        )
-        print(
-            UI.colorize("Type ", "BRIGHT_WHITE")
-            + UI.colorize("/help", "BRIGHT_YELLOW")
-            + UI.colorize(" for available commands.", "BRIGHT_WHITE")
-        )
-        print(UI.colorize("-" * 50, "GREEN"))
+        print("\n" + t("startup.welcome"))
+        print(t("separators.startup_line"))
+        print(t("startup.send_part1") + t("keys.alt_enter") + t("startup.send_part2"))
+        print(t("startup.files_part1") + t("keys.ctrl_b") + t("startup.files_part2"))
+        print(t("startup.help_part1") + t("keys.slash_help") + t("startup.help_part2"))
+        print(t("separators.startup_line"))
 
     @staticmethod
     def show_exit_message(log_path):
         """Show exit message with log location"""
         if log_path:
-            print("\n" + UI.colorize("Session log saved to:", "BRIGHT_CYAN"))
+            print("\n" + t("startup.session_log_saved"))
             print(f"  {log_path}")
-        print("\n" + UI.colorize("Goodbye!", "BRIGHT_GREEN"))
+        print("\n" + t("common.goodbye"))
 
     @staticmethod
     def render_markdown(text):
@@ -111,33 +97,35 @@ class UI:
         item_formatter=lambda x: x,
         allow_new=False,
         new_item_validator=lambda x: True,
-        new_item_error="Invalid item",
+        new_item_error=None,
     ):
         """
         Generic interactive selection function with history support
         """
+        if new_item_error is None:
+            new_item_error = t("prompts.new_item_error")
         completer = PathCompleter(expanduser=True) if allow_new else None
         session = PromptSession(completer=completer)
 
         while True:
             if items:
-                print(f"{UI.colorize(prompt_title, 'BRIGHT_CYAN')}")
+                print(UI.colorize(prompt_title, "BRIGHT_CYAN"))
                 for i, item in enumerate(items, 1):
-                    print(f"  {i}. {item_formatter(item)}")
+                    print(t("menus.item_format", index=i, item=item_formatter(item)))
                 print(prompt_message)
             else:
-                print(f"{UI.colorize(no_items_message, 'BRIGHT_CYAN')}")
+                print(UI.colorize(no_items_message, "BRIGHT_CYAN"))
                 if allow_new:
-                    print("Enter item path:")
+                    print(t("prompts.enter_item_path"))
 
             try:
-                user_input = session.prompt("> ").strip()
+                user_input = session.prompt(t("common.prompt_arrow")).strip()
             except (KeyboardInterrupt, EOFError):
-                print("\nSelection cancelled.")
+                print(t("common.selection_cancelled"))
                 raise
 
             if not user_input:
-                print(f"{UI.colorize('Error:', 'RED')} Empty input - please try again.")
+                print(f"{t('common.error_prefix')} {t('common.empty_input')}")
                 continue
 
             # Numeric selection from items
@@ -145,12 +133,10 @@ class UI:
                 idx = int(user_input) - 1
                 if 0 <= idx < len(items):
                     chosen = items[idx]
-                    print(
-                        f"{UI.colorize('Selected:', 'BRIGHT_CYAN')} {item_formatter(chosen)}"
-                    )
+                    print(f"{t('common.selected_prefix')} {item_formatter(chosen)}")
                     return chosen
                 else:
-                    print(f"{UI.colorize('Error:', 'RED')} Number out of range.")
+                    print(f"{t('common.error_prefix')} {t('common.number_out_of_range')}")
                     continue
 
             # Manual entry (only if allow_new is True)
@@ -160,16 +146,12 @@ class UI:
                     if new_item_validator(new_item):
                         resolved_str = str(new_item)
                         print(
-                            f"{UI.colorize('Using:', 'BRIGHT_CYAN')} {item_formatter(resolved_str)}"
+                            f"{t('common.using_prefix')} {item_formatter(resolved_str)}"
                         )
                         return resolved_str
                     else:
-                        print(
-                            f"{UI.colorize('Error:', 'RED')} {new_item_error}: {user_input}"
-                        )
+                        print(f"{t('common.error_prefix')} {new_item_error}: {user_input}")
                 except Exception as e:
-                    print(f"{UI.colorize('Error:', 'RED')} Invalid input: {e}")
+                    print(f"{t('common.error_prefix')} {t('common.invalid_input', error=e)}")
             else:
-                print(
-                    f"{UI.colorize('Error:', 'RED')} Please enter a valid number or enable new item entry."
-                )
+                print(f"{t('common.error_prefix')} {t('prompts.enter_valid_number')}")

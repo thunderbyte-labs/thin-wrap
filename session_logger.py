@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 import config
 import re
+from strings import t
 
 
 class SessionLogger:
@@ -98,7 +99,7 @@ class SessionLogger:
             return self.session_path
 
         except Exception as e:
-            print(f"⚠️  Error saving session: {e}")
+            print(t("errors.error_saving_session", error=e))
             return None
 
     def load_session(self, zip_path):
@@ -114,10 +115,10 @@ class SessionLogger:
             return session_data
 
         except FileNotFoundError:
-            print(f"⚠️  Session file not found: {zip_path}")
+            print(t("errors.session_file_not_found", path=zip_path))
             return None
         except Exception as e:
-            print(f"⚠️  Error loading session: {e}")
+            print(t("errors.error_loading_session", error=e))
             return None
 
     def load_session_metadata(self, zip_path):

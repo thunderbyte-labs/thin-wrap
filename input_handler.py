@@ -8,6 +8,7 @@ from prompt_toolkit.completion import WordCompleter
 import shutil
 import os
 import config
+from strings import t
 
 
 class CommandCompleter(Completer):
@@ -203,7 +204,7 @@ class InputHandler:
             [
                 (
                     "bold fg:ansidefault",
-                    "Alt+Enter to send. Ctrl+B for files. Page Up/Down: history:\n",
+                    t("prompts.input_hint"),
                 ),
             ]
         )

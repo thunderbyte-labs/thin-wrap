@@ -3,6 +3,7 @@ from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, DirectoryTree, ListView, ListItem, Static
 from textual.containers import Horizontal, Vertical
 from textual.binding import Binding
+from strings import t
 
 
 class FileMenuApp(App):
@@ -10,12 +11,12 @@ class FileMenuApp(App):
 
     ENABLE_COMMAND_PALETTE = False
     BINDINGS = [
-        Binding("ctrl+b", "quit", "Quit", key_display="Ctrl+B", show=True),
-        Binding("escape", "quit", "Quit"),
-        Binding("r", "to_readable", "Readable"),
-        Binding("e", "to_editable", "Editable"),
-        Binding("d", "delete_selected", "Delete"),
-        Binding("ctrl+d", "clear_lists", "Clear All", key_display="Ctrl+D", show=True),
+        Binding("ctrl+b", "quit", t("menus.shortcuts.quit"), key_display="Ctrl+B", show=True),
+        Binding("escape", "quit", t("menus.shortcuts.quit")),
+        Binding("r", "to_readable", t("menus.shortcuts.readable")),
+        Binding("e", "to_editable", t("menus.shortcuts.editable")),
+        Binding("d", "delete_selected", t("menus.shortcuts.delete")),
+        Binding("ctrl+d", "clear_lists", t("menus.shortcuts.clear_all"), key_display="Ctrl+D", show=True),
     ]
     CSS = """
     Horizontal { height: 100%; }
@@ -40,15 +41,13 @@ class FileMenuApp(App):
         yield Header()
         with Horizontal():
             with Vertical():
-                yield Static("Editable Files\n(d: delete, r: move to readable)")
+                yield Static(t("menus.editable_files_menu"))
                 yield ListView(id="editable")
             with Vertical():
-                yield Static("Readable Files\n(d: delete, e: move to editable)")
+                yield Static(t("menus.readable_files_menu"))
                 yield ListView(id="readable")
             with Vertical():
-                yield Static(
-                    "Navigator (Project Files)\nr: readable\ne: editable\nd: remove"
-                )
+                yield Static(t("menus.navigator_menu"))
                 yield DirectoryTree(self.root_dir, id="navigator")
         yield Footer()
 

@@ -5,6 +5,7 @@ from pathlib import Path
 from ui import UI
 import config
 from proxy_wrapper import validate_proxy_url
+from strings import t
 
 
 class CommandHandler:
@@ -38,7 +39,7 @@ class CommandHandler:
         elif cmd == "/proxy":
             self._handle_proxy(args)
         else:
-            print(f"Unknown command: {cmd}. Type /help for available commands.")
+            print(t("commands.unknown_command", cmd=cmd))
 
         return False
 
@@ -49,90 +50,91 @@ class CommandHandler:
             if cmd in config.COMMANDS:
                 print(f"{UI.colorize(cmd, 'BRIGHT_YELLOW')}: {config.COMMANDS[cmd]}")
             else:
-                print(f"No help available for '{cmd}'")
+                print(t("commands.no_help", cmd=cmd))
         else:
-            print("Available commands:")
+            print(t("commands.available_commands"))
             for cmd, desc in config.COMMANDS.items():
                 print(f"  {UI.colorize(cmd, 'BRIGHT_YELLOW')} - {desc}")
+            print(t("commands.help_ctrl_b", shortcut=t("keys.ctrl_b")))
             print(
-                f"\nPress {UI.colorize('Ctrl+B', 'BRIGHT_YELLOW')} to open file context menu."
+                t(
+                    "commands.help_alt_enter",
+                    send_key=t("keys.alt_enter"),
+                    newline_key=t("keys.enter"),
+                )
             )
-            print(
-                f"Use {UI.colorize('Alt+Enter', 'BRIGHT_YELLOW')} to send message, {UI.colorize('Enter', 'BRIGHT_YELLOW')} for new line."
-            )
-            print(
-                f"{UI.colorize('Page Up/Down', 'BRIGHT_YELLOW')} for message history (sent messages and temporary drafts)."
-            )
+            print(t("commands.help_pageup", shortcut=t("keys.page_up_down")))
 
     def _handle_clear(self):
         """Clear conversation history without user confirmation."""
         self.llm_client.clear_conversation()
         self.input_handler.clear_history()
-        print(f"{UI.colorize('Conversation history cleared.', 'BRIGHT_GREEN')}")
+        print(t("commands.clear_history"))
 
     def _handle_model(self, args):
         """Switch or show current model - reloads config.json on each call"""
         # get_models() already re-reads the config file, so we don't need to reload explicitly
-        print(f"Current model: {self.llm_client.get_current_model()}")
+        print(t("info.current_model", model=self.llm_client.get_current_model()))
         if not args:
             # No arguments provided - show interactive model selection menu
-            print("Interactive model selection:")
+            print(t("info.interactive_model_selection"))
             selected_model = self.llm_client.choose_model()
             if selected_model:
                 success = self.llm_client.switch_model(selected_model)
                 if success:
-                    print(
-                        f"{UI.colorize('Model switched successfully.', 'BRIGHT_GREEN')}"
-                    )
+                    print(t("info.model_switched"))
                     self._prompt_clear_after_model_switch()
             elif selected_model is None:
                 # User cancelled with Ctrl+C while already having a model
-                print(f"{UI.colorize('Returning to conversation...', 'BRIGHT_CYAN')}")
+                print(t("info.returning_to_conversation"))
         else:
             # Arguments provided - use the old behavior
             new_model = args[0]
             success = self.llm_client.switch_model(new_model)
             if success:
-                print(f"{UI.colorize('Model switched successfully.', 'BRIGHT_GREEN')}")
+                print(t("info.model_switched"))
                 self._prompt_clear_after_model_switch()
 
     def _prompt_clear_after_model_switch(self):
         """Ask user whether to clear conversation history after a model switch."""
-        print(
-            f"{UI.colorize('Clear conversation history? (y/N): ', 'BRIGHT_YELLOW')}",
-            end="",
-        )
+        print(t("prompts.clear_confirm"), end="")
         try:
             response = input().strip().lower()
         except (KeyboardInterrupt, EOFError):
-            print(f"\n{UI.colorize('Clear cancelled.', 'BRIGHT_YELLOW')}")
+            print(f"\n{t('warnings.clear_cancelled')}")
             return
 
         if response == "y" or response == "yes":
             self._handle_clear()
         else:
-            print(f"{UI.colorize('Conversation history preserved.', 'BRIGHT_YELLOW')}")
+            print(t("warnings.history_preserved"))
 
     def _handle_reload(self):
         """Reload a previous conversation from the current project root"""
         sessions = self.session_logger.list_available_sessions()
         if not sessions:
             if self.chat_app.root_dir is not None:
-                print(
-                    f"{UI.colorize('No previous conversations found for this project root.', 'BRIGHT_YELLOW')}"
-                )
+                print(t("warnings.no_previous_convs_project"))
             else:
-                print(
-                    f"{UI.colorize('No previous conversations found in free chat mode.', 'BRIGHT_YELLOW')}"
-                )
+                print(t("warnings.no_previous_convs_free_chat"))
             root_display = (
                 self.chat_app.root_dir
                 if self.chat_app.root_dir is not None
-                else "Free chat mode"
+                else t("sessions.free_chat_display")
             )
-            print(f"Project root: {UI.colorize(root_display, 'BRIGHT_CYAN')}")
             print(
-                f"Conversation directory: {UI.colorize(self.session_logger.conversation_dir, 'BRIGHT_CYAN')}"
+                t(
+                    "sessions.project_root",
+                    root=UI.colorize(root_display, "BRIGHT_CYAN"),
+                )
+            )
+            print(
+                t(
+                    "sessions.conversation_dir",
+                    dir=UI.colorize(
+                        self.session_logger.conversation_dir, "BRIGHT_CYAN"
+                    ),
+                )
             )
             return
 
@@ -172,28 +174,36 @@ class CommandHandler:
                     # Truncate preview to 50 chars for display
                     if len(preview) > 50:
                         preview = preview[:47] + "..."
-                    return f"{timestamp} ({count} messages) - {preview}"
+                    return t(
+                        "sessions.format_with_preview",
+                        timestamp=timestamp,
+                        count=count,
+                        preview=preview,
+                    )
                 else:
-                    return f"{timestamp} ({count} messages)"
+                    return t("sessions.format", timestamp=timestamp, count=count)
             else:
                 return timestamp
 
         root_display = (
             self.chat_app.root_dir
             if self.chat_app.root_dir is not None
-            else "Free chat mode"
+            else t("sessions.free_chat_display")
         )
-        print(f"Project root: {UI.colorize(root_display, 'BRIGHT_CYAN')}")
+        print(t("sessions.project_root", root=UI.colorize(root_display, "BRIGHT_CYAN")))
         print(
-            f"Conversation directory: {UI.colorize(self.session_logger.conversation_dir, 'BRIGHT_CYAN')}"
+            t(
+                "sessions.conversation_dir",
+                dir=UI.colorize(self.session_logger.conversation_dir, "BRIGHT_CYAN"),
+            )
         )
         print()
 
         try:
             selected_path = UI.interactive_selection(
-                prompt_title="Available conversations:",
-                prompt_message="Enter a number to select:",
-                no_items_message="No conversations available",
+                prompt_title=t("prompts.available_conversations"),
+                prompt_message=t("prompts.conversation_enter_number"),
+                no_items_message=t("prompts.no_conversations_available"),
                 items=sessions,
                 item_formatter=format_session,
                 allow_new=False,
@@ -209,23 +219,31 @@ class CommandHandler:
                     self.input_handler.load_from_conversation_history(
                         conversation_history
                     )
-                    print(f"Loaded conversation from {format_session(selected_path)}")
-                    print(f"Contains {len(conversation_history)} messages")
                     print(
-                        f"Loaded {len(self.input_handler.history)} user messages into history"
+                        t(
+                            "sessions.loaded_conversation",
+                            session=format_session(selected_path),
+                        )
+                    )
+                    print(
+                        t("sessions.contains_messages", count=len(conversation_history))
+                    )
+                    print(
+                        t(
+                            "sessions.loaded_into_history",
+                            count=len(self.input_handler.history),
+                        )
                     )
                 else:
-                    print("Failed to load conversation.")
+                    print(t("sessions.failed_to_load_conversation"))
         except (KeyboardInterrupt, EOFError):
-            print("\nReload cancelled.")
+            print(t("sessions.reload_cancelled"))
 
     def handle_files_command(self):
         """Handle Ctrl+B file context menu"""
         # In free chat mode, prompt for root directory selection instead
         if hasattr(self.chat_app, "free_chat_mode") and self.chat_app.free_chat_mode:
-            print(
-                "Free chat mode active. Selecting a root directory will enable file context."
-            )
+            print(t("info.free_chat_mode_active"))
             self._handle_rootdir([])
             return
 
@@ -242,7 +260,7 @@ class CommandHandler:
             self.chat_app.editable_files = app.editable_files
             self.chat_app.readable_files = app.readable_files
         except Exception as e:
-            print(f"Error opening file menu: {e}")
+            print(t("errors.error_opening_file_menu", error=e))
 
     def _handle_rootdir(self, args):
         """Show or set project root directory using interactive selection with free chat option"""
@@ -253,10 +271,10 @@ class CommandHandler:
                 try:
                     self.chat_app.set_root_dir(str(new_root))
                 except ValueError as e:
-                    print(f"{UI.colorize('Error:', 'RED')} {e}")
+                    print(f"{t('common.error_prefix')} {e}")
             else:
                 print(
-                    f"{UI.colorize('Error:', 'RED')} {new_root} is not a valid directory"
+                    f"{t('common.error_prefix')} {t('errors.root_arg_not_valid', root=new_root)}"
                 )
         else:
             # Interactive selection mode with free chat option
@@ -266,27 +284,21 @@ class CommandHandler:
             completer = PathCompleter(expanduser=True)
             session = PromptSession(completer=completer)
 
-            free_chat_label = "No root directory - Free chatting without file context"
-
             while True:
-                print(f"{UI.colorize('Previous project roots:', 'BRIGHT_CYAN')}")
-                print(f"  0. {free_chat_label}")
+                print(t("menus.previous_project_roots"))
+                print(t("menus.option_zero", label=t("menus.free_chat_label")))
                 for i, item in enumerate(self.chat_app.recent_roots, 1):
-                    print(f"  {i}. {item}")
-                print(
-                    "Enter a number to select, or type a new path (Tab for completion, ~ for home):"
-                )
+                    print(t("menus.item_format", index=i, item=item))
+                print(t("prompts.root_enter"))
 
                 try:
-                    user_input = session.prompt("> ").strip()
+                    user_input = session.prompt(t("common.prompt_arrow")).strip()
                 except (KeyboardInterrupt, EOFError):
-                    print("\nSelection cancelled.")
+                    print(t("common.selection_cancelled"))
                     return
 
                 if not user_input:
-                    print(
-                        f"{UI.colorize('Error:', 'RED')} Empty input - please try again."
-                    )
+                    print(f"{t('common.error_prefix')} {t('common.empty_input')}")
                     continue
 
                 # Numeric selection
@@ -294,17 +306,19 @@ class CommandHandler:
                     idx = int(user_input)
                     if idx == 0:
                         print(
-                            f"{UI.colorize('Selected:', 'BRIGHT_CYAN')} {free_chat_label}"
+                            f"{t('common.selected_prefix')} {t("menus.free_chat_label")}"
                         )
                         self.chat_app.set_root_dir(self.chat_app.FREE_CHAT_MODE)
                         return
                     elif 1 <= idx <= len(self.chat_app.recent_roots):
                         chosen = self.chat_app.recent_roots[idx - 1]
-                        print(f"{UI.colorize('Selected:', 'BRIGHT_CYAN')} {chosen}")
+                        print(f"{t('common.selected_prefix')} {chosen}")
                         self.chat_app.set_root_dir(chosen)
                         return
                     else:
-                        print(f"{UI.colorize('Error:', 'RED')} Number out of range.")
+                        print(
+                            f"{t('common.error_prefix')} {t('common.number_out_of_range')}"
+                        )
                         continue
 
                 # Manual path entry
@@ -312,15 +326,17 @@ class CommandHandler:
                     new_item = Path(user_input).expanduser().resolve(strict=False)
                     if new_item.is_dir():
                         resolved_str = str(new_item)
-                        print(f"{UI.colorize('Using:', 'BRIGHT_CYAN')} {resolved_str}")
+                        print(f"{t('common.using_prefix')} {resolved_str}")
                         self.chat_app.set_root_dir(resolved_str)
                         return
                     else:
                         print(
-                            f"{UI.colorize('Error:', 'RED')} Not a valid directory: {user_input}"
+                            f"{t('common.error_prefix')} {t('common.not_valid_directory', input=user_input)}"
                         )
                 except Exception as e:
-                    print(f"{UI.colorize('Error:', 'RED')} Invalid input: {e}")
+                    print(
+                        f"{t('common.error_prefix')} {t('common.invalid_input', error=e)}"
+                    )
 
     def _handle_proxy(self, args):
         """Handle /proxy command to manage proxy settings."""
@@ -339,43 +355,41 @@ class CommandHandler:
             completer = PathCompleter(expanduser=True)
             session = PromptSession(completer=completer)
 
-            disable_label = "Disable proxy (turn off)"
+            disable_label = t("menus.disable_proxy_label")
 
             while True:
-                print(f"{UI.colorize('Proxy management:', 'BRIGHT_CYAN')}")
-                print(f"  0. {disable_label}")
+                print(t("menus.proxy_management"))
+                print(t("menus.option_zero", label=disable_label))
                 for i, proxy in enumerate(self.chat_app.recent_proxies, 1):
-                    print(f"  {i}. {proxy}")
-                print("Enter a number to select, or type a new proxy URL:")
+                    print(t("menus.item_format", index=i, item=proxy))
+                print(t("prompts.proxy_enter"))
 
                 try:
-                    user_input = session.prompt("> ").strip()
+                    user_input = session.prompt(t("common.prompt_arrow")).strip()
                 except (KeyboardInterrupt, EOFError):
-                    print("\nSelection cancelled.")
+                    print(t("common.selection_cancelled"))
                     return
 
                 if not user_input:
-                    print(
-                        f"{UI.colorize('Error:', 'RED')} Empty input - please try again."
-                    )
+                    print(f"{t('common.error_prefix')} {t('common.empty_input')}")
                     continue
 
                 # Numeric selection
                 if user_input.isdigit():
                     idx = int(user_input)
                     if idx == 0:
-                        print(
-                            f"{UI.colorize('Selected:', 'BRIGHT_CYAN')} {disable_label}"
-                        )
+                        print(f"{t('common.selected_prefix')} {disable_label}")
                         self.chat_app.set_proxy(None)
                         return
                     elif 1 <= idx <= len(self.chat_app.recent_proxies):
                         chosen = self.chat_app.recent_proxies[idx - 1]
-                        print(f"{UI.colorize('Selected:', 'BRIGHT_CYAN')} {chosen}")
+                        print(f"{t('common.selected_prefix')} {chosen}")
                         self.chat_app.set_proxy(chosen)
                         return
                     else:
-                        print(f"{UI.colorize('Error:', 'RED')} Number out of range.")
+                        print(
+                            f"{t('common.error_prefix')} {t('common.number_out_of_range')}"
+                        )
                         continue
 
                 # Manual proxy URL entry
