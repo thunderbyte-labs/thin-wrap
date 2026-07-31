@@ -311,7 +311,7 @@ class CommandHandler:
                     idx = int(user_input)
                     if idx == 0:
                         print(
-                            f"{t('common.selected_prefix')} {t("menus.free_chat_label")}"
+                            f"{t('common.selected_prefix')} {t('menus.free_chat_label')}"
                         )
                         self.chat_app.set_root_dir(self.chat_app.FREE_CHAT_MODE)
                         return
