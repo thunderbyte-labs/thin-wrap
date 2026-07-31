@@ -63,7 +63,6 @@ class UI:
         print(t("startup.send_part1") + t("keys.alt_enter") + t("startup.send_part2"))
         print(t("startup.files_part1") + t("keys.ctrl_b") + t("startup.files_part2"))
         print(t("startup.help_part1") + t("keys.slash_help") + t("startup.help_part2"))
-        print(t("separators.startup_line"))
 
     @staticmethod
     def show_exit_message(log_path):

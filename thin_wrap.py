@@ -121,7 +121,6 @@ class LLMChat:
             if self.root_dir == self.FREE_CHAT_MODE:
                 self.free_chat_mode = True
                 self.root_dir = None
-                print(f"{t('common.info_prefix')} {t('info.free_chat_enabled')}")
             else:
                 self.free_chat_mode = False
                 self._add_to_recent_roots(history_file, self.root_dir)
@@ -574,8 +573,6 @@ class LLMChat:
             return
 
         UI.show_startup_message()
-        if self.free_chat_mode:
-            print(t("info.free_chat_enabled_dot"))
         self._print_files_summary()
         logger.debug("Showed startup message")
 
@@ -731,7 +728,6 @@ class LLMChat:
             print(
                 f"   {input_tokens:<11} | {output_tokens:<11} | {cache_display:<12} | {duration_display:<11} | {ops_display:<12}"
             )
-            print(t("separators.token_line"))
 
         except Exception as e:
             print(t("tokens.token_error", error=e))

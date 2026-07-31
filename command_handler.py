@@ -48,7 +48,9 @@ class CommandHandler:
         if args:
             cmd = args[0]
             if cmd in config.COMMANDS:
-                print(f"{t('commands.cmd_highlight', value=cmd)}: {config.COMMANDS[cmd]}")
+                print(
+                    f"{t('commands.cmd_highlight', value=cmd)}: {config.COMMANDS[cmd]}"
+                )
             else:
                 print(t("commands.no_help", cmd=cmd))
         else:
@@ -77,12 +79,10 @@ class CommandHandler:
         print(t("info.current_model", model=self.llm_client.get_current_model()))
         if not args:
             # No arguments provided - show interactive model selection menu
-            print(t("info.interactive_model_selection"))
             selected_model = self.llm_client.choose_model()
             if selected_model:
                 success = self.llm_client.switch_model(selected_model)
                 if success:
-                    print(t("info.model_switched"))
                     self._prompt_clear_after_model_switch()
             elif selected_model is None:
                 # User cancelled with Ctrl+C while already having a model
@@ -92,7 +92,6 @@ class CommandHandler:
             new_model = args[0]
             success = self.llm_client.switch_model(new_model)
             if success:
-                print(t("info.model_switched"))
                 self._prompt_clear_after_model_switch()
 
     def _prompt_clear_after_model_switch(self):

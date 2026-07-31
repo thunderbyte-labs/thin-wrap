@@ -2,6 +2,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
 from prompt_toolkit.document import Document
 from prompt_toolkit.styles import Style
+from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.completion import Completer
 from prompt_toolkit.completion import WordCompleter
@@ -200,14 +201,7 @@ class InputHandler:
 
             event.current_buffer.cursor_position = len(event.current_buffer.text)
 
-        prompt_message = FormattedText(
-            [
-                (
-                    "bold fg:ansidefault",
-                    t("prompts.input_hint"),
-                ),
-            ]
-        )
+        prompt_message = ANSI(t("prompts.input_hint"))
 
         style = Style.from_dict(
             {

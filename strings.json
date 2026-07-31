@@ -2,8 +2,8 @@
   "common": {
     "error_prefix": {"text": "Error:", "color": "RED"},
     "success_prefix": {"text": "Success:", "color": "GREEN"},
-    "info_prefix": {"text": "Info:", "color": "GREEN"},
-    "selected_prefix": {"text": "Selected:", "color": "GREEN"},
+    "info_prefix": {"text": "·", "color": "GREEN"},
+    "selected_prefix": {"text": "→", "color": "GREEN"},
     "using_prefix": {"text": "Using:", "color": "GREEN"},
     "note_prefix": {"text": "Note:", "color": "GREEN"},
     "warning_prefix": {"text": "Warning:", "color": "BRIGHT_YELLOW"},
@@ -62,8 +62,6 @@
 
   "info": {
     "using_project_root": "Using specified project root: {path}",
-    "free_chat_enabled": "Free chat mode enabled (no file context)",
-    "free_chat_enabled_dot": "Free chat mode enabled - no file context.",
     "note_convs_found": "Found {count} conversation(s) in the new project root.",
     "use_reload": "Use {cmd} to load one of these conversations.",
     "proxy_disabling": {"text": "Disabling proxy...", "color": "GREEN"},
@@ -79,29 +77,27 @@
     "direct_without_proxy": "Attempting direct connection without proxy...",
     "direct_connected": "✓ Direct connection established successfully!",
     "current_model": "Current model: {model}",
-    "interactive_model_selection": "Interactive model selection:",
     "keeping_current_model": {"text": "Keeping current model:", "color": "GREEN"},
-    "model_switched": {"text": "Model switched successfully.", "color": "GREEN"},
     "returning_to_conversation": {"text": "Returning to conversation...", "color": "GREEN"},
     "already_using": "Already using {model}",
     "switching_model": "Switching from {current} to {new}...",
-    "switched_model": "✓ Successfully switched to {model}. Conversation history preserved.",
-    "llm_explanation": {"text": "LLM Explanation / Reasoning:", "color": "GREEN"},
+    "switched_model": {"text": "✓ Successfully switched to {model}", "color": "GREEN"},
+    "llm_explanation": {"text": "===================== Reply ======================\n", "color": "GREEN"},
     "no_explanation": "\nNo explanation provided by the LLM.",
-    "request_sending": "⏳ Sending request to LLM client... (Press Ctrl+C to interrupt)",
+    "request_sending": "⏳ Thinking... (Press Ctrl+C to interrupt)",
     "request_interrupted": {"text": "Request interrupted by user (Ctrl+C)", "color": "BRIGHT_YELLOW"},
     "empty_message_hint": {"text": "Empty message or KeyboardInterrupt. Type /help to see command or /bye (then Alt+Enter) to quit.\n\n", "color": "BOLD"},
     "free_chat_mode_active": "Free chat mode active. Selecting a root directory will enable file context."
   },
 
   "prompts": {
-    "root_enter": "Enter a number to select, or type a new path (Tab for completion, ~ for home):",
+    "root_enter": "Enter a number to select, or type a new path (Tab for completion, ~ for home, ./ for current dir):",
     "api_key_prompt": "Please enter your {model} API key: ",
     "model_choose": "\nChoose model (1-{count}): ",
     "model_range_error": "Please enter a number between 1 and {count}",
     "proxy_enter": "Enter a number to select, or type a new proxy URL:",
     "enter_item_path": "Enter item path:",
-    "clear_confirm": {"text": "Clear conversation history? (y/N): ", "color": "BRIGHT_YELLOW"},
+    "clear_confirm": {"text": "Clear conversation history? (y/N): ", "color": "GREEN"},
     "config_selection_title": "Config file selection:",
     "config_selection_prompt": "Enter path to config.json file (Tab for completion, ~ for home):",
     "no_config_found": "No config file found.",
@@ -116,12 +112,12 @@
     "returning_to_editor": "Returning to text editor. Use Ctrl+B to add files before sending.",
     "enter_valid_number": "Please enter a valid number or enable new item entry.",
     "new_item_error": "Invalid item",
-    "input_hint": "Type your query (or /help) then press Alt+Enter to send:\n"
+    "input_hint": {"text": "-------------------- Message ---------------------\n\n" , "color": "BRIGHT_GREEN"}
   },
 
   "menus": {
     "previous_project_roots": {"text": "Previous project roots:", "color": "GREEN"},
-    "free_chat_label": "No root directory - Free chatting without file context",
+    "free_chat_label": "Free chat (no project / no file context)",
     "proxy_management": {"text": "Proxy management:", "color": "GREEN"},
     "disable_proxy_label": "Disable proxy (turn off)",
     "available_models": "Available LLM Models:",
@@ -207,29 +203,28 @@
   "startup": {
     "banner_title": {"text": "Thin Wrap - LLM Terminal Chat", "color": "GREEN"},
     "banner_content": {"text": "{value}", "color": "GREEN"},
-    "welcome": {"text": "Welcome to Thin Wrap - LLM Terminal Chat!", "color": "GREEN"},
-    "send_part1": {"text": "Type your message and press ", "color": "BRIGHT_WHITE"},
-    "send_part2": {"text": " to send.", "color": "BRIGHT_WHITE"},
-    "files_part1": {"text": "Press ", "color": "BRIGHT_WHITE"},
-    "files_part2": {"text": " to manage file context.", "color": "BRIGHT_WHITE"},
-    "help_part1": {"text": "Type ", "color": "BRIGHT_WHITE"},
-    "help_part2": {"text": " for available commands.", "color": "BRIGHT_WHITE"},
-    "session_log_saved": {"text": "Session log saved to:", "color": "GREEN"}
+    "welcome": {"text": "Thin Wrap ready", "color": "GREEN"},
+    "send_part1": { "text": "Message → ", "color": "BRIGHT_WHITE" },
+    "send_part2": { "text": " to send", "color": "BRIGHT_WHITE" },
+    "files_part1": { "text": " · ", "color": "BRIGHT_WHITE" },
+    "files_part2": { "text": " for file context", "color": "BRIGHT_WHITE" },
+    "help_part1": { "text": " · ", "color": "BRIGHT_WHITE" },
+    "help_part2": { "text": " for help", "color": "BRIGHT_WHITE" },
+    "session_log_saved": {"text": "Session saved ·", "color": "GREEN"}
   },
 
   "separators": {
     "banner_line": {"text":  "==================================================", "color": "GREEN"},
     "startup_line": {"text": "--------------------------------------------------", "color": "GREEN"},
-    "message_line": {"text": "--------------------------------------------------", "color": "GREEN"},
-    "response_line": {"text":"==================================================", "color": "GREEN"},
-    "token_line": {"text":   "──────────────────────────────────────────────────", "color": "GREEN"}
+    "message_line": {"text": "\n--------------------------------------------------", "color": "BRIGHT_GREEN"},
+    "response_line": {"text":"\n==================================================", "color": "GREEN"}
   },
 
   "tokens": {
-    "token_usage_title": "\nToken Usage ({source})",
-    "token_header": "   Input       | Output      | Cache Hit    | Time (s)    | Output/s    ",
-    "token_separator": "   ────────────|─────────────|──────────────|─────────────|────────────",
-    "token_error": "   ?? Could not get token usage: {error}"
+    "token_usage_title": "\nUsage ({source}):",
+    "token_header": "Input       | Output      | Cache Hit    | Time (s)    | Output/s    ",
+    "token_separator": "────────────|─────────────|──────────────|─────────────|────────────",
+    "token_error": "?? Could not get token usage: {error}"
   },
 
   "help": {
