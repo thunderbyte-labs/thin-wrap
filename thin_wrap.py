@@ -24,6 +24,7 @@ from command_handler import CommandHandler
 from file_processor import generate_query, generate_plain_query, parse_plain_response
 from input_handler import InputHandler
 from llm_client import LLMClient
+from path_utils import resolve_path
 from proxy_wrapper import create_proxy_wrapper, validate_proxy_url, normalize_proxy_url
 from session_logger import SessionLogger
 from strings import t
@@ -104,12 +105,12 @@ class LLMChat:
 
         # Process root directory
         if root_dir is not None:
-            root_path = Path(root_dir).expanduser().resolve()
-            if not root_path.is_dir():
+            root_path = resolve_path(root_dir)
+            if not Path(root_path).is_dir():
                 raise ValueError(
                     f"Specified root_dir is not a valid directory: {root_path}"
                 )
-            self.root_dir = str(root_path)
+            self.root_dir = root_path
             self.free_chat_mode = False
             self._add_to_recent_roots(history_file, self.root_dir)
             print(
@@ -134,23 +135,12 @@ class LLMChat:
             assert (
                 self.root_dir is not None
             ), "root_dir must be set when free_chat_mode is False"
-            root_path = Path(self.root_dir)
-            self.editable_files = [
-                str(
-                    (
-                        Path(p).resolve() if Path(p).is_absolute() else (root_path / p)
-                    ).resolve()
-                )
-                for p in (editable_files or [])
-            ]
-            self.readable_files = [
-                str(
-                    (
-                        Path(p).resolve() if Path(p).is_absolute() else (root_path / p)
-                    ).resolve()
-                )
-                for p in (readable_files or [])
-            ]
+            self.editable_files = self._resolve_file_list(
+                editable_files or [], self.root_dir
+            )
+            self.readable_files = self._resolve_file_list(
+                readable_files or [], self.root_dir
+            )
         self.first_message = "" if not first_message else first_message
         self.proxy_wrapper = create_proxy_wrapper(proxy_url) if proxy_url else None
 
@@ -166,6 +156,16 @@ class LLMChat:
             self.llm_client, self.session_logger, self.input_handler, self
         )
         logger.debug("Initialized all LLMChat components")
+
+    def _resolve_file_list(self, files: list[str], root_dir: str) -> list[str]:
+        """Resolve a list of file paths, skipping any that fail to resolve."""
+        resolved = []
+        for f in files:
+            try:
+                resolved.append(resolve_path(f, root_dir))
+            except Exception as e:
+                logger.warning(f"Skipping unresolvable file {f}: {e}")
+        return resolved
 
     def _load_recent_roots(self, history_file: Path) -> list[str]:
         """Load recent root_dirs from history file."""
@@ -294,9 +294,8 @@ class LLMChat:
                     continue
             # Manual path entry
             try:
-                new_item = Path(user_input).expanduser().resolve(strict=False)
-                if new_item.is_dir():
-                    resolved_str = str(new_item)
+                resolved_str = resolve_path(user_input)
+                if Path(resolved_str).is_dir():
                     print(f"{t('common.using_prefix')} {resolved_str}")
                     return resolved_str
                 else:
@@ -331,14 +330,14 @@ class LLMChat:
             return
 
         # Otherwise, it's a directory path
-        root_path = Path(new_root).expanduser().resolve()
-        if not root_path.is_dir():
+        root_path = resolve_path(new_root)
+        if not Path(root_path).is_dir():
             raise ValueError(
                 f"Specified root_dir is not a valid directory: {root_path}"
             )
 
         old_root = self.root_dir
-        self.root_dir = str(root_path)
+        self.root_dir = root_path
         self.free_chat_mode = False
 
         # Clear file lists when switching to a different project root
@@ -346,7 +345,7 @@ class LLMChat:
         should_clear_files = True
         if old_root is not None:
             # Compare resolved paths to see if it's the same directory
-            old_resolved = Path(old_root).resolve()
+            old_resolved = resolve_path(old_root)
             if old_resolved == root_path:
                 should_clear_files = False
 

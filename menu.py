@@ -3,6 +3,7 @@ from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, DirectoryTree, ListView, ListItem, Static
 from textual.containers import Horizontal, Vertical
 from textual.binding import Binding
+from path_utils import resolve_path
 from strings import t
 
 
@@ -11,12 +12,20 @@ class FileMenuApp(App):
 
     ENABLE_COMMAND_PALETTE = False
     BINDINGS = [
-        Binding("ctrl+b", "quit", t("menus.shortcuts.quit"), key_display="Ctrl+B", show=True),
+        Binding(
+            "ctrl+b", "quit", t("menus.shortcuts.quit"), key_display="Ctrl+B", show=True
+        ),
         Binding("escape", "quit", t("menus.shortcuts.quit")),
         Binding("r", "to_readable", t("menus.shortcuts.readable")),
         Binding("e", "to_editable", t("menus.shortcuts.editable")),
         Binding("d", "delete_selected", t("menus.shortcuts.delete")),
-        Binding("ctrl+d", "clear_lists", t("menus.shortcuts.clear_all"), key_display="Ctrl+D", show=True),
+        Binding(
+            "ctrl+d",
+            "clear_lists",
+            t("menus.shortcuts.clear_all"),
+            key_display="Ctrl+D",
+            show=True,
+        ),
     ]
     CSS = """
     Horizontal { height: 100%; }
@@ -33,7 +42,7 @@ class FileMenuApp(App):
         super().__init__()
         self.editable_files = editable_files
         self.readable_files = readable_files
-        self.root_dir = os.path.abspath(root_dir)
+        self.root_dir = resolve_path(root_dir)
         self.editable_set = set(editable_files)
         self.readable_set = set(readable_files)
 
