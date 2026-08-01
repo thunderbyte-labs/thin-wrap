@@ -427,6 +427,17 @@ class LLMChat:
         sys.stdout.write(t("prompts.input_hint"))
         sys.stdout.flush()
 
+    def _erase_pending_message_prompt(self):
+        """Erase the "Message" header printed before the current input.
+
+        Called before running a command whose own output / prompt supersedes
+        the header, so consecutive app outputs don't pile up redundant
+        "Message" separators (e.g. before /nameconv, /model, /reload, ...).
+        """
+        if getattr(self, "_message_prompt_shown", False):
+            sys.stdout.write("\x1b[3A\x1b[J")
+            sys.stdout.flush()
+
     def _prompt_for_proxy_if_needed(self, selected_model: str) -> bool:
         """
         Prompt for proxy selection if the selected model suggests proxy and no proxy is configured.
@@ -555,6 +566,11 @@ class LLMChat:
                     self.command_handler.handle_files_command()
                     continue
                 logger.debug("Detected command input")
+                if cmd != "/bye":
+                    # The command's own output/prompt supersedes the header
+                    # printed for this input; erase it to avoid a redundant
+                    # "Message" separator (e.g. before /nameconv, /model, ...).
+                    self._erase_pending_message_prompt()
                 should_quit = self.command_handler.handle_command(user_input)
                 if should_quit:
                     logger.debug("Command requested quit")

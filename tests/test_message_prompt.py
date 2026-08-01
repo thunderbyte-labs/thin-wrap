@@ -90,6 +90,20 @@ def test_print_file_context_block_empty_is_noop(capsys):
     assert capsys.readouterr().out == ""
 
 
+def test_erase_pending_message_prompt(capsys):
+    chat = _chat()
+    chat._message_prompt_shown = True
+    chat._erase_pending_message_prompt()
+    out = capsys.readouterr().out
+    assert "\x1b[3A\x1b[J" in out
+
+
+def test_erase_pending_message_prompt_no_header(capsys):
+    chat = _chat()
+    chat._erase_pending_message_prompt()
+    assert capsys.readouterr().out == ""
+
+
 def test_exit_cleanly_erases_message_header(capsys):
     chat = _chat()
     chat._message_prompt_shown = True
