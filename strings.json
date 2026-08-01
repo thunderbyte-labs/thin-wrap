@@ -168,6 +168,7 @@
     "insertions_deletions": "{filename}: {insertions} insertions(+), {deletions} deletions(-)",
     "label_editable": "Editable",
     "label_readable": "Readable",
+    "context_title": "File context:",
     "none": "{label}: None",
     "list": "{label} ({count}): {files}",
     "and_more": " ... and {count} more"

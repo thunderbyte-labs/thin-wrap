@@ -154,7 +154,6 @@ class LLMChat:
         self.command_handler = CommandHandler(
             self.llm_client, self.session_logger, self.input_handler, self
         )
-        self._message_prompt_height = 0
         logger.debug("Initialized all LLMChat components")
 
     def _resolve_file_list(self, files: list[str], root_dir: str) -> list[str]:
@@ -381,52 +380,38 @@ class LLMChat:
         print(self._format_files_line(self.readable_files, t("files.label_readable")))
         print()
 
+    def _file_context_block(self) -> str:
+        """Green ANSI block shown below the input (following it while typing)
+        and kept in the scrollback after sending: a blank line, then "File
+        context:" and the files summary. Empty when there is no context."""
+        if not self.editable_files and not self.readable_files:
+            return ""
+        lines = [
+            "",
+            t("files.context_title"),
+            self._format_files_line(self.editable_files, t("files.label_editable")),
+            self._format_files_line(self.readable_files, t("files.label_readable")),
+        ]
+        return UI.colorize("\n".join(lines), "GREEN")
+
+    def _print_file_context_block(self):
+        """Print the file-context block into the scrollback (after sending)."""
+        block = self._file_context_block()
+        if block:
+            sys.stdout.write(block + "\n")
+            sys.stdout.flush()
+
     def _print_message_prompt(self):
-        """Render the input header exactly once, with clean lines.
+        """Render the input header: a blank line, then the Message separator.
 
-        Shows the files summary (if any), a blank line, then the Message
-        separator. The header is owned by the app (not prompt_toolkit) so it is
-        printed once per input regardless of the scenario (empty context or not).
-
-        The number of terminal lines written is recorded in
-        ``_message_prompt_height`` so the header can later be redrawn in place.
+        The header is owned by the app (not prompt_toolkit) so it is printed
+        once per input. The files context is no longer part of the header: it
+        is shown dynamically below the input while typing (bottom toolbar) and
+        kept in the scrollback after sending.
         """
-        if self.editable_files or self.readable_files:
-            print(
-                self._format_files_line(self.editable_files, t("files.label_editable"))
-            )
-            print(
-                self._format_files_line(self.readable_files, t("files.label_readable"))
-            )
-            print()
-            self._message_prompt_height = 5
-        else:
-            print()
-            self._message_prompt_height = 3
+        print()
         sys.stdout.write(t("prompts.input_hint"))
         sys.stdout.flush()
-
-    def _refresh_message_prompt(self, draft: str = ""):
-        """Redraw the Message header in place, keeping a single clean block.
-
-        Used after the full-screen file menu (Ctrl+B or /files): the menu runs
-        on the alternate screen, so the previously printed header is still on
-        screen when it closes. Move back up to it, erase everything below, and
-        redraw -- so adding/removing files or pressing Ctrl+B repeatedly never
-        piles up duplicate headers or pushes the cursor down.
-        """
-        draft_lines = draft.count("\n") + 1 if draft else 1
-        if self._message_prompt_height > 0:
-            sys.stdout.write(f"\x1b[{self._message_prompt_height + draft_lines}A")
-            sys.stdout.write("\x1b[J")
-        self._print_message_prompt()
-
-    def _after_file_menu(self, menu_ok: bool, draft: str = ""):
-        """Print the Message header after a file-menu action (Ctrl+B or /files)."""
-        if menu_ok:
-            self._refresh_message_prompt(draft)
-        else:
-            self._print_message_prompt()
 
     def _prompt_for_proxy_if_needed(self, selected_model: str) -> bool:
         """
@@ -533,12 +518,14 @@ class LLMChat:
 
         while True:
             logger.debug("Entering main chat loop iteration")
-            user_input = self.input_handler.get_input_with_editing(default=next_default)
+            user_input = self.input_handler.get_input_with_editing(
+                default=next_default,
+                context_provider=self._file_context_block,
+            )
             next_default = ""
             if isinstance(user_input, tuple) and user_input[0] == "Ctrl+B":
                 next_default = user_input[1]
-                menu_ok = self.command_handler.handle_files_command()
-                self._after_file_menu(menu_ok, next_default)
+                self.command_handler.handle_files_command()
                 continue
 
             if not user_input:
@@ -551,8 +538,7 @@ class LLMChat:
             if user_input.startswith("/"):
                 cmd = user_input.split()[0].lower()
                 if cmd == "/files":
-                    menu_ok = self.command_handler.handle_files_command()
-                    self._after_file_menu(menu_ok)
+                    self.command_handler.handle_files_command()
                     continue
                 logger.debug("Detected command input")
                 should_quit = self.command_handler.handle_command(user_input)
@@ -593,8 +579,6 @@ class LLMChat:
         model = self.llm_client.get_current_model()
         logger.debug(f"Using model: {model}")
 
-        print(t("separators.message_line"))
-
         query, response_parser = generate_query(
             self.root_dir or "",
             self.readable_files,
@@ -605,6 +589,12 @@ class LLMChat:
         # Check if user chose to insert files (abort send)
         if query is None and response_parser is None:
             return "insert_files"
+
+        # Echo the sent message and keep the files context in the scrollback,
+        # one line below it, before the message separator.
+        print(message)
+        self._print_file_context_block()
+        print(t("separators.message_line"))
 
         assert query is not None
         query = clean_text(query)
