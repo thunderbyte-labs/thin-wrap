@@ -91,7 +91,7 @@
     "history_preserved": {"text": "Conversation history preserved.", "color": "GREEN"},
     "llm_explanation": {"text": "===================== Reply ======================\n", "color": "GREEN"},
     "no_explanation": "\nNo explanation provided by the LLM.",
-    "request_sending": "⏳ Thinking (Press Ctrl+C to interrupt) ... ",
+    "request_sending": "⏳ Thinking (Press Ctrl+C to interrupt)... ",
     "ttf": "Time To First token \"TTF\" : {elapsed} s",
     "request_interrupted": {"text": "Request interrupted by user (Ctrl+C)", "color": "GREEN"},
     "empty_message_hint": {"text": "Empty message or KeyboardInterrupt. Type /help to see command or /bye (then Alt+Enter) to quit.\n\n", "color": "BOLD"},
