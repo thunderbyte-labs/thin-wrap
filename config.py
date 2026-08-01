@@ -316,4 +316,5 @@ COMMANDS = {
     "/rootdir": t("commands.descriptions.rootdir"),
     "/files": t("commands.descriptions.files"),
     "/proxy": t("commands.descriptions.proxy"),
+    "/nameconv": t("commands.descriptions.nameconv"),
 }

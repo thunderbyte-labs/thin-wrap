@@ -11,6 +11,26 @@ import tomlkit
 import config
 from strings import t
 
+CONVERSATION_NAME_MAX_WORDS = 12
+
+
+def sanitize_conversation_name(raw: str) -> tuple[str | None, str | None]:
+    """Validate and normalize a conversation name.
+
+    Returns ``(error_key, slug)``. On failure *error_key* is one of
+    ``nameconv_empty``, ``nameconv_invalid_chars`` or
+    ``nameconv_too_many_words`` and *slug* is ``None``.
+    """
+    candidate = raw.strip().lower()
+    if not candidate:
+        return "nameconv_empty", None
+    if not re.fullmatch(r"[a-z0-9 ]+", candidate):
+        return "nameconv_invalid_chars", None
+    words = candidate.split()
+    if len(words) > CONVERSATION_NAME_MAX_WORDS:
+        return "nameconv_too_many_words", None
+    return None, "-".join(words)
+
 
 class SessionLogger:
     def __init__(self, script_directory, root_dir):
@@ -22,9 +42,9 @@ class SessionLogger:
         os.makedirs(self.conversation_dir, exist_ok=True)
 
         self.session_start_time = datetime.now()
-        self.session_filename = (
-            f"session_{self.session_start_time.strftime('%Y%m%d_%H%M%S')}.toml.zip"
-        )
+        self.session_name = None
+        self._ts_str = self.session_start_time.strftime("%Y%m%d_%H%M%S")
+        self.session_filename = f"session_{self._ts_str}.toml.zip"
         self.session_path = os.path.join(self.conversation_dir, self.session_filename)
 
     def _get_conversation_dir(self):
@@ -46,6 +66,19 @@ class SessionLogger:
             safe_name = hashlib.md5(str(root_path).encode()).hexdigest()
 
         return os.path.join(config.CONVERSATIONS_DIR, safe_name)
+
+    def set_name(self, name: str):
+        """Set a display name for the current session and rename the file.
+
+        All subsequent saves write to the renamed file.
+        """
+        old_path = self.session_path
+        self.session_name = name
+        self.session_filename = f"session_{self._ts_str}_{name}.toml.zip"
+        self.session_path = os.path.join(self.conversation_dir, self.session_filename)
+        if os.path.exists(old_path) and old_path != self.session_path:
+            os.replace(old_path, self.session_path)
+        return self.session_path
 
     def save_session(self, conversation_history):
         """
@@ -73,6 +106,7 @@ class SessionLogger:
             metadata.add(
                 "root_dir", self.root_dir if self.root_dir is not None else "free_chat"
             )
+            metadata.add("name", self.session_name or "")
             doc.add("metadata", metadata)
 
             conv_array = tomlkit.aot()
@@ -140,6 +174,7 @@ class SessionLogger:
             result["interaction_count"] = metadata.get("interaction_count", 0)
             result["preview"] = metadata.get("preview", "")
             result["root_dir"] = metadata.get("root_dir", "")
+            result["name"] = metadata.get("name", "")
         except (KeyError, TypeError, AttributeError):
             # If metadata is malformed, return partial data
             pass

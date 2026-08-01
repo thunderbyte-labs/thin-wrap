@@ -44,7 +44,10 @@
     "error_opening_file_menu": "Error opening file menu: {error}",
     "error_computing_diff": "{filename}: error computing diff",
     "invalid_input_yni": "Invalid input. Please enter 'y', 'n', or 'i' (or press Enter for default 'y').",
-    "root_arg_not_valid": "{root} is not a valid directory"
+    "root_arg_not_valid": "{root} is not a valid directory",
+    "nameconv_empty": "Name cannot be empty. Please enter a name.",
+    "nameconv_invalid_chars": "Only lowercase letters (a-z), digits (0-9) and spaces are allowed.",
+    "nameconv_too_many_words": "Too many words. Maximum is 12."
   },
 
   "warnings": {
@@ -56,7 +59,6 @@
     "proxy_setup_cancelled": {"text": "Proxy setup cancelled, continuing without proxy.", "color": "RED"},
     "continuing_without_proxy": {"text": "Continuing without proxy.", "color": "RED"},
     "clear_cancelled": {"text": "Clear cancelled.", "color": "RED"},
-    "history_preserved": {"text": "Conversation history preserved.", "color": "RED"},
     "no_previous_convs_project": {"text": "No previous conversations found for this project root.", "color": "RED"},
     "no_previous_convs_free_chat": {"text": "No previous conversations found in free chat mode.", "color": "RED"}
   },
@@ -83,6 +85,7 @@
     "already_using": "Already using {model}",
     "switching_model": "Switching from {current} to {new}...",
     "switched_model": {"text": "✓ Successfully switched to {model}", "color": "GREEN"},
+    "history_preserved": {"text": "Conversation history preserved.", "color": "GREEN"},
     "llm_explanation": {"text": "===================== Reply ======================\n", "color": "GREEN"},
     "no_explanation": "\nNo explanation provided by the LLM.",
     "request_sending": "⏳ Thinking... (Press Ctrl+C to interrupt)",
@@ -113,6 +116,7 @@
     "returning_to_editor": "Returning to text editor. Use Ctrl+B to add files before sending.",
     "enter_valid_number": "Please enter a valid number or enable new item entry.",
     "new_item_error": "Invalid item",
+    "nameconv": "How would you like to name this conversation (12 words maximum)? ",
     "input_hint": {"text": "-------------------- Message ---------------------\n\n" , "color": "BRIGHT_GREEN"}
   },
 
@@ -166,7 +170,9 @@
     "failed_to_load_conversation": "Failed to load conversation.",
     "reload_cancelled": "\nReload cancelled.",
     "format_with_preview": "{timestamp} ({count} messages) - {preview}",
-    "format": "{timestamp} ({count} messages)"
+    "format": "{timestamp} ({count} messages)",
+    "format_named": "{name} - {timestamp} ({count} messages)",
+    "format_named_with_preview": "{name} - {timestamp} ({count} messages) - {preview}"
   },
 
   "commands": {
@@ -180,6 +186,9 @@
     "clear_history": {"text": "Conversation history cleared.", "color": "GREEN"},
     "switched_free_chat": "Switched to free chat mode (no file context)",
     "root_changed": "Project root changed from '{old}' to '{new}'",
+    "nameconv_success": {"text": "Conversation named: {name}", "color": "GREEN"},
+    "nameconv_cancelled": {"text": "Name conversation cancelled.", "color": "RED"},
+    "nameconv_no_args": "Usage: /nameconv takes no arguments.",
     "descriptions": {
       "clear": "Clear session context",
       "bye": "Exit (auto-saves session log)",
@@ -188,7 +197,8 @@
       "reload": "Reload a previous conversation",
       "rootdir": "Show or set project root directory (option 0 for free chat mode)",
       "files": "Handle Ctrl+B file context menu",
-      "proxy": "Manage proxy (off to disable, number for previous, or new URL like socks5://127.0.0.1:1080)"
+      "proxy": "Manage proxy (off to disable, number for previous, or new URL like socks5://127.0.0.1:1080)",
+      "nameconv": "Name the current conversation"
     }
   },
 

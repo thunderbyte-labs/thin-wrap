@@ -7,6 +7,7 @@ from prompt_toolkit.completion import PathCompleter
 
 import config
 from path_utils import resolve_path
+from session_logger import sanitize_conversation_name
 from strings import t
 from ui import UI
 
@@ -45,6 +46,8 @@ class CommandHandler:
             self._handle_rootdir(args)
         elif cmd == "/proxy":
             self._handle_proxy(args)
+        elif cmd == "/nameconv":
+            self._handle_nameconv(args)
         else:
             print(t("commands.unknown_command", cmd=cmd))
 
@@ -113,7 +116,7 @@ class CommandHandler:
         if response == "y" or response == "yes":
             self._handle_clear()
         else:
-            print(t("warnings.history_preserved"))
+            print(t("info.history_preserved"))
 
     def _handle_reload(self):
         """Reload a previous conversation from the current project root"""
@@ -176,11 +179,20 @@ class CommandHandler:
             meta = metadata_cache.get(path)
             if meta:
                 count = meta.get("interaction_count", 0)
+                name = meta.get("name", "")
                 preview = meta.get("preview", "")
                 if preview:
                     # Truncate preview to 50 chars for display
                     if len(preview) > 50:
                         preview = preview[:47] + "..."
+                    if name:
+                        return t(
+                            "sessions.format_named_with_preview",
+                            name=name,
+                            timestamp=timestamp,
+                            count=count,
+                            preview=preview,
+                        )
                     return t(
                         "sessions.format_with_preview",
                         timestamp=timestamp,
@@ -188,6 +200,13 @@ class CommandHandler:
                         preview=preview,
                     )
                 else:
+                    if name:
+                        return t(
+                            "sessions.format_named",
+                            name=name,
+                            timestamp=timestamp,
+                            count=count,
+                        )
                     return t("sessions.format", timestamp=timestamp, count=count)
             else:
                 return timestamp
@@ -250,6 +269,28 @@ class CommandHandler:
                     print(t("sessions.failed_to_load_conversation"))
         except (KeyboardInterrupt, EOFError):
             print(t("sessions.reload_cancelled"))
+
+    def _handle_nameconv(self, args):
+        """Name the current conversation (file gets a readable suffix)."""
+        if args:
+            print(t("commands.nameconv_no_args"))
+            return
+
+        while True:
+            try:
+                name_input = input(t("prompts.nameconv")).strip()
+            except (KeyboardInterrupt, EOFError):
+                print(t("commands.nameconv_cancelled"))
+                return
+
+            error_key, slug = sanitize_conversation_name(name_input)
+            if error_key:
+                print(t(f"errors.{error_key}"))
+                continue
+
+            self.session_logger.set_name(slug)
+            print(t("commands.nameconv_success", name=slug))
+            return
 
     def handle_files_command(self):
         """Handle Ctrl+B file context menu"""
