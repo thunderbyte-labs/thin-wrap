@@ -420,6 +420,21 @@ class LLMChat:
         # Return True regardless - if user selected "No proxy", proxy_wrapper remains None
         return True
 
+    def _ensure_proxy_for_model(self, model: str | None) -> None:
+        """Ensure a proxy is configured when the model suggests one.
+
+        Single entry point shared by the startup flow and the /model command:
+        prompts the user to configure a proxy when the selected model has
+        ``"proxy": true`` in config and none is configured yet.
+        """
+        if model is None:
+            return
+        try:
+            if not self._prompt_for_proxy_if_needed(model):
+                print(t("warnings.continuing_without_proxy"))
+        except KeyboardInterrupt:
+            print(f"\n{t('warnings.proxy_setup_cancelled')}")
+
     def run(self):
         """Main chat loop"""
         logger.debug("Starting run method")
@@ -454,11 +469,7 @@ class LLMChat:
             if model is None:
                 logger.warning("Model selection returned None, skipping proxy prompt")
             else:
-                try:
-                    if not self._prompt_for_proxy_if_needed(model):
-                        print(t("warnings.continuing_without_proxy"))
-                except KeyboardInterrupt:
-                    print(f"\n{t('warnings.proxy_setup_cancelled')}")
+                self._ensure_proxy_for_model(model)
             try:
                 self.llm_client.setup_api_key(model)
                 logger.debug("Set up API key successfully")
