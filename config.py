@@ -60,7 +60,10 @@ def setup_logging():
 # Use get_models() instead of accessing SUPPORTED_MODELS directly
 
 # Global variable to store config file path once determined
-_CONFIG_PATH = None
+_CONFIG_PATH: str | None = None
+
+# Cache keyed by (path, st_mtime_ns) → validated config dict
+_CONFIG_CACHE: dict[tuple[str, int], dict] = {}
 
 
 def set_config_path(config_path: str | None = None) -> None:
@@ -72,6 +75,13 @@ def set_config_path(config_path: str | None = None) -> None:
     """
     global _CONFIG_PATH
     _CONFIG_PATH = config_path
+    invalidate()
+
+
+def invalidate() -> None:
+    """Clear the config cache so the next call to get_models/backup re-reads disk."""
+    global _CONFIG_CACHE
+    _CONFIG_CACHE.clear()
 
 
 def _get_script_dir() -> Path:
@@ -152,6 +162,13 @@ def _load_config_internal(config_path: str | None = None) -> dict:
 
     _CONFIG_PATH = str(config_file)
 
+    cache_key = (
+        str(config_file),
+        os.stat(config_file).st_mtime_ns,
+    )
+    if cache_key in _CONFIG_CACHE:
+        return _CONFIG_CACHE[cache_key]
+
     try:
         with open(config_file, "r", encoding="utf-8") as f:
             config_data = json.load(f)
@@ -227,6 +244,7 @@ def _load_config_internal(config_path: str | None = None) -> dict:
             )
         backup_config["overwrite_original"] = backup_config.pop("backup_old_file")
 
+    _CONFIG_CACHE[cache_key] = config_data
     return config_data
 
 

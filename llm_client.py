@@ -28,7 +28,6 @@ class LLMClient:
         self.conversation_history: list[dict[str, str]] = []
         self.proxy_wrapper: Optional[ProxyWrapper] = proxy_wrapper
         self._http_client: Optional[httpx.Client] = None
-        self._proxy_context = None  # for proxy_connection() context manager
         self.current_model = None
         self.current_model_config = None
         self.session_logger = session_logger
@@ -66,8 +65,7 @@ class LLMClient:
             except Exception as e:
                 logger.error(f"Proxy configuration failed: {e}")
                 print(t("info.direct_without_proxy"))
-                # Fully disconnect proxy: clean up context + clear wrapper
-                self._cleanup_proxy_context()
+                self._cleanup_http_client()
                 self.proxy_wrapper = None
                 self._initialize_http_client()  # direct mode (no proxy)
                 try:
@@ -164,15 +162,13 @@ class LLMClient:
     # ===================================================================
 
     def _initialize_client_with_proxy(self):
-        """Initialize proxy context manager and HTTP client inside it (exact original behaviour)."""
+        """Test proxy setup, then initialise HTTP client and API connection."""
         try:
-            self._proxy_context = self.proxy_wrapper.proxy_connection()
-            self._proxy_context.__enter__()
-            self._initialize_http_client()
-            self._test_connection()
-        except Exception as e:
-            self._cleanup_proxy_context()
-            raise
+            self.proxy_wrapper.test_connection()
+        except Exception:
+            pass  # test_connection warned; continue
+        self._initialize_http_client()
+        self._test_connection()
 
     def _initialize_http_client(self):
         """Create (or recreate) the httpx client."""
@@ -206,18 +202,6 @@ class LLMClient:
                 logger.debug(f"Error closing HTTP client: {e}")
             finally:
                 self._http_client = None
-
-    def _cleanup_proxy_context(self):
-        """Clean up both HTTP client and proxy context manager."""
-        self._cleanup_http_client()
-
-        if self._proxy_context:
-            try:
-                self._proxy_context.__exit__(None, None, None)
-            except Exception as e:
-                logger.debug(f"Error exiting proxy context: {e}")
-            finally:
-                self._proxy_context = None
 
     # ===================================================================
     # REQUEST HELPERS
@@ -435,5 +419,5 @@ class LLMClient:
         return self.current_model
 
     def __del__(self):
-        """Ensure resources are cleaned up when object is destroyed."""
-        self._cleanup_proxy_context()
+        """Ensure HTTP client is cleaned up when object is destroyed."""
+        self._cleanup_http_client()

@@ -9,7 +9,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import cast, Optional
+from typing import Optional
 
 from prompt_toolkit.completion import PathCompleter
 
@@ -19,7 +19,7 @@ import config
 config.setup_logging()
 
 from command_handler import CommandHandler
-from file_processor import generate_query, generate_plain_query, parse_plain_response
+from file_processor import generate_query
 from history_store import HistoryStore
 from input_handler import InputHandler
 from llm_client import LLMClient
@@ -318,8 +318,8 @@ class LLMChat:
                 )
                 return False
 
-            # Try to enter proxy context (which tests connection)
-            test_wrapper.proxy_connection()
+            # Test proxy connection
+            test_wrapper.test_connection()
 
             # Connection test passed, now switch
             old_proxy = self.proxy_wrapper
@@ -532,19 +532,16 @@ class LLMChat:
 
         print(t("separators.message_line"))
 
-        if self.free_chat_mode:
-            # Free chat mode: plain message without file context
-            query = generate_plain_query(message)
-            response_parser = parse_plain_response
-        else:
-            # In non-free chat mode, root_dir must be a string
-            root_dir_str = cast(str, self.root_dir)
-            query, response_parser = generate_query(
-                root_dir_str, self.readable_files, self.editable_files, message
-            )
-            # Check if user chose to insert files (abort send)
-            if query is None and response_parser is None:
-                return "insert_files"
+        query, response_parser = generate_query(
+            self.root_dir or "",
+            self.readable_files,
+            self.editable_files,
+            message,
+            force_plain=self.free_chat_mode,
+        )
+        # Check if user chose to insert files (abort send)
+        if query is None and response_parser is None:
+            return "insert_files"
 
         assert query is not None
         query = clean_text(query)

@@ -411,23 +411,17 @@ def parse_xml_response(llm_response: str) -> str:
     return comments.strip()
 
 
-def should_generate_plain_query(
+def _prompt_send_plain_or_insert(
     readable_files: list[str], writable_files: list[str]
-) -> tuple[str, bool]:
+) -> str:
     """
-    Determine if a plain query (without XML formatting) should be generated.
-
-    Args:
-        readable_files: List of readable file paths
-        writable_files: List of writable file paths
+    Prompt the user when no files are in context.
 
     Returns:
-        Tuple of (action, should_generate_plain) where:
-        - action: 'send_plain', 'send_with_files', or 'insert_files'
-        - should_generate_plain: True for plain message, False for file context
+        'send_plain', 'send_with_files', or 'insert_files'
     """
     if len(readable_files) + len(writable_files) > 0:
-        return ("send_with_files", False)
+        return "send_with_files"
 
     print(t("prompts.no_files_in_context"))
 
@@ -437,14 +431,14 @@ def should_generate_plain_query(
         except KeyboardInterrupt:
             # Ctrl+C should behave like choosing 'i' to insert files
             print()  # Add a newline after ^C
-            return ("insert_files", False)
+            return "insert_files"
 
         if response == "" or response in {"y", "yes"}:
-            return ("send_plain", True)
+            return "send_plain"
         if response in {"n", "no"}:
-            return ("send_with_files", False)
+            return "send_with_files"
         if response in {"i", "insert"}:
-            return ("insert_files", False)
+            return "insert_files"
 
         print(t("errors.invalid_input_yni"))
 
@@ -467,27 +461,31 @@ def generate_query(
     readable_files: list[str],
     writable_files: list[str],
     user_request: str,
+    *,
+    force_plain: bool = False,
 ) -> tuple[str, callable]:
     """
     Generate the query and return the appropriate parser function.
+
+    Args:
+        force_plain: If True (free-chat mode), skip file context entirely.
 
     Returns:
         (query_string, parser_function) or (None, None) if user chose to insert files
         where parser_function is either parse_xml_response or parse_plain_response
     """
-    action, should_generate_plain = should_generate_plain_query(
-        readable_files, writable_files
-    )
+    if force_plain:
+        return generate_plain_query(user_request), parse_plain_response
 
-    if action == "insert_files":
-        # User chose to insert files - abort send and return to text editor
-        print(t("prompts.returning_to_editor"))
-        return None, None
-    elif should_generate_plain:
-        query = generate_plain_query(user_request)
-        return query, parse_plain_response
-    else:
-        query = generate_file_query(
-            root_dir, readable_files, writable_files, user_request
-        )
-        return query, parse_xml_response
+    if not readable_files and not writable_files:
+        action = _prompt_send_plain_or_insert(readable_files, writable_files)
+        if action == "insert_files":
+            print(t("prompts.returning_to_editor"))
+            return None, None
+        if action == "send_plain":
+            return generate_plain_query(user_request), parse_plain_response
+
+    return (
+        generate_file_query(root_dir, readable_files, writable_files, user_request),
+        parse_xml_response,
+    )
