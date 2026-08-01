@@ -72,19 +72,17 @@ class LLMClient:
                     self._test_connection()
                     print(t("info.direct_connected"))
                 except Exception as e2:
-                    print(
-                        f"\n{t('common.warning_prefix')} {t('warnings.direct_connection_failed', error=e2)}"
-                    )
-                    print(t("warnings.continue_despite_errors"))
+                    raise RuntimeError(
+                        t("errors.api_connection_failed", model=self.current_model)
+                    ) from e2
         else:
             self._initialize_http_client()
             try:
                 self._test_connection()
             except Exception as e:
-                print(
-                    f"\n{t('common.warning_prefix')} {t('warnings.api_test_failed', error=e)}"
-                )
-                print(t("warnings.continue_despite_errors"))
+                raise RuntimeError(
+                    t("errors.api_connection_failed", model=self.current_model)
+                ) from e
 
     def choose_model(self):
         """Display interactive model selection menu and return selected model key."""

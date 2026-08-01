@@ -30,6 +30,7 @@
     "api_error_details": "Error details returned by the provider:",
     "api_error_raw": "Raw error body:",
     "unexpected_connection_error": "Unexpected error during connection test: {error}",
+    "api_connection_failed": "Could not connect to '{model}'. Select another model.",
     "error_communicating": "Error communicating with {model}: {error}",
     "disable_proxy_failed": "Failed to disable proxy",
     "create_proxy_wrapper_failed": "Failed to create proxy wrapper",

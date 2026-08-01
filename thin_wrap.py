@@ -442,31 +442,31 @@ class LLMChat:
             print()
             logger.debug("Displayed proxy information")
 
-        try:
-            model = self.llm_client.choose_model()
-        except KeyboardInterrupt as e:
-            print(f"\n{t('info.exiting_during_setup')}")
-            self._save_and_exit()
-            return
-        # Prompt for proxy if model suggests it and no proxy configured
-        if model is None:
-            # This shouldn't happen during initialization, but handle gracefully
-            logger.warning("Model selection returned None, skipping proxy prompt")
-        else:
+        while True:
             try:
-                if not self._prompt_for_proxy_if_needed(model):
-                    # User cancelled proxy selection, continue without proxy
-                    print(t("warnings.continuing_without_proxy"))
+                model = self.llm_client.choose_model()
             except KeyboardInterrupt:
-                print(f"\n{t('warnings.proxy_setup_cancelled')}")
-        # Now set up API key (may fail if proxy still needed but not configured)
-        try:
-            self.llm_client.setup_api_key(model)
-            logger.debug("Set up API key successfully")
-        except KeyboardInterrupt as e:
-            print(f"\n{t('info.exiting_during_setup')}")
-            self._save_and_exit()
-            return
+                print(f"\n{t('info.exiting_during_setup')}")
+                self._save_and_exit()
+                return
+            if model is None:
+                logger.warning("Model selection returned None, skipping proxy prompt")
+            else:
+                try:
+                    if not self._prompt_for_proxy_if_needed(model):
+                        print(t("warnings.continuing_without_proxy"))
+                except KeyboardInterrupt:
+                    print(f"\n{t('warnings.proxy_setup_cancelled')}")
+            try:
+                self.llm_client.setup_api_key(model)
+                logger.debug("Set up API key successfully")
+                break
+            except KeyboardInterrupt:
+                print(f"\n{t('info.exiting_during_setup')}")
+                self._save_and_exit()
+                return
+            except RuntimeError as e:
+                print(f"\n{t('common.error_prefix')} {e}\n")
 
         UI.show_startup_message()
         self._print_files_summary()
