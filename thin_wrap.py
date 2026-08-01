@@ -347,42 +347,58 @@ class LLMChat:
             )
             return False
 
+    def _format_files_line(self, file_list, label):
+        """Format a single files-summary line (e.g. "Editable (2): a.py, b.py")."""
+        if not file_list:
+            return t("files.none", label=label)
+        # Convert to relative paths
+        rel_paths = []
+        for f in file_list:
+            try:
+                rel_path = os.path.relpath(f, self.root_dir)
+            except ValueError:
+                rel_path = f
+            rel_paths.append(rel_path)
+        # Truncate if too many
+        max_show = 5
+        if len(rel_paths) <= max_show:
+            files_str = ", ".join(rel_paths)
+            return t("files.list", label=label, count=len(rel_paths), files=files_str)
+        shown = rel_paths[:max_show]
+        files_str = ", ".join(shown) + t(
+            "files.and_more", count=len(rel_paths) - max_show
+        )
+        return t("files.list", label=label, count=len(rel_paths), files=files_str)
+
     def _print_files_summary(self):
         """Print a compact summary of editable and readable files."""
         if not self.editable_files and not self.readable_files:
             return
 
-        def format_files(file_list, label):
-            if not file_list:
-                return t("files.none", label=label)
-            # Convert to relative paths
-            rel_paths = []
-            for f in file_list:
-                try:
-                    rel_path = os.path.relpath(f, self.root_dir)
-                except ValueError:
-                    rel_path = f
-                rel_paths.append(rel_path)
-            # Truncate if too many
-            max_show = 5
-            if len(rel_paths) <= max_show:
-                files_str = ", ".join(rel_paths)
-                return t(
-                    "files.list", label=label, count=len(rel_paths), files=files_str
-                )
-            else:
-                shown = rel_paths[:max_show]
-                files_str = ", ".join(shown) + t(
-                    "files.and_more", count=len(rel_paths) - max_show
-                )
-                return t(
-                    "files.list", label=label, count=len(rel_paths), files=files_str
-                )
+        print()
+        print(self._format_files_line(self.editable_files, t("files.label_editable")))
+        print(self._format_files_line(self.readable_files, t("files.label_readable")))
+        print()
 
-        print()
-        print(format_files(self.editable_files, t("files.label_editable")))
-        print(format_files(self.readable_files, t("files.label_readable")))
-        print()
+    def _print_message_prompt(self):
+        """Render the input header exactly once, with clean lines.
+
+        Shows the files summary (if any), a blank line, then the Message
+        separator. The header is owned by the app (not prompt_toolkit) so it is
+        printed once per input regardless of the scenario (empty context or not).
+        """
+        if self.editable_files or self.readable_files:
+            print(
+                self._format_files_line(self.editable_files, t("files.label_editable"))
+            )
+            print(
+                self._format_files_line(self.readable_files, t("files.label_readable"))
+            )
+            print()
+        else:
+            print()
+        sys.stdout.write(t("prompts.input_hint"))
+        sys.stdout.flush()
 
     def _prompt_for_proxy_if_needed(self, selected_model: str) -> bool:
         """
@@ -482,7 +498,7 @@ class LLMChat:
                 print(f"\n{t('common.error_prefix')} {e}\n")
 
         UI.show_startup_message()
-        self._print_files_summary()
+        self._print_message_prompt()
         logger.debug("Showed startup message")
 
         next_default = self.first_message
@@ -494,7 +510,7 @@ class LLMChat:
             if isinstance(user_input, tuple) and user_input[0] == "Ctrl+B":
                 next_default = user_input[1]
                 self.command_handler.handle_files_command()
-                self._print_files_summary()
+                self._print_message_prompt()
                 continue
 
             if not user_input:
@@ -510,6 +526,7 @@ class LLMChat:
                 if should_quit:
                     logger.debug("Command requested quit")
                     break
+                self._print_message_prompt()
                 continue
 
             logger.debug("Handling non-command user message")
@@ -518,9 +535,11 @@ class LLMChat:
             # If user chose to insert files, return to editor with the message
             if send_result == "insert_files":
                 next_default = user_input
+                self._print_message_prompt()
                 continue
             else:
                 self.input_handler.add_to_history(user_input)
+                self._print_message_prompt()
         logger.debug("Exiting main chat loop")
         self._exit_cleanly()
 

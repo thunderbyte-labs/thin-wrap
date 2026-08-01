@@ -4,12 +4,10 @@ import shutil
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import Completer, WordCompleter
 from prompt_toolkit.document import Document
-from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
 from prompt_toolkit.styles import Style
 
 import config
-from strings import t
 
 
 class CommandCompleter(Completer):
@@ -197,18 +195,19 @@ class InputHandler:
 
             event.current_buffer.cursor_position = len(event.current_buffer.text)
 
-        prompt_message = ANSI(t("prompts.input_hint"))
-
         style = Style.from_dict(
             {
                 "": "bold #ffd700",
             }
         )
 
+        # The "Message" separator / files summary is rendered by the app
+        # (LLMChat._print_message_prompt) before this prompt, so prompt_toolkit
+        # uses an empty message to avoid re-printing it on every redraw/exit.
         session = PromptSession(
             multiline=True,
             key_bindings=kb,
-            message=prompt_message,
+            message="",
             style=style,
             mouse_support=False,
             completer=self.command_completer,
