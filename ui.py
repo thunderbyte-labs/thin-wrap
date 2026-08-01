@@ -87,7 +87,7 @@ class UI:
         """Show exit message with log location"""
         if log_path:
             print("\n" + t("startup.session_log_saved"))
-            print(f"  {log_path}")
+            print(f"{log_path}")
         print("\n" + t("common.goodbye"))
 
     @staticmethod

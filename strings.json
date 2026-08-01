@@ -6,7 +6,7 @@
     "selected_prefix": {"text": "→", "color": "GREEN"},
     "using_prefix": {"text": "Using:", "color": "GREEN"},
     "note_prefix": {"text": "Note:", "color": "GREEN"},
-    "warning_prefix": {"text": "Warning:", "color": "BRIGHT_YELLOW"},
+    "warning_prefix": {"text": "Warning:", "color": "RED"},
     "selection_cancelled": "\nSelection cancelled.",
     "empty_input": "Empty input - please try again.",
     "number_out_of_range": "Number out of range.",
@@ -36,7 +36,7 @@
     "create_proxy_wrapper_failed": "Failed to create proxy wrapper",
     "llm_update_proxy_failed": "Failed to update LLM client with new proxy",
     "proxy_connection_test_failed": "Proxy connection test failed: {error}",
-    "config_not_found": {"text": "Config file not found.", "color": "BRIGHT_YELLOW"},
+    "config_not_found": {"text": "Config file not found.", "color": "RED"},
     "searched_in": "Searched in:",
     "error_saving_session": "⚠️  Error saving session: {error}",
     "session_file_not_found": "⚠️  Session file not found: {path}",
@@ -51,14 +51,14 @@
     "direct_connection_failed": "Direct connection also failed: {error}",
     "api_test_failed": "API connection test failed: {error}",
     "continue_despite_errors": "You can continue and try sending messages - errors may occur.",
-    "model_selection_cancelled": {"text": "Model selection cancelled.", "color": "BRIGHT_YELLOW"},
-    "proxy_selection_cancelled": {"text": "Proxy selection cancelled.", "color": "BRIGHT_YELLOW"},
-    "proxy_setup_cancelled": {"text": "Proxy setup cancelled, continuing without proxy.", "color": "BRIGHT_YELLOW"},
-    "continuing_without_proxy": {"text": "Continuing without proxy.", "color": "BRIGHT_YELLOW"},
-    "clear_cancelled": {"text": "Clear cancelled.", "color": "BRIGHT_YELLOW"},
-    "history_preserved": {"text": "Conversation history preserved.", "color": "BRIGHT_YELLOW"},
-    "no_previous_convs_project": {"text": "No previous conversations found for this project root.", "color": "BRIGHT_YELLOW"},
-    "no_previous_convs_free_chat": {"text": "No previous conversations found in free chat mode.", "color": "BRIGHT_YELLOW"}
+    "model_selection_cancelled": {"text": "Model selection cancelled.", "color": "RED"},
+    "proxy_selection_cancelled": {"text": "Proxy selection cancelled.", "color": "RED"},
+    "proxy_setup_cancelled": {"text": "Proxy setup cancelled, continuing without proxy.", "color": "RED"},
+    "continuing_without_proxy": {"text": "Continuing without proxy.", "color": "RED"},
+    "clear_cancelled": {"text": "Clear cancelled.", "color": "RED"},
+    "history_preserved": {"text": "Conversation history preserved.", "color": "RED"},
+    "no_previous_convs_project": {"text": "No previous conversations found for this project root.", "color": "RED"},
+    "no_previous_convs_free_chat": {"text": "No previous conversations found in free chat mode.", "color": "RED"}
   },
 
   "info": {
@@ -71,7 +71,7 @@
     "proxy_switched": "Proxy switched to: {url}",
     "proxy_mode_enabled": {"text": "PROXY MODE ENABLED", "color": "GREEN"},
     "proxy_url": "Proxy URL: {url}",
-    "proxy_suggested_title": {"text": "Proxy suggested for this model:", "color": "BRIGHT_YELLOW"},
+    "proxy_suggested_title": {"text": "Proxy suggested for this model:", "color": "GREEN"},
     "proxy_suggested_model": "Model '{model}' recommends using a proxy for optimal connectivity.",
     "proxy_configure_now": "Would you like to configure a proxy now?",
     "exiting_during_setup": {"text": "Exiting during setup...", "color": "BRIGHT_WHITE"},
@@ -86,7 +86,7 @@
     "llm_explanation": {"text": "===================== Reply ======================\n", "color": "GREEN"},
     "no_explanation": "\nNo explanation provided by the LLM.",
     "request_sending": "⏳ Thinking... (Press Ctrl+C to interrupt)",
-    "request_interrupted": {"text": "Request interrupted by user (Ctrl+C)", "color": "BRIGHT_YELLOW"},
+    "request_interrupted": {"text": "Request interrupted by user (Ctrl+C)", "color": "GREEN"},
     "empty_message_hint": {"text": "Empty message or KeyboardInterrupt. Type /help to see command or /bye (then Alt+Enter) to quit.\n\n", "color": "BOLD"},
     "free_chat_mode_active": "Free chat mode active. Selecting a root directory will enable file context."
   },
@@ -211,7 +211,7 @@
     "files_part2": { "text": " for file context", "color": "BRIGHT_WHITE" },
     "help_part1": { "text": " · ", "color": "BRIGHT_WHITE" },
     "help_part2": { "text": " for help", "color": "BRIGHT_WHITE" },
-    "session_log_saved": {"text": "Session saved ·", "color": "GREEN"}
+    "session_log_saved": {"text": "Session saved at:", "color": "GREEN"}
   },
 
   "separators": {
