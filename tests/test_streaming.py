@@ -2,6 +2,7 @@
 
 import io
 import os
+import re
 import sys
 import time
 from unittest.mock import MagicMock, patch
@@ -11,6 +12,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import httpx
 
 from llm_client import LLMClient
+from strings import t
 from thin_wrap import LLMChat
 
 
@@ -245,8 +247,11 @@ def test_send_message_via_httpx_shows_ttf(capsys):
     text, usage = client._send_message_via_httpx()
 
     out = capsys.readouterr().out
-    assert "TTF :" in out
-    assert "Thinking" in out
+    # Wording-agnostic: reference the configured strings rather than hardcoding
+    # the TTF label, so strings.json can be edited freely.
+    assert t("info.request_sending") in out
+    ttf_pattern = re.escape(t("info.ttf", elapsed="{0}")).replace(r"\{0\}", r"\d+\.\d")
+    assert re.search(ttf_pattern, out)
     assert text == "Hi"
     assert usage == {"prompt_tokens": 3, "completion_tokens": 1}
 
