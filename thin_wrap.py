@@ -448,7 +448,7 @@ class LLMChat:
                 model = self.llm_client.choose_model()
             except KeyboardInterrupt:
                 print(f"\n{t('info.exiting_during_setup')}")
-                self._save_and_exit()
+                self._exit_cleanly()
                 return
             if model is None:
                 logger.warning("Model selection returned None, skipping proxy prompt")
@@ -464,7 +464,7 @@ class LLMChat:
                 break
             except KeyboardInterrupt:
                 print(f"\n{t('info.exiting_during_setup')}")
-                self._save_and_exit()
+                self._exit_cleanly()
                 return
             except RuntimeError as e:
                 print(f"\n{t('common.error_prefix')} {e}\n")
@@ -510,16 +510,12 @@ class LLMChat:
             else:
                 self.input_handler.add_to_history(user_input)
         logger.debug("Exiting main chat loop")
-        self._save_and_exit()
+        self._exit_cleanly()
 
-    def _save_and_exit(self):
-        """Save session and exit cleanly"""
-        logger.debug("Saving session and preparing to exit")
-        # Save final state before exit
-        self.session_logger.save_session(self.llm_client.conversation_history)
+    def _exit_cleanly(self):
+        """Show the session log location and exit cleanly."""
         log_path = self.session_logger.get_session_path()
         UI.show_exit_message(log_path)
-        logger.debug(f"Session saved to: {log_path}")
 
     def _send_message(self, message):
         """
