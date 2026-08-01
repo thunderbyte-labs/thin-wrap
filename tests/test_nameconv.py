@@ -5,10 +5,12 @@ import os
 import shutil
 import sys
 import tempfile
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import config
+from command_handler import CommandHandler, _extract_suggested_name
 from session_logger import SessionLogger, sanitize_conversation_name
 
 HISTORY = [
@@ -186,6 +188,116 @@ def test_empty_history_not_saved():
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+# =========================================================================
+# AI-suggested names (_extract_suggested_name + /nameconv AI flow)
+# =========================================================================
+
+
+def test_extract_suggested_name_clean():
+    """A plain keyword response becomes a lowercase slug."""
+    assert _extract_suggested_name("Why Jesus is King?") == "why-jesus-is-king"
+
+
+def test_extract_suggested_name_strips_markdown_and_quotes():
+    """Markdown, quotes and dashes are stripped from the suggestion."""
+    assert _extract_suggested_name("**why jesus is king**") == "why-jesus-is-king"
+    assert _extract_suggested_name("'hello world'") == "hello-world"
+
+
+def test_extract_suggested_name_truncates_to_limit():
+    """More than 12 words are truncated to the allowed maximum."""
+    raw = " ".join(f"w{i}" for i in range(20))
+    slug = _extract_suggested_name(raw)
+    assert len(slug.split("-")) == 12
+
+
+def test_extract_suggested_name_rejects_garbage():
+    """Non-alphanumeric responses are considered unusable."""
+    assert _extract_suggested_name("!!!") is None
+    assert _extract_suggested_name("🤖😀✨") is None
+    assert _extract_suggested_name("") is None
+
+
+def _make_nameconv_handler(generate_result, history):
+    session_logger = MagicMock()
+    llm_client = MagicMock()
+    llm_client.conversation_history = history
+    llm_client.generate.return_value = generate_result
+    handler = CommandHandler(
+        llm_client=llm_client,
+        session_logger=session_logger,
+        input_handler=MagicMock(),
+        chat_app=MagicMock(),
+    )
+    return handler, session_logger
+
+
+def test_nameconv_manual_still_works():
+    """Typing a name keeps the original manual behavior."""
+    handler, session_logger = _make_nameconv_handler(None, [])
+    with patch("builtins.input", side_effect=["my name"]):
+        handler._handle_nameconv([])
+    session_logger.set_name.assert_called_once_with("my-name")
+
+
+def test_nameconv_ai_suggestion_accepted():
+    """Empty input asks the AI; pressing Enter accepts the suggestion."""
+    handler, session_logger = _make_nameconv_handler(
+        "Why Jesus is King?", [{"role": "user", "content": "hi"}]
+    )
+    with patch("builtins.input", side_effect=["", ""]):
+        handler._handle_nameconv([])
+    session_logger.set_name.assert_called_once_with("why-jesus-is-king")
+
+
+def test_nameconv_ai_suggestion_modified():
+    """The suggestion can be edited before applying."""
+    handler, session_logger = _make_nameconv_handler(
+        "Why Jesus is King?", [{"role": "user", "content": "hi"}]
+    )
+    with patch("builtins.input", side_effect=["", "why pythagore"]):
+        handler._handle_nameconv([])
+    session_logger.set_name.assert_called_once_with("why-pythagore")
+
+
+def test_nameconv_ai_suggestion_cancelled():
+    """Typing 'c' cancels without renaming."""
+    handler, session_logger = _make_nameconv_handler(
+        "Why Jesus is King?", [{"role": "user", "content": "hi"}]
+    )
+    with patch("builtins.input", side_effect=["", "c"]):
+        handler._handle_nameconv([])
+    session_logger.set_name.assert_not_called()
+
+
+def test_nameconv_ai_no_content_falls_back_to_manual():
+    """An empty conversation warns and falls back to manual naming."""
+    handler, session_logger = _make_nameconv_handler("ignored", [])
+    with patch("builtins.input", side_effect=["", "hello world"]):
+        handler._handle_nameconv([])
+    session_logger.set_name.assert_called_once_with("hello-world")
+
+
+def test_nameconv_ai_failure_falls_back_to_manual():
+    """An AI error falls back to manual naming without retrying."""
+    handler, session_logger = _make_nameconv_handler(
+        None, [{"role": "user", "content": "hi"}]
+    )
+    with patch("builtins.input", side_effect=["", "hello world"]):
+        handler._handle_nameconv([])
+    session_logger.set_name.assert_called_once_with("hello-world")
+
+
+def test_nameconv_ai_unusable_falls_back_to_manual():
+    """An unusable suggestion falls back to manual naming."""
+    handler, session_logger = _make_nameconv_handler(
+        "!!!", [{"role": "user", "content": "hi"}]
+    )
+    with patch("builtins.input", side_effect=["", "hello world"]):
+        handler._handle_nameconv([])
+    session_logger.set_name.assert_called_once_with("hello-world")
+
+
 def test_collision_rolls_over_minute():
     """Collision avoidance rolls the timestamp over the minute boundary."""
     from datetime import datetime
@@ -224,5 +336,16 @@ if __name__ == "__main__":
     test_set_name_replaces_previous_name()
     test_name_in_metadata()
     test_empty_history_not_saved()
+    test_extract_suggested_name_clean()
+    test_extract_suggested_name_strips_markdown_and_quotes()
+    test_extract_suggested_name_truncates_to_limit()
+    test_extract_suggested_name_rejects_garbage()
+    test_nameconv_manual_still_works()
+    test_nameconv_ai_suggestion_accepted()
+    test_nameconv_ai_suggestion_modified()
+    test_nameconv_ai_suggestion_cancelled()
+    test_nameconv_ai_no_content_falls_back_to_manual()
+    test_nameconv_ai_failure_falls_back_to_manual()
+    test_nameconv_ai_unusable_falls_back_to_manual()
     test_collision_rolls_over_minute()
     print("\n✅ All nameconv tests passed!")

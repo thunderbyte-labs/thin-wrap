@@ -130,7 +130,7 @@ When `"enabled": true`, the three fields `timestamp_format`, `extra_string` and 
 | `/bye` | Exit (saves session) |
 | `/model` | Switch model (interactive or `name`) |
 | `/reload` | Load a previous session (optionally search by keywords) |
-| `/nameconv` | Name the current conversation (shown in `/reload`) |
+| `/nameconv` | Name the current conversation (manual or AI-suggested; shown in `/reload`) |
 | `/rootdir` | Change root directory (option 0 = free chat) |
 | `/files` | Open file context menu |
 | `/proxy` | Configure proxy (`off` to disable) |

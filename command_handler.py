@@ -9,7 +9,7 @@ from prompt_toolkit.completion import PathCompleter
 
 import config
 from path_utils import resolve_path
-from session_logger import sanitize_conversation_name
+from session_logger import CONVERSATION_NAME_MAX_WORDS, sanitize_conversation_name
 from strings import t
 from ui import UI
 
@@ -142,6 +142,23 @@ def _make_search_formatter(
         return base
 
     return search_aware_formatter
+
+
+def _extract_suggested_name(raw: str) -> str | None:
+    """Turn an LLM naming response into a valid slug, or ``None`` if unusable.
+
+    Strips quotes/markdown, keeps only alphanumeric words, truncates to the
+    conversation-name limit and applies the usual slug sanitization.
+    """
+    words = re.findall(r"[a-z0-9]+", raw.lower())
+    if not words:
+        return None
+    if len(words) > CONVERSATION_NAME_MAX_WORDS:
+        words = words[:CONVERSATION_NAME_MAX_WORDS]
+    error_key, slug = sanitize_conversation_name(" ".join(words))
+    if error_key:
+        return None
+    return slug
 
 
 def format_session(path: str, meta: dict | None = None) -> str:
@@ -522,13 +539,60 @@ class CommandHandler:
                 print(t("commands.nameconv_cancelled"))
                 return
 
-            error_key, slug = sanitize_conversation_name(name_input)
+            if name_input:
+                # Manual name entry
+                error_key, slug = sanitize_conversation_name(name_input)
+                if error_key:
+                    print(t(f"errors.{error_key}"))
+                    continue
+                self.session_logger.set_name(slug)
+                print(t("commands.nameconv_success", name=slug))
+                return
+
+            # Empty input → ask the AI for a keyword suggestion
+            if not self.llm_client.conversation_history:
+                print(t("warnings.nameconv_no_content"))
+                continue
+
+            try:
+                raw = self.llm_client.generate(t("prompts.nameconv_llm_query"))
+            except (KeyboardInterrupt, EOFError):
+                print(t("commands.nameconv_cancelled"))
+                return
+
+            if not raw:
+                print(t("errors.nameconv_ai_failed"))
+                continue
+
+            slug = _extract_suggested_name(raw)
+            if slug is None:
+                print(t("errors.nameconv_suggestion_unusable"))
+                continue
+
+            # Validate the suggestion: accept / edit / cancel
+            print(t("prompts.nameconv_suggestion", name=slug))
+            try:
+                confirm = input(t("prompts.nameconv_confirm")).strip()
+            except (KeyboardInterrupt, EOFError):
+                print(t("commands.nameconv_cancelled"))
+                return
+
+            if not confirm:
+                self.session_logger.set_name(slug)
+                print(t("commands.nameconv_success", name=slug))
+                return
+
+            if confirm.lower() in ("c", "cancel", "no"):
+                print(t("commands.nameconv_cancelled"))
+                return
+
+            # Manual modification of the suggestion
+            error_key, new_slug = sanitize_conversation_name(confirm)
             if error_key:
                 print(t(f"errors.{error_key}"))
                 continue
-
-            self.session_logger.set_name(slug)
-            print(t("commands.nameconv_success", name=slug))
+            self.session_logger.set_name(new_slug)
+            print(t("commands.nameconv_success", name=new_slug))
             return
 
     def handle_files_command(self):

@@ -401,6 +401,35 @@ class LLMClient:
                 None,
             )
 
+    def generate(self, instruction: str) -> str | None:
+        """Send a one-off instruction appended to the full conversation history.
+
+        Unlike :meth:`send_message`, this never mutates ``conversation_history``
+        nor persists anything; it only returns the extracted response text.
+        Returns ``None`` on API error. Raises ``KeyboardInterrupt`` on cancel.
+        """
+        print(t("info.request_sending"))
+
+        messages = [
+            {"role": msg["role"], "content": msg["content"]}
+            for msg in self.conversation_history
+        ]
+        messages.append({"role": "user", "content": instruction})
+
+        payload = self._build_request_params(messages=messages)
+        url, headers = self._get_request_url_and_headers()
+
+        try:
+            response = self._http_client.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            return self._extract_response_content(data)
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:
+            print(t("errors.error_communicating", model=self.current_model, error=e))
+            return None
+
     def clear_conversation(self):
         """Clear conversation history. The old session stays saved on disk."""
         self.conversation_history = []

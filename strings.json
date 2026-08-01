@@ -47,7 +47,9 @@
     "root_arg_not_valid": "{root} is not a valid directory",
     "nameconv_empty": "Name cannot be empty. Please enter a name.",
     "nameconv_invalid_chars": "Only lowercase letters (a-z), digits (0-9) and spaces are allowed.",
-    "nameconv_too_many_words": "Too many words. Maximum is 12."
+    "nameconv_too_many_words": "Too many words. Maximum is 12.",
+    "nameconv_ai_failed": "The AI could not suggest a name.",
+    "nameconv_suggestion_unusable": "The AI suggestion was not usable. Please enter a name manually."
   },
 
   "warnings": {
@@ -60,7 +62,8 @@
     "continuing_without_proxy": {"text": "Continuing without proxy.", "color": "RED"},
     "clear_cancelled": {"text": "Clear cancelled.", "color": "RED"},
     "no_previous_convs_project": {"text": "No previous conversations found for this project root.", "color": "RED"},
-    "no_previous_convs_free_chat": {"text": "No previous conversations found in free chat mode.", "color": "RED"}
+    "no_previous_convs_free_chat": {"text": "No previous conversations found in free chat mode.", "color": "RED"},
+    "nameconv_no_content": {"text": "Nothing to name yet — send a message first.", "color": "RED"}
   },
 
   "info": {
@@ -124,7 +127,10 @@
     "returning_to_editor": "Returning to text editor. Use Ctrl+B to add files before sending.",
     "enter_valid_number": "Please enter a valid number or enable new item entry.",
     "new_item_error": "Invalid item",
-    "nameconv": "How would you like to name this conversation (12 words maximum)? ",
+    "nameconv": "Name this conversation (12 words max), or press Enter to ask the AI to suggest one: ",
+    "nameconv_llm_query": "Name this conversation with less than 12 keywords (no more than 12) in a way that would make it easily recoverable by the user in a list of conversations. Answer this query with only such keywords, nothing else.",
+    "nameconv_suggestion": "Suggested name: {name}",
+    "nameconv_confirm": "Press Enter to accept, type a new name, or 'c' to cancel: ",
     "input_hint": {"text": "-------------------- Message ---------------------\n\n" , "color": "BRIGHT_GREEN"}
   },
 
@@ -210,7 +216,7 @@
       "rootdir": "Show or set project root directory (option 0 for free chat mode)",
       "files": "Handle Ctrl+B file context menu",
       "proxy": "Manage proxy (off to disable, number for previous, or new URL like socks5://127.0.0.1:1080)",
-      "nameconv": "Name the current conversation"
+      "nameconv": "Name the current conversation (manual or AI-suggested)"
     }
   },
 
