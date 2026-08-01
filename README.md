@@ -26,7 +26,7 @@ curl -fsSL https://raw.githubusercontent.com/thunderbyte-labs/thin-wrap/main/uni
 - **File Context:** `Ctrl+B` opens a 3-column browser (editable / readable / navigator). `r`/`e`/`d` moves files; `Ctrl+D` clears all.
 - **Proxy:** Use any SOCKS5/HTTP proxy (`--proxy` or `/proxy`). Per-model proxy hints via `"proxy": true` in config.
 - **Intelligent Editing:** LLM-recommended edits get timestamped backups (`file.thin-wrap.20250130.py`) with Python-native diff stats. Backup can be disabled entirely via `backup.enabled` (see Configuration).
-- **Session Logging:** Conversations auto-saved as `.toml.zip` with metadata (message count, preview). Reload with `/reload`.
+- **Session Logging:** Conversations auto-saved as `.toml.zip` with metadata (message count, preview). Reload with `/reload`; name the current conversation with `/nameconv` (shown in the reload list). `/reload` shows your past conversations and can optionally search them by keywords (ranked by relevance with content snippets).
 - **Free Chat:** Choose "No root directory" at startup to chat without file context.
 - **History:** `PageUp`/`PageDown` navigates sent messages and temporary drafts.
 
@@ -129,7 +129,8 @@ When `"enabled": true`, the three fields `timestamp_format`, `extra_string` and 
 | `/clear` | Clear conversation |
 | `/bye` | Exit (saves session) |
 | `/model` | Switch model (interactive or `name`) |
-| `/reload` | Load a previous session |
+| `/reload` | Load a previous session (optionally search by keywords) |
+| `/nameconv` | Name the current conversation (manual or AI-suggested; shown in `/reload`) |
 | `/rootdir` | Change root directory (option 0 = free chat) |
 | `/files` | Open file context menu |
 | `/proxy` | Configure proxy (`off` to disable) |

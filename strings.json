@@ -6,7 +6,7 @@
     "selected_prefix": {"text": "→", "color": "GREEN"},
     "using_prefix": {"text": "Using:", "color": "GREEN"},
     "note_prefix": {"text": "Note:", "color": "GREEN"},
-    "warning_prefix": {"text": "Warning:", "color": "BRIGHT_YELLOW"},
+    "warning_prefix": {"text": "Warning:", "color": "RED"},
     "selection_cancelled": "\nSelection cancelled.",
     "empty_input": "Empty input - please try again.",
     "number_out_of_range": "Number out of range.",
@@ -36,7 +36,7 @@
     "create_proxy_wrapper_failed": "Failed to create proxy wrapper",
     "llm_update_proxy_failed": "Failed to update LLM client with new proxy",
     "proxy_connection_test_failed": "Proxy connection test failed: {error}",
-    "config_not_found": {"text": "Config file not found.", "color": "BRIGHT_YELLOW"},
+    "config_not_found": {"text": "Config file not found.", "color": "RED"},
     "searched_in": "Searched in:",
     "error_saving_session": "⚠️  Error saving session: {error}",
     "session_file_not_found": "⚠️  Session file not found: {path}",
@@ -44,21 +44,26 @@
     "error_opening_file_menu": "Error opening file menu: {error}",
     "error_computing_diff": "{filename}: error computing diff",
     "invalid_input_yni": "Invalid input. Please enter 'y', 'n', or 'i' (or press Enter for default 'y').",
-    "root_arg_not_valid": "{root} is not a valid directory"
+    "root_arg_not_valid": "{root} is not a valid directory",
+    "nameconv_empty": "Name cannot be empty. Please enter a name.",
+    "nameconv_invalid_chars": "Only lowercase letters (a-z), digits (0-9) and spaces are allowed.",
+    "nameconv_too_many_words": "Too many words. Maximum is 12.",
+    "nameconv_ai_failed": "The AI could not suggest a name.",
+    "nameconv_suggestion_unusable": "The AI suggestion was not usable. Please enter a name manually."
   },
 
   "warnings": {
     "direct_connection_failed": "Direct connection also failed: {error}",
     "api_test_failed": "API connection test failed: {error}",
     "continue_despite_errors": "You can continue and try sending messages - errors may occur.",
-    "model_selection_cancelled": {"text": "Model selection cancelled.", "color": "BRIGHT_YELLOW"},
-    "proxy_selection_cancelled": {"text": "Proxy selection cancelled.", "color": "BRIGHT_YELLOW"},
-    "proxy_setup_cancelled": {"text": "Proxy setup cancelled, continuing without proxy.", "color": "BRIGHT_YELLOW"},
-    "continuing_without_proxy": {"text": "Continuing without proxy.", "color": "BRIGHT_YELLOW"},
-    "clear_cancelled": {"text": "Clear cancelled.", "color": "BRIGHT_YELLOW"},
-    "history_preserved": {"text": "Conversation history preserved.", "color": "BRIGHT_YELLOW"},
-    "no_previous_convs_project": {"text": "No previous conversations found for this project root.", "color": "BRIGHT_YELLOW"},
-    "no_previous_convs_free_chat": {"text": "No previous conversations found in free chat mode.", "color": "BRIGHT_YELLOW"}
+    "model_selection_cancelled": {"text": "Model selection cancelled.", "color": "RED"},
+    "proxy_selection_cancelled": {"text": "Proxy selection cancelled.", "color": "RED"},
+    "proxy_setup_cancelled": {"text": "Proxy setup cancelled, continuing without proxy.", "color": "RED"},
+    "continuing_without_proxy": {"text": "Continuing without proxy.", "color": "RED"},
+    "clear_cancelled": {"text": "Clear cancelled.", "color": "RED"},
+    "no_previous_convs_project": {"text": "No previous conversations found for this project root.", "color": "RED"},
+    "no_previous_convs_free_chat": {"text": "No previous conversations found in free chat mode.", "color": "RED"},
+    "nameconv_no_content": {"text": "Nothing to name yet — send a message first.", "color": "RED"}
   },
 
   "info": {
@@ -71,7 +76,7 @@
     "proxy_switched": "Proxy switched to: {url}",
     "proxy_mode_enabled": {"text": "PROXY MODE ENABLED", "color": "GREEN"},
     "proxy_url": "Proxy URL: {url}",
-    "proxy_suggested_title": {"text": "Proxy suggested for this model:", "color": "BRIGHT_YELLOW"},
+    "proxy_suggested_title": {"text": "Proxy suggested for this model:", "color": "GREEN"},
     "proxy_suggested_model": "Model '{model}' recommends using a proxy for optimal connectivity.",
     "proxy_configure_now": "Would you like to configure a proxy now?",
     "exiting_during_setup": {"text": "Exiting during setup...", "color": "BRIGHT_WHITE"},
@@ -83,10 +88,11 @@
     "already_using": "Already using {model}",
     "switching_model": "Switching from {current} to {new}...",
     "switched_model": {"text": "✓ Successfully switched to {model}", "color": "GREEN"},
+    "history_preserved": {"text": "Conversation history preserved.", "color": "GREEN"},
     "llm_explanation": {"text": "===================== Reply ======================\n", "color": "GREEN"},
     "no_explanation": "\nNo explanation provided by the LLM.",
     "request_sending": "⏳ Thinking... (Press Ctrl+C to interrupt)",
-    "request_interrupted": {"text": "Request interrupted by user (Ctrl+C)", "color": "BRIGHT_YELLOW"},
+    "request_interrupted": {"text": "Request interrupted by user (Ctrl+C)", "color": "GREEN"},
     "empty_message_hint": {"text": "Empty message or KeyboardInterrupt. Type /help to see command or /bye (then Alt+Enter) to quit.\n\n", "color": "BOLD"},
     "free_chat_mode_active": "Free chat mode active. Selecting a root directory will enable file context."
   },
@@ -106,13 +112,25 @@
     "title_value": {"text": "{value}", "color": "GREEN"},
     "no_items_value": {"text": "{value}", "color": "GREEN"},
     "available_conversations": "Available conversations:",
-    "conversation_enter_number": "Enter a number to select:",
+    "conversation_enter_number": "Enter a conversation number to select:",
     "no_conversations_available": "No conversations available",
+    "reload_enter_number_or_search": "Enter a conversation number or search keywords: ",
+    "reload_enter_keywords": "Enter keywords (space-separated): ",
+    "reload_no_matches": "No conversations matched your keywords.",
+    "reload_search_no_matches": "Enter new keywords or press Enter to go back: ",
+    "reload_showing_matches": "Showing {count} matching conversation(s) (sorted by relevance):",
+    "reload_search_select": "Enter conversation number, new keywords, or press Enter to go back: ",
+    "reload_back_hint": "(press Enter or type 'n' to go back to the full list)",
+    "reload_back_search_hint": "(press Enter or type 'n' to search by keywords)",
     "no_files_in_context": "No files are currently included in the context. What would you like to do?\n  [Y] - Send a plain message (without file context and file creation)\n  [n] - Send with file context (allow thin-wrap to create files)\n  [i] - Insert a file into the context (returns to text editor)\n",
     "yni_prompt": "[Y/n/i]: ",
     "returning_to_editor": "Returning to text editor. Use Ctrl+B to add files before sending.",
     "enter_valid_number": "Please enter a valid number or enable new item entry.",
     "new_item_error": "Invalid item",
+    "nameconv": "Name this conversation (12 words max), or press Enter to ask the AI to suggest one: ",
+    "nameconv_llm_query": "Name this conversation with less than 12 keywords (no more than 12) in a way that would make it easily recoverable by the user in a list of conversations. Answer this query with only such keywords, nothing else.",
+    "nameconv_suggestion": "Suggested name: {name}",
+    "nameconv_confirm": "Press Enter to accept, type a new name, or 'c' to cancel: ",
     "input_hint": {"text": "-------------------- Message ---------------------\n\n" , "color": "BRIGHT_GREEN"}
   },
 
@@ -159,14 +177,20 @@
     "conversation_dir": "Conversation directory: {dir}",
     "root_value": {"text": "{value}", "color": "GREEN"},
     "dir_value": {"text": "{value}", "color": "GREEN"},
+    "name_value": {"text": "{value}", "color": "GREEN"},
     "free_chat_display": "Free chat mode",
     "loaded_conversation": "Loaded conversation from {session}",
     "contains_messages": "Contains {count} messages",
     "loaded_into_history": "Loaded {count} user messages into history",
     "failed_to_load_conversation": "Failed to load conversation.",
     "reload_cancelled": "\nReload cancelled.",
-    "format_with_preview": "{timestamp} ({count} messages) - {preview}",
-    "format": "{timestamp} ({count} messages)"
+    "format": "{timestamp} · {name} ({count_label})",
+    "format_preview": "{timestamp} · {name} ({count_label}) - {preview}",
+    "message": "{count} message",
+    "messages": "{count} messages",
+    "no_name": "*no name*",
+    "score_label": "score: {score}",
+    "snippet_prefix": "  ... {snippet} ..."
   },
 
   "commands": {
@@ -180,6 +204,9 @@
     "clear_history": {"text": "Conversation history cleared.", "color": "GREEN"},
     "switched_free_chat": "Switched to free chat mode (no file context)",
     "root_changed": "Project root changed from '{old}' to '{new}'",
+    "nameconv_success": {"text": "Conversation named: {name}", "color": "GREEN"},
+    "nameconv_cancelled": {"text": "Name conversation cancelled.", "color": "RED"},
+    "nameconv_no_args": "Usage: /nameconv takes no arguments.",
     "descriptions": {
       "clear": "Clear session context",
       "bye": "Exit (auto-saves session log)",
@@ -188,7 +215,8 @@
       "reload": "Reload a previous conversation",
       "rootdir": "Show or set project root directory (option 0 for free chat mode)",
       "files": "Handle Ctrl+B file context menu",
-      "proxy": "Manage proxy (off to disable, number for previous, or new URL like socks5://127.0.0.1:1080)"
+      "proxy": "Manage proxy (off to disable, number for previous, or new URL like socks5://127.0.0.1:1080)",
+      "nameconv": "Name the current conversation (manual or AI-suggested)"
     }
   },
 
@@ -211,7 +239,7 @@
     "files_part2": { "text": " for file context", "color": "BRIGHT_WHITE" },
     "help_part1": { "text": " · ", "color": "BRIGHT_WHITE" },
     "help_part2": { "text": " for help", "color": "BRIGHT_WHITE" },
-    "session_log_saved": {"text": "Session saved ·", "color": "GREEN"}
+    "session_log_saved": {"text": "Session saved at:", "color": "GREEN"}
   },
 
   "separators": {
@@ -242,3 +270,4 @@
     "location_config_default": "default searched locations:\n  - $THIN_WRAP_CONFIG_DIR/config.json\n  - ~/.config/thin-wrap/config.json\n  - (same directory as binary)"
   }
 }
+

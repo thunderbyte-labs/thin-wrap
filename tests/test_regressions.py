@@ -296,3 +296,50 @@ def test_config_invalidate_clears_cache(tmp_path, monkeypatch):
         config.invalidate()
         m2 = config.get_models()
         assert m1 is not m2, "invalidate should force re-read"
+
+
+# =========================================================================
+# /clear starts a fresh session while keeping the old one on disk
+# =========================================================================
+
+
+def test_clear_rotates_to_new_session(tmp_path):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    cf = config_dir / "config.json"
+    _minimal_config_for_llmchat(str(cf))
+
+    root = tmp_path / "project"
+    root.mkdir()
+
+    chat = LLMChat(root_dir=str(root), config_path=str(cf))
+    old_sl = chat.session_logger
+
+    # Simulate a conversation already saved on disk
+    history = [
+        {
+            "timestamp": "2025-01-01T00:00:00",
+            "role": "user",
+            "content": "hello",
+        }
+    ]
+    old_file = old_sl.get_session_path()
+    old_sl.save_session(history)
+    assert os.path.exists(old_file)
+
+    # /clear rotates to a new session logger (fresh timestamp → new file)
+    chat.command_handler._handle_clear()
+    assert chat.session_logger is not old_sl
+    assert chat.command_handler.session_logger is chat.session_logger
+    assert chat.llm_client.session_logger is chat.session_logger
+
+    new_file = chat.session_logger.get_session_path()
+    assert new_file != old_file
+
+    # Old conversation stays on disk untouched
+    assert os.path.exists(old_file)
+    # The new session only creates its file on first (non-empty) save
+    assert not os.path.exists(new_file)
+    chat.session_logger.save_session(history)
+    assert os.path.exists(new_file)
+    assert os.path.exists(old_file)

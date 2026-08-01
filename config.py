@@ -309,11 +309,11 @@ TERMINAL_WIDTH_FALLBACK = 120
 COMMANDS = {
     "/clear": t("commands.descriptions.clear"),
     "/bye": t("commands.descriptions.bye"),
-    "/?": t("commands.descriptions.help"),
     "/help": t("commands.descriptions.help"),
     "/model": t("commands.descriptions.model"),
     "/reload": t("commands.descriptions.reload"),
     "/rootdir": t("commands.descriptions.rootdir"),
     "/files": t("commands.descriptions.files"),
     "/proxy": t("commands.descriptions.proxy"),
+    "/nameconv": t("commands.descriptions.nameconv"),
 }
