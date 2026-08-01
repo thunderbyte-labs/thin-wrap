@@ -36,7 +36,7 @@ def format_session(path: str, meta: dict | None = None) -> str:
 
     meta = meta or {}
     name = meta.get("name", "") or filename_name
-    name_label = UI.colorize(name, "GREEN") if name else t("sessions.no_name")
+    name_label = t("sessions.name_value", value=name) if name else t("sessions.no_name")
 
     count = meta.get("interaction_count", 0)
     if count == 1:

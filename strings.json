@@ -163,6 +163,7 @@
     "conversation_dir": "Conversation directory: {dir}",
     "root_value": {"text": "{value}", "color": "GREEN"},
     "dir_value": {"text": "{value}", "color": "GREEN"},
+    "name_value": {"text": "{value}", "color": "GREEN"},
     "free_chat_display": "Free chat mode",
     "loaded_conversation": "Loaded conversation from {session}",
     "contains_messages": "Contains {count} messages",
