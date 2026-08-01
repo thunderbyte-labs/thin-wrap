@@ -11,6 +11,19 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import config
 from session_logger import SessionLogger, sanitize_conversation_name
 
+HISTORY = [
+    {
+        "timestamp": "2025-01-01T00:00:00",
+        "role": "user",
+        "content": "hello",
+    },
+    {
+        "timestamp": "2025-01-01T00:00:01",
+        "role": "assistant",
+        "content": "hi",
+    },
+]
+
 
 def test_sanitize_valid_name():
     """Valid names are lowercased and spaces become dashes."""
@@ -63,7 +76,7 @@ def test_set_name_renames_existing_file():
     try:
         logger = SessionLogger(script_directory="/tmp", root_dir=None)
         old_path = logger.get_session_path()
-        logger.save_session([])
+        logger.save_session(HISTORY)
         assert os.path.exists(old_path)
 
         new_path = logger.set_name("my-conversation")
@@ -73,7 +86,7 @@ def test_set_name_renames_existing_file():
         assert os.path.exists(new_path)
 
         # Subsequent saves write to the renamed file
-        logger.save_session([])
+        logger.save_session(HISTORY)
         assert os.path.exists(new_path)
         print("✓ set_name renames the file and stays persistent")
     finally:
@@ -92,7 +105,7 @@ def test_set_name_before_first_save():
         assert not os.path.exists(logger.get_session_path())
         new_path = logger.set_name("brand-new")
         # First save creates the file with the final name
-        logger.save_session([])
+        logger.save_session(HISTORY)
         assert os.path.exists(new_path)
         assert new_path.endswith("_brand-new.toml.zip")
         print("✓ set_name works before the first save")
@@ -109,7 +122,7 @@ def test_set_name_replaces_previous_name():
 
     try:
         logger = SessionLogger(script_directory="/tmp", root_dir=None)
-        logger.save_session([])
+        logger.save_session(HISTORY)
         first = logger.set_name("first-name")
         assert os.path.exists(first)
         second = logger.set_name("second-name")
@@ -130,14 +143,44 @@ def test_name_in_metadata():
 
     try:
         logger = SessionLogger(script_directory="/tmp", root_dir=None)
-        logger.save_session([])
+        logger.save_session(HISTORY)
         logger.set_name("named-session")
-        saved_path = logger.save_session([])
+        saved_path = logger.save_session(HISTORY)
 
         metadata = logger.load_session_metadata(saved_path)
         assert metadata is not None
         assert metadata["name"] == "named-session"
         print("✓ name is persisted in session metadata")
+    finally:
+        config.CONVERSATIONS_DIR = original
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def test_empty_history_not_saved():
+    """Empty conversations are never persisted (and never deleted)."""
+    original = config.CONVERSATIONS_DIR
+    temp_dir = tempfile.mkdtemp()
+    config.CONVERSATIONS_DIR = temp_dir
+
+    try:
+        logger = SessionLogger(script_directory="/tmp", root_dir=None)
+        path = logger.get_session_path()
+        assert not os.path.exists(path)
+
+        # Saving an empty history creates nothing
+        result = logger.save_session([])
+        assert result is None
+        assert not os.path.exists(path)
+
+        # Saving non-empty creates the file
+        logger.save_session(HISTORY)
+        assert os.path.exists(path)
+
+        # Saving empty afterwards must not delete the existing file
+        result = logger.save_session([])
+        assert result is None
+        assert os.path.exists(path)
+        print("✓ empty histories are never persisted")
     finally:
         config.CONVERSATIONS_DIR = original
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -153,4 +196,5 @@ if __name__ == "__main__":
     test_set_name_before_first_save()
     test_set_name_replaces_previous_name()
     test_name_in_metadata()
+    test_empty_history_not_saved()
     print("\n✅ All nameconv tests passed!")

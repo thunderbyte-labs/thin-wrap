@@ -402,10 +402,8 @@ class LLMClient:
             )
 
     def clear_conversation(self):
-        """Clear conversation history and save empty session."""
+        """Clear conversation history. The old session stays saved on disk."""
         self.conversation_history = []
-        if self.session_logger:
-            self.session_logger.save_session(self.conversation_history)
 
     def load_conversation(self, conversation_history: list):
         """Load a saved conversation history."""

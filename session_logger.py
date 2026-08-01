@@ -83,7 +83,10 @@ class SessionLogger:
     def save_session(self, conversation_history):
         """
         Save conversation history to a zipped TOML file with multi-line literal strings for readable content.
+        Empty conversations are never persisted.
         """
+        if not conversation_history:
+            return None
         try:
             doc = tomlkit.document()
 
