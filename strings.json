@@ -222,8 +222,9 @@
 
   "tokens": {
     "token_usage_title": "\nUsage ({source}):",
-    "token_header": "Input       | Output      | Cache Hit    | Time (s)    | Output/s    ",
-    "token_separator": "────────────|─────────────|──────────────|─────────────|────────────",
+    "token_header": " Input Tokens  | Output Tokens | Cache Hit   | Time (s)    | Out Tokens/s",
+    "token_separator": " ───────────── | ───────────── | ─────────── | ─────────── | ────────────",
+    "token_row": " {input_tokens:<13} | {output_tokens:<13} | {cache_display:<11} | {duration_display:<11} | {ops_display:<12}",
     "token_error": "?? Could not get token usage: {error}"
   },
 

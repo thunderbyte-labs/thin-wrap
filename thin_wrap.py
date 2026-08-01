@@ -622,7 +622,14 @@ class LLMChat:
                 cache_display = "-"
 
             print(
-                f"   {input_tokens:<12} | {output_tokens:<12} | {cache_display:<14} | {duration_display:<11} | {ops_display:<12}"
+                t(
+                    "tokens.token_row",
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cache_display=cache_display,
+                    duration_display=duration_display,
+                    ops_display=ops_display,
+                )
             )
 
         except Exception as e:
