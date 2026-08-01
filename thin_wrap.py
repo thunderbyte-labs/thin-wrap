@@ -202,6 +202,13 @@ class LLMChat:
                     f"{t('common.error_prefix')} {t('common.invalid_input', error=e)}"
                 )
 
+    def _new_session_logger(self) -> SessionLogger:
+        """Create a fresh SessionLogger (new timestamp → new file) and propagate it."""
+        self.session_logger = SessionLogger(self.script_directory, self.root_dir)
+        self.llm_client.session_logger = self.session_logger
+        self.command_handler.session_logger = self.session_logger
+        return self.session_logger
+
     def set_root_dir(self, new_root: str, ask_to_reload: bool = True) -> None:
         """
         Change the current project root directory or switch to free chat mode.
@@ -218,9 +225,7 @@ class LLMChat:
             self.readable_files = []
 
             # Update session logger with None root (free chat mode)
-            self.session_logger = SessionLogger(self.script_directory, self.root_dir)
-            self.llm_client.session_logger = self.session_logger
-            self.command_handler.session_logger = self.session_logger
+            self._new_session_logger()
 
             print(f"{t('common.success_prefix')} {t('commands.switched_free_chat')}")
             return
@@ -256,11 +261,7 @@ class LLMChat:
         self._history.add_root(self.root_dir)
 
         # Update session logger with new root
-        self.session_logger = SessionLogger(self.script_directory, self.root_dir)
-
-        # Update LLM client's session logger reference
-        self.llm_client.session_logger = self.session_logger
-        self.command_handler.session_logger = self.session_logger
+        self._new_session_logger()
 
         print(
             f"{t('common.success_prefix')} {t('commands.root_changed', old=old_root, new=self.root_dir)}"
@@ -515,6 +516,8 @@ class LLMChat:
     def _exit_cleanly(self):
         """Show the session log location and exit cleanly."""
         log_path = self.session_logger.get_session_path()
+        if not os.path.exists(log_path):
+            log_path = None
         UI.show_exit_message(log_path)
 
     def _send_message(self, message):

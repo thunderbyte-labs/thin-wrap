@@ -44,6 +44,13 @@ class SessionLogger:
         self.session_start_time = datetime.now()
         self.session_name = None
         self._ts_str = self.session_start_time.strftime("%Y%m%d_%H%M%S")
+        while os.path.exists(
+            os.path.join(self.conversation_dir, f"session_{self._ts_str}.toml.zip")
+        ):
+            self.session_start_time = self.session_start_time.replace(
+                second=self.session_start_time.second + 1
+            )
+            self._ts_str = self.session_start_time.strftime("%Y%m%d_%H%M%S")
         self.session_filename = f"session_{self._ts_str}.toml.zip"
         self.session_path = os.path.join(self.conversation_dir, self.session_filename)
 

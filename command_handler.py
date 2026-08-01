@@ -78,9 +78,10 @@ class CommandHandler:
             print(t("commands.help_pageup", shortcut=t("keys.page_up_down")))
 
     def _handle_clear(self):
-        """Clear conversation history without user confirmation."""
+        """Clear conversation history and start a fresh session."""
         self.llm_client.clear_conversation()
         self.input_handler.clear_history()
+        self.chat_app._new_session_logger()
         print(t("commands.clear_history"))
 
     def _handle_model(self, args):
