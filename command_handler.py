@@ -1,6 +1,7 @@
 """Command handling for LLM Terminal Chat"""
 
 import os
+import re
 from pathlib import Path
 
 from prompt_toolkit.completion import PathCompleter
@@ -10,6 +11,56 @@ from path_utils import resolve_path
 from session_logger import sanitize_conversation_name
 from strings import t
 from ui import UI
+
+
+def format_session(path: str, meta: dict | None = None) -> str:
+    """Format a session file path for the /reload listing.
+
+    Displayed as ``{timestamp} · {name} ({count_label})`` with an optional
+    preview suffix. The name is colored GREEN when present, otherwise
+    ``*no name*`` is shown.
+    """
+    filename = os.path.basename(path)
+    stem = filename.replace("session_", "").replace(".toml.zip", "")
+    ts_match = re.fullmatch(r"(\d{8}_\d{6})(?:_(.*))?", stem)
+    if ts_match:
+        raw_ts = ts_match.group(1)
+        timestamp = (
+            f"{raw_ts[:4]}-{raw_ts[4:6]}-{raw_ts[6:8]} "
+            f"{raw_ts[9:11]}:{raw_ts[11:13]}:{raw_ts[13:15]}"
+        )
+        filename_name = ts_match.group(2) or ""
+    else:
+        timestamp = stem
+        filename_name = ""
+
+    meta = meta or {}
+    name = meta.get("name", "") or filename_name
+    name_label = UI.colorize(name, "GREEN") if name else t("sessions.no_name")
+
+    count = meta.get("interaction_count", 0)
+    if count == 1:
+        count_label = t("sessions.message", count=count)
+    else:
+        count_label = t("sessions.messages", count=count)
+
+    preview = meta.get("preview", "")
+    if preview:
+        if len(preview) > 50:
+            preview = preview[:47] + "..."
+        return t(
+            "sessions.format_preview",
+            timestamp=timestamp,
+            name=name_label,
+            count_label=count_label,
+            preview=preview,
+        )
+    return t(
+        "sessions.format",
+        timestamp=timestamp,
+        name=name_label,
+        count_label=count_label,
+    )
 
 
 class CommandHandler:
@@ -157,61 +208,6 @@ class CommandHandler:
             if meta:
                 metadata_cache[session_path] = meta
 
-        def format_session(path):
-            filename = os.path.basename(path)
-            # Remove the .toml.zip extension and session_ prefix
-            name = filename.replace("session_", "").replace(".toml.zip", "")
-            # Format as YYYY-MM-DD HH:MM:SS
-            try:
-                # Parse the timestamp format: YYYYMMDD_HHMMSS
-                if "_" in name:
-                    date_part, time_part = name.split("_", 1)
-                    if len(date_part) == 8 and len(time_part) == 6:
-                        # Format: YYYY-MM-DD HH:MM:SS
-                        timestamp = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]} {time_part[:2]}:{time_part[2:4]}:{time_part[4:6]}"
-                    else:
-                        timestamp = name
-                else:
-                    timestamp = name
-            except Exception:
-                timestamp = name
-
-            # Add metadata if available
-            meta = metadata_cache.get(path)
-            if meta:
-                count = meta.get("interaction_count", 0)
-                name = meta.get("name", "")
-                preview = meta.get("preview", "")
-                if preview:
-                    # Truncate preview to 50 chars for display
-                    if len(preview) > 50:
-                        preview = preview[:47] + "..."
-                    if name:
-                        return t(
-                            "sessions.format_named_with_preview",
-                            name=name,
-                            timestamp=timestamp,
-                            count=count,
-                            preview=preview,
-                        )
-                    return t(
-                        "sessions.format_with_preview",
-                        timestamp=timestamp,
-                        count=count,
-                        preview=preview,
-                    )
-                else:
-                    if name:
-                        return t(
-                            "sessions.format_named",
-                            name=name,
-                            timestamp=timestamp,
-                            count=count,
-                        )
-                    return t("sessions.format", timestamp=timestamp, count=count)
-            else:
-                return timestamp
-
         root_display = (
             self.chat_app.root_dir
             if self.chat_app.root_dir is not None
@@ -237,7 +233,7 @@ class CommandHandler:
                 prompt_message=t("prompts.conversation_enter_number"),
                 no_items_message=t("prompts.no_conversations_available"),
                 items=sessions,
-                item_formatter=format_session,
+                item_formatter=lambda p: format_session(p, metadata_cache.get(p)),
                 allow_new=False,
             )
 
@@ -254,7 +250,9 @@ class CommandHandler:
                     print(
                         t(
                             "sessions.loaded_conversation",
-                            session=format_session(selected_path),
+                            session=format_session(
+                                selected_path, metadata_cache.get(selected_path)
+                            ),
                         )
                     )
                     print(

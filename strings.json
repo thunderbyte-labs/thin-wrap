@@ -169,10 +169,11 @@
     "loaded_into_history": "Loaded {count} user messages into history",
     "failed_to_load_conversation": "Failed to load conversation.",
     "reload_cancelled": "\nReload cancelled.",
-    "format_with_preview": "{timestamp} ({count} messages) - {preview}",
-    "format": "{timestamp} ({count} messages)",
-    "format_named": "{name} - {timestamp} ({count} messages)",
-    "format_named_with_preview": "{name} - {timestamp} ({count} messages) - {preview}"
+    "format": "{timestamp} · {name} ({count_label})",
+    "format_preview": "{timestamp} · {name} ({count_label}) - {preview}",
+    "message": "{count} message",
+    "messages": "{count} messages",
+    "no_name": "*no name*"
   },
 
   "commands": {
