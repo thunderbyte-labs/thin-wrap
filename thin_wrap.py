@@ -348,9 +348,12 @@ class LLMChat:
             return False
 
     def _format_files_line(self, file_list, label):
-        """Format a single files-summary line (e.g. "Editable (2): a.py, b.py")."""
+        """Format a files-summary line as ``(label_part, value_part)``.
+
+        e.g. ``("Editable (2):", "a.py, b.py")`` or ``("Readable:", "None")``.
+        """
         if not file_list:
-            return t("files.none", label=label)
+            return t("files.none_label", label=label), t("files.none_value")
         # Convert to relative paths
         rel_paths = []
         for f in file_list:
@@ -363,12 +366,15 @@ class LLMChat:
         max_show = 5
         if len(rel_paths) <= max_show:
             files_str = ", ".join(rel_paths)
-            return t("files.list", label=label, count=len(rel_paths), files=files_str)
-        shown = rel_paths[:max_show]
-        files_str = ", ".join(shown) + t(
-            "files.and_more", count=len(rel_paths) - max_show
+        else:
+            shown = rel_paths[:max_show]
+            files_str = ", ".join(shown) + t(
+                "files.and_more", count=len(rel_paths) - max_show
+            )
+        return (
+            t("files.list_label", label=label, count=len(rel_paths)),
+            files_str,
         )
-        return t("files.list", label=label, count=len(rel_paths), files=files_str)
 
     def _print_files_summary(self):
         """Print a compact summary of editable and readable files."""
@@ -376,23 +382,30 @@ class LLMChat:
             return
 
         print()
-        print(self._format_files_line(self.editable_files, t("files.label_editable")))
-        print(self._format_files_line(self.readable_files, t("files.label_readable")))
+        for file_list, label in (
+            (self.editable_files, t("files.label_editable")),
+            (self.readable_files, t("files.label_readable")),
+        ):
+            label_part, value_part = self._format_files_line(file_list, label)
+            print(f"{label_part} {value_part}")
         print()
 
     def _file_context_block(self) -> str:
-        """Green ANSI block shown below the input (following it while typing)
-        and kept in the scrollback after sending: a blank line, then "File
-        context:" and the files summary. Empty when there is no context."""
+        """ANSI block shown below the input (following it while typing) and
+        kept in the scrollback after sending: a blank line, then "File
+        context:" and the files summary. Only the labels ("File context:",
+        "Editable:", "Readable:") are green; the values stay in the default
+        color. Empty when there is no context."""
         if not self.editable_files and not self.readable_files:
             return ""
-        lines = [
-            "",
-            t("files.context_title"),
-            self._format_files_line(self.editable_files, t("files.label_editable")),
-            self._format_files_line(self.readable_files, t("files.label_readable")),
-        ]
-        return UI.colorize("\n".join(lines), "GREEN")
+        lines = ["", UI.colorize(t("files.context_title"), "GREEN")]
+        for file_list, label in (
+            (self.editable_files, t("files.label_editable")),
+            (self.readable_files, t("files.label_readable")),
+        ):
+            label_part, value_part = self._format_files_line(file_list, label)
+            lines.append(f"{UI.colorize(label_part, 'GREEN')} {value_part}")
+        return "\n".join(lines)
 
     def _print_file_context_block(self):
         """Print the file-context block into the scrollback (after sending)."""

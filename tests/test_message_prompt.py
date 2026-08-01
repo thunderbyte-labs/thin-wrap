@@ -40,9 +40,25 @@ def test_file_context_block_formats_files(capsys):
     chat.root_dir = "/proj"
     block = chat._file_context_block()
     assert "File context:" in block
-    assert "Editable (1): hello.s" in block
-    assert "Readable (1): notes.md" in block
-    assert "\x1b[32m" in block  # GREEN
+    assert "Editable (1):" in block
+    assert "Readable (1):" in block
+    assert "hello.s" in block
+    assert "notes.md" in block
+    # labels green, values default color
+    assert "\x1b[32mFile context:\x1b[0m" in block
+    assert "\x1b[32mEditable (1):\x1b[0m hello.s" in block
+    assert "\x1b[32mReadable (1):\x1b[0m notes.md" in block
+    assert "\x1b[32mhello.s" not in block  # value is not green
+
+
+def test_file_context_block_none_value_default_color(capsys):
+    chat = _chat()
+    chat.editable_files = []
+    chat.readable_files = ["/proj/notes.md"]
+    chat.root_dir = "/proj"
+    block = chat._file_context_block()
+    assert "\x1b[32mEditable:\x1b[0m None" in block
+    assert "\x1b[32mReadable (1):\x1b[0m notes.md" in block
 
 
 def test_file_context_block_empty_when_no_files():
@@ -61,7 +77,8 @@ def test_print_file_context_block_writes_scrollback(capsys):
     chat._print_file_context_block()
     out = capsys.readouterr().out
     assert "File context:" in out
-    assert "Editable (1): hello.s" in out
+    assert "Editable (1):" in out
+    assert "hello.s" in out
 
 
 def test_print_file_context_block_empty_is_noop(capsys):

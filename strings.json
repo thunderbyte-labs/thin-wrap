@@ -169,8 +169,9 @@
     "label_editable": "Editable",
     "label_readable": "Readable",
     "context_title": "File context:",
-    "none": "{label}: None",
-    "list": "{label} ({count}): {files}",
+    "none_label": "{label}:",
+    "none_value": "None",
+    "list_label": "{label} ({count}):",
     "and_more": " ... and {count} more"
   },
 
