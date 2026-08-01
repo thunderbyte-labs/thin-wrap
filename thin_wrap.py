@@ -546,15 +546,95 @@ class LLMChat:
         assert query is not None
         query = clean_text(query)
 
-        # Measure time taken for LLM client interaction
+        # Measure time taken for LLM client interaction. The token-usage table
+        # is rendered once and its data row redrawn in place (no new lines)
+        # as the streamed response progresses.
         start_time_ns = time.perf_counter_ns()
-        response, usage = self.llm_client.send_message(query)
+        input_estimate = estimate_tokens(query)
+        table_state = {"shown": False, "last_draw": 0.0}
+
+        def _token_table_lines(
+            input_tokens,
+            output_tokens,
+            cached_tokens,
+            duration_ms,
+            source,
+        ):
+            title = t("tokens.token_usage_title", source=source)
+            header = t("tokens.token_header")
+            separator = t("tokens.token_separator")
+            row = self._format_token_row(
+                input_tokens, output_tokens, cached_tokens, duration_ms
+            )
+            return title.split("\n") + [header, separator, row]
+
+        def _redraw_token_table(lines, final=False):
+            if table_state["shown"]:
+                # The cursor sits on the block's last line, so back up by
+                # len(lines) - 1 rows to reach the first line of the block.
+                sys.stdout.write(f"\x1b[{len(lines) - 1}A")
+            for i, line in enumerate(lines):
+                sys.stdout.write(f"\r\x1b[2K{line}")
+                if i < len(lines) - 1 or final:
+                    sys.stdout.write("\n")
+            sys.stdout.flush()
+            table_state["shown"] = True
+
+        def _on_progress(text, partial_usage):
+            now = time.perf_counter()
+            if table_state["shown"] and now - table_state["last_draw"] < 0.1:
+                return
+            table_state["last_draw"] = now
+            elapsed_ms = (time.perf_counter_ns() - start_time_ns) / 1_000_000.0
+            lines = _token_table_lines(
+                input_estimate,
+                estimate_tokens(text),
+                0,
+                elapsed_ms,
+                "estimated",
+            )
+            _redraw_token_table(lines)
+
+        response, usage = self.llm_client.send_message(query, on_progress=_on_progress)
         end_time_ns = time.perf_counter_ns()
         duration_ms = (
             end_time_ns - start_time_ns
         ) / 1_000_000.0  # Millisecond precision
 
-        self._report_token_usage(query, response, usage, duration_ms=duration_ms)
+        try:
+            (
+                input_tokens,
+                output_tokens,
+                cached_tokens,
+                source,
+            ) = self._token_usage_numbers(query, response, usage)
+            final_lines = _token_table_lines(
+                input_tokens,
+                output_tokens,
+                cached_tokens,
+                duration_ms,
+                source,
+            )
+            if table_state["shown"]:
+                _redraw_token_table(final_lines, final=True)
+            else:
+                self._report_token_usage(
+                    query, response, usage, duration_ms=duration_ms
+                )
+        except Exception as e:
+            if table_state["shown"]:
+                _redraw_token_table(
+                    _token_table_lines(
+                        input_estimate,
+                        estimate_tokens(response),
+                        0,
+                        duration_ms,
+                        "estimated",
+                    ),
+                    final=True,
+                )
+            else:
+                print(t("tokens.token_error", error=e))
 
         assert response is not None
         comments = response_parser(response)
@@ -569,6 +649,74 @@ class LLMChat:
         print()
         logger.debug("Message sent and response processed successfully")
 
+    def _token_usage_numbers(
+        self,
+        query: str,
+        response: str,
+        usage: dict | None,
+    ) -> tuple[int, int, int, str]:
+        """Resolve (input_tokens, output_tokens, cached_tokens, source).
+
+        Accepts both the OpenAI /chat/completions usage keys
+        (``prompt_tokens``/``completion_tokens``, DeepSeek's
+        ``prompt_cache_hit_tokens`` or OpenAI's ``prompt_tokens_details``)
+        and the DashScope /responses keys (``input_tokens``/``output_tokens``,
+        ``input_tokens_details.cached_tokens``).
+        """
+        if usage and isinstance(usage, dict):
+            input_tokens = usage.get("prompt_tokens") or usage.get("input_tokens") or 0
+            output_tokens = (
+                usage.get("completion_tokens") or usage.get("output_tokens") or 0
+            )
+            # Cache hit (compatible DeepSeek + OpenAI/OpenRouter/Gemini + DashScope)
+            cached_tokens = (
+                usage.get("prompt_cache_hit_tokens", 0)
+                or usage.get("prompt_tokens_details", {}).get("cached_tokens", 0)
+                or usage.get("input_tokens_details", {}).get("cached_tokens", 0)
+            )
+            source = "API"
+        else:
+            input_tokens = estimate_tokens(query)
+            output_tokens = estimate_tokens(response)
+            cached_tokens = 0
+            source = "estimated"
+
+        return input_tokens, output_tokens, cached_tokens, source
+
+    def _format_token_row(
+        self,
+        input_tokens: int,
+        output_tokens: int,
+        cached_tokens: int = 0,
+        duration_ms: float | None = None,
+    ) -> str:
+        """Format a single table data row (shared by live and static display)."""
+        duration_display = "-"
+        ops_display = "-"
+
+        if duration_ms is not None and duration_ms > 0:
+            duration_seconds = duration_ms / 1000.0
+            duration_display = f"{duration_seconds:.1f}"
+            if output_tokens > 0:
+                output_tokens_per_second = 1000.0 * output_tokens / duration_ms
+                ops_display = f"{output_tokens_per_second:.1f}"
+
+        if cached_tokens > 0 and input_tokens > 0:
+            ratio = (cached_tokens / input_tokens) * 100
+            # Compacted to fit 12 characters: e.g., '12345 (100%)'
+            cache_display = f"{cached_tokens} ({ratio:.0f}%)"
+        else:
+            cache_display = "-"
+
+        return t(
+            "tokens.token_row",
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_display=cache_display,
+            duration_display=duration_display,
+            ops_display=ops_display,
+        )
+
     def _report_token_usage(
         self,
         query: str,
@@ -578,54 +726,21 @@ class LLMChat:
     ):
         """Affiche un tableau clair avec Input, Output, Cache Hit, Time (s), et Output/s."""
         try:
-            if usage and isinstance(usage, dict):
-                input_tokens = usage.get("prompt_tokens", 0)
-                output_tokens = usage.get("completion_tokens", 0)
-
-                # Cache hit (compatible DeepSeek + OpenAI/OpenRouter/Gemini)
-                cached_tokens = usage.get("prompt_cache_hit_tokens", 0) or usage.get(
-                    "prompt_tokens_details", {}
-                ).get("cached_tokens", 0)
-                source = "API"
-            else:
-                input_tokens = estimate_tokens(query)
-                output_tokens = estimate_tokens(response)
-                cached_tokens = 0
-                source = "estimated"
-
-            duration_seconds = 0.0
-            output_tokens_per_second = 0.0
-            duration_display = "-"
-            ops_display = "-"
-
-            if duration_ms is not None and duration_ms > 0:
-                duration_seconds = duration_ms / 1000.0
-                duration_display = f"{duration_seconds:.1f}"
-                if output_tokens > 0:
-                    output_tokens_per_second = 1000.0 * output_tokens / duration_ms
-                    ops_display = f"{output_tokens_per_second:.1f}"
+            (
+                input_tokens,
+                output_tokens,
+                cached_tokens,
+                source,
+            ) = self._token_usage_numbers(query, response, usage)
 
             print(t("tokens.token_usage_title", source=source))
             # Headers for 5 columns, total width (excluding '   ' prefix) is 62 characters
             # This aligns the table's content width with the '─' * 65 line when considering the '   ' prefix
             print(t("tokens.token_header"))
             print(t("tokens.token_separator"))
-
-            if cached_tokens > 0 and input_tokens > 0:
-                ratio = (cached_tokens / input_tokens) * 100
-                # Compacted to fit 12 characters: e.g., '12345 (100%)'
-                cache_display = f"{cached_tokens} ({ratio:.0f}%)"
-            else:
-                cache_display = "-"
-
             print(
-                t(
-                    "tokens.token_row",
-                    input_tokens=input_tokens,
-                    output_tokens=output_tokens,
-                    cache_display=cache_display,
-                    duration_display=duration_display,
-                    ops_display=ops_display,
+                self._format_token_row(
+                    input_tokens, output_tokens, cached_tokens, duration_ms
                 )
             )
 
