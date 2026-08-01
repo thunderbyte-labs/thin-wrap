@@ -3,7 +3,7 @@
 import os
 import re
 import zipfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import tomlkit
@@ -47,9 +47,7 @@ class SessionLogger:
         while os.path.exists(
             os.path.join(self.conversation_dir, f"session_{self._ts_str}.toml.zip")
         ):
-            self.session_start_time = self.session_start_time.replace(
-                second=self.session_start_time.second + 1
-            )
+            self.session_start_time += timedelta(seconds=1)
             self._ts_str = self.session_start_time.strftime("%Y%m%d_%H%M%S")
         self.session_filename = f"session_{self._ts_str}.toml.zip"
         self.session_path = os.path.join(self.conversation_dir, self.session_filename)

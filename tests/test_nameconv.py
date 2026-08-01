@@ -186,6 +186,33 @@ def test_empty_history_not_saved():
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+def test_collision_rolls_over_minute():
+    """Collision avoidance rolls the timestamp over the minute boundary."""
+    from datetime import datetime
+    from unittest.mock import patch
+
+    original = config.CONVERSATIONS_DIR
+    temp_dir = tempfile.mkdtemp()
+    config.CONVERSATIONS_DIR = temp_dir
+
+    try:
+        conv_dir = os.path.join(temp_dir, "free_chat")
+        os.makedirs(conv_dir, exist_ok=True)
+        # Occupied timestamp at second 59 → next free slot is the next minute
+        with open(os.path.join(conv_dir, "session_20260801_123459.toml.zip"), "w"):
+            pass
+
+        fixed = datetime(2026, 8, 1, 12, 34, 59)
+        with patch("session_logger.datetime") as mock_dt:
+            mock_dt.now.return_value = fixed
+            logger = SessionLogger(script_directory="/tmp", root_dir=None)
+            assert logger._ts_str == "20260801_123500"
+        print("✓ collision avoidance rolls over the minute boundary")
+    finally:
+        config.CONVERSATIONS_DIR = original
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 if __name__ == "__main__":
     test_sanitize_valid_name()
     test_sanitize_collapses_spaces()
@@ -197,4 +224,5 @@ if __name__ == "__main__":
     test_set_name_replaces_previous_name()
     test_name_in_metadata()
     test_empty_history_not_saved()
+    test_collision_rolls_over_minute()
     print("\n✅ All nameconv tests passed!")
