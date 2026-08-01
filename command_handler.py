@@ -597,13 +597,19 @@ class CommandHandler:
             print(t("commands.nameconv_success", name=new_slug))
             return
 
-    def handle_files_command(self):
-        """Handle Ctrl+B file context menu"""
+    def handle_files_command(self) -> bool:
+        """Handle Ctrl+B file context menu.
+
+        Returns True when the full-screen file menu was shown (the terminal
+        screen is unchanged on exit, so the caller can refresh the Message
+        header in place), False otherwise (free-chat root selection or menu
+        error scrolled the terminal).
+        """
         # In free chat mode, prompt for root directory selection instead
         if hasattr(self.chat_app, "free_chat_mode") and self.chat_app.free_chat_mode:
             print(t("info.free_chat_mode_active"))
             self._handle_rootdir([])
-            return
+            return False
 
         from menu import FileMenuApp
 
@@ -617,8 +623,10 @@ class CommandHandler:
             # Update the files lists after menu closes
             self.chat_app.editable_files = app.editable_files
             self.chat_app.readable_files = app.readable_files
+            return True
         except Exception as e:
             print(t("errors.error_opening_file_menu", error=e))
+            return False
 
     def _handle_rootdir(self, args):
         """Show or set project root directory using interactive selection with free chat option"""

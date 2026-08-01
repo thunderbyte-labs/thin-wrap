@@ -154,6 +154,7 @@ class LLMChat:
         self.command_handler = CommandHandler(
             self.llm_client, self.session_logger, self.input_handler, self
         )
+        self._message_prompt_height = 0
         logger.debug("Initialized all LLMChat components")
 
     def _resolve_file_list(self, files: list[str], root_dir: str) -> list[str]:
@@ -386,6 +387,9 @@ class LLMChat:
         Shows the files summary (if any), a blank line, then the Message
         separator. The header is owned by the app (not prompt_toolkit) so it is
         printed once per input regardless of the scenario (empty context or not).
+
+        The number of terminal lines written is recorded in
+        ``_message_prompt_height`` so the header can later be redrawn in place.
         """
         if self.editable_files or self.readable_files:
             print(
@@ -395,23 +399,33 @@ class LLMChat:
                 self._format_files_line(self.readable_files, t("files.label_readable"))
             )
             print()
+            self._message_prompt_height = 5
         else:
             print()
+            self._message_prompt_height = 3
         sys.stdout.write(t("prompts.input_hint"))
         sys.stdout.flush()
 
-    def _context_signature(self):
-        """Snapshot of the context shown in the Message header (root + files)."""
-        return (self.root_dir, list(self.editable_files), list(self.readable_files))
+    def _refresh_message_prompt(self, draft: str = ""):
+        """Redraw the Message header in place, keeping a single clean block.
 
-    def _print_message_prompt_after_menu(self, context_before):
-        """Re-render the Message header after the Ctrl+B menu, but only when the
-        context (root / files) changed.
-
-        Opening and closing the menu without touching the files would otherwise
-        re-print the header on every Ctrl+B, piling up duplicate blocks.
+        Used after the full-screen file menu (Ctrl+B or /files): the menu runs
+        on the alternate screen, so the previously printed header is still on
+        screen when it closes. Move back up to it, erase everything below, and
+        redraw -- so adding/removing files or pressing Ctrl+B repeatedly never
+        piles up duplicate headers or pushes the cursor down.
         """
-        if self._context_signature() != context_before:
+        draft_lines = draft.count("\n") + 1 if draft else 1
+        if self._message_prompt_height > 0:
+            sys.stdout.write(f"\x1b[{self._message_prompt_height + draft_lines}A")
+            sys.stdout.write("\x1b[J")
+        self._print_message_prompt()
+
+    def _after_file_menu(self, menu_ok: bool, draft: str = ""):
+        """Print the Message header after a file-menu action (Ctrl+B or /files)."""
+        if menu_ok:
+            self._refresh_message_prompt(draft)
+        else:
             self._print_message_prompt()
 
     def _prompt_for_proxy_if_needed(self, selected_model: str) -> bool:
@@ -523,9 +537,8 @@ class LLMChat:
             next_default = ""
             if isinstance(user_input, tuple) and user_input[0] == "Ctrl+B":
                 next_default = user_input[1]
-                context_before = self._context_signature()
-                self.command_handler.handle_files_command()
-                self._print_message_prompt_after_menu(context_before)
+                menu_ok = self.command_handler.handle_files_command()
+                self._after_file_menu(menu_ok, next_default)
                 continue
 
             if not user_input:
@@ -536,6 +549,11 @@ class LLMChat:
             logger.debug(f"Processing user input: {user_input[:50]}...")
 
             if user_input.startswith("/"):
+                cmd = user_input.split()[0].lower()
+                if cmd == "/files":
+                    menu_ok = self.command_handler.handle_files_command()
+                    self._after_file_menu(menu_ok)
+                    continue
                 logger.debug("Detected command input")
                 should_quit = self.command_handler.handle_command(user_input)
                 if should_quit:
