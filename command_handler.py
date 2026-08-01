@@ -47,7 +47,7 @@ def _score_session(
         kw_lower = kw.lower()
         if not kw_lower:
             continue
-        pattern = re.compile(r'\b' + re.escape(kw_lower) + r'\b', re.IGNORECASE)
+        pattern = re.compile(r"\b" + re.escape(kw_lower) + r"\b", re.IGNORECASE)
 
         # Title scoring
         for _ in pattern.finditer(name_lower):
@@ -75,7 +75,7 @@ def _all_keywords_present(name: str, content: str, keywords: list[str]) -> bool:
         return True
     for kw in keywords:
         kw_lower = kw.lower()
-        pattern = re.compile(r'\b' + re.escape(kw_lower) + r'\b', re.IGNORECASE)
+        pattern = re.compile(r"\b" + re.escape(kw_lower) + r"\b", re.IGNORECASE)
         if not (pattern.search(name) or pattern.search(content)):
             return False
     return True
@@ -367,9 +367,7 @@ class CommandHandler:
             selected_path = None
             while selected_path is None:
                 user_input = (
-                    input(t("prompts.reload_enter_number_or_search"))
-                    .strip()
-                    .lower()
+                    input(t("prompts.reload_enter_number_or_search")).strip().lower()
                 )
 
                 if not user_input:
@@ -387,8 +385,7 @@ class CommandHandler:
                         )
                         break
                     print(
-                        f"{t('common.error_prefix')} "
-                        f"{t('common.number_out_of_range')}"
+                        f"{t('common.error_prefix')} {t('common.number_out_of_range')}"
                     )
                     # Re-show the list so the user can see valid numbers
                     _show_conversation_menu(sessions, item_formatter)
@@ -474,11 +471,7 @@ class CommandHandler:
             if not ranked:
                 # No matching sessions with these keywords
                 print(t("prompts.reload_no_matches"))
-                new_input = (
-                    input(t("prompts.reload_search_no_matches"))
-                    .strip()
-                    .lower()
-                )
+                new_input = input(t("prompts.reload_search_no_matches")).strip().lower()
                 if not new_input:
                     # Go back to full list
                     return None
@@ -488,20 +481,14 @@ class CommandHandler:
 
             # Show ranked results
             print()
-            print(
-                t("prompts.reload_showing_matches", count=len(ranked))
-            )
+            print(t("prompts.reload_showing_matches", count=len(ranked)))
             print()
             search_formatter = _make_search_formatter(metadata_cache, ranked)
             ranked_paths = [path for _, path, _ in ranked]
             _show_conversation_menu(ranked_paths, search_formatter)
 
             # Single prompt for selection / refine / back
-            user_input = (
-                input(t("prompts.reload_search_select"))
-                .strip()
-                .lower()
-            )
+            user_input = input(t("prompts.reload_search_select")).strip().lower()
 
             if not user_input:
                 # Empty → go back to full list
@@ -511,15 +498,9 @@ class CommandHandler:
                 idx = int(user_input) - 1
                 if 0 <= idx < len(ranked_paths):
                     chosen = ranked_paths[idx]
-                    print(
-                        f"{t('common.selected_prefix')} "
-                        f"{search_formatter(chosen)}"
-                    )
+                    print(f"{t('common.selected_prefix')} {search_formatter(chosen)}")
                     return chosen
-                print(
-                    f"{t('common.error_prefix')} "
-                    f"{t('common.number_out_of_range')}"
-                )
+                print(f"{t('common.error_prefix')} {t('common.number_out_of_range')}")
                 # Re-show the search results (loop will restart without new
                 # input, so we manually re-display)
                 continue
@@ -655,4 +636,3 @@ class CommandHandler:
             # manual proxy URL entry -- retry on failure
             if self.chat_app.set_proxy(sel_value):
                 return
-
