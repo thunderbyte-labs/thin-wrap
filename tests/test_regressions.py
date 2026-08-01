@@ -3,12 +3,10 @@
 import json
 import os
 import shutil
-import tempfile
 import sys
+import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -16,9 +14,8 @@ import config
 from command_handler import CommandHandler
 from file_processor import _report_diff, _write_file, generate_query
 from history_store import HistoryStore
-from ui import UI
 from thin_wrap import LLMChat
-
+from ui import UI
 
 # =========================================================================
 # history_store
@@ -38,7 +35,9 @@ def test_history_store_round_trip():
         assert "socks5://127.0.0.1:1080" in store.recent_proxies
         store2 = HistoryStore(hf)
         assert test_dir in store2.recent_roots, "persist + re-load root"
-        assert "socks5://127.0.0.1:1080" in store2.recent_proxies, "persist + re-load proxy"
+        assert "socks5://127.0.0.1:1080" in store2.recent_proxies, (
+            "persist + re-load proxy"
+        )
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

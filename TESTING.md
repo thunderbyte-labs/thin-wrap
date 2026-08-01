@@ -159,28 +159,31 @@ To ensure all tests pass before merging to main, configure the following branch 
 ```python
 #!/usr/bin/env python3
 """Test <feature> functionality."""
+
 import sys
 import os
 import tempfile
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Import modules to test
 import config
 from module import Class
+
 
 def test_feature_scenario():
     """Test specific scenario with expected behavior."""
     # Setup
     original_value = None
     temp_dir = tempfile.mkdtemp()
-    
+
     try:
         # Test logic
         result = function_under_test()
-        
+
         # Assertions
         assert result == expected, f"Expected {expected}, got {result}"
-        
+
         print("✓ Test passed")
     finally:
         # Cleanup

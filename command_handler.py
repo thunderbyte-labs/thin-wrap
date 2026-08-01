@@ -5,10 +5,10 @@ from pathlib import Path
 
 from prompt_toolkit.completion import PathCompleter
 
-from ui import UI
 import config
 from path_utils import resolve_path
 from strings import t
+from ui import UI
 
 
 class CommandHandler:

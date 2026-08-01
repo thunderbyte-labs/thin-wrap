@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Test proxy command functionality."""
 
-import sys
-import os
-import tempfile
 import json
+import os
 import shutil
+import sys
+import tempfile
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -47,9 +47,7 @@ def test_proxy_history():
     # We'll monkey-patch config.CONVERSATIONS_DIR later
     import platformdirs
 
-    user_data_dir = platformdirs.user_data_dir(
-        config.APP_NAME, appauthor=False, ensure_exists=True
-    )
+    platformdirs.user_data_dir(config.APP_NAME, appauthor=False, ensure_exists=True)
     # Override the config dir via environment variable? Instead, we'll directly test LLMChat
     # which uses platformdirs internally. We'll need to mock platformdirs.user_config_dir.
     # For simplicity, test the internal methods directly.
@@ -79,7 +77,7 @@ def test_proxy_history():
         assert len(chat.recent_proxies) == 3  # But limited to 10
 
         # Verify history file contains both roots and proxies
-        with open(history_file, "r") as f:
+        with open(history_file) as f:
             saved_data = json.load(f)
         assert "recent_root_dirs" in saved_data
         assert "recent_proxies" in saved_data
@@ -98,7 +96,6 @@ def test_proxy_command_parsing():
     # This is a simple test that the command handler recognizes /proxy
     # We'll test by importing CommandHandler and checking handle_command
     from command_handler import CommandHandler
-    import config
 
     # Mock dependencies
     class MockLLMClient:

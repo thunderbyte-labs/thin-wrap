@@ -1,9 +1,9 @@
 """Text processing and encoding utilities"""
 
-import config
 import re
 import unicodedata
-from typing import Optional
+
+import config
 
 
 def clean_text(text):
@@ -35,7 +35,7 @@ def clean_text(text):
         )
 
 
-def estimate_tokens(text: Optional[str]) -> int:
+def estimate_tokens(text: str | None) -> int:
     """
     Token approximation without external dependencies.
 
@@ -106,9 +106,8 @@ def estimate_tokens(text: Optional[str]) -> int:
             bpe_estimate += (tok_len - 10) // 5  # Conservative: ~5 chars per subword
 
         # Numbers: long digit sequences often split (e.g., "12345" → "12" + "345")
-        if token.isdigit():
-            if tok_len > 3:
-                bpe_estimate += tok_len // 4
+        if token.isdigit() and tok_len > 3:
+            bpe_estimate += tok_len // 4
 
     # Detect code with better heuristics
     code_score = 0

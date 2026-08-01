@@ -1,10 +1,11 @@
 """SOCKS5 proxy wrapper for routing LLM client's API traffic"""
 
-import requests
+import importlib.util
 import logging
-import socks
-from typing import Optional
 from urllib.parse import urlparse
+
+import requests
+import socks
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 class ProxyWrapper:
     """Base class for proxy wrappers"""
 
-    def __init__(self, proxy_url: Optional[str] = None):
+    def __init__(self, proxy_url: str | None = None):
         self.proxy_url = proxy_url
 
     def test_connection(self) -> bool:
@@ -216,19 +217,18 @@ def create_proxy_wrapper(proxy_url=None):
     if not proxy_url:
         return None
 
-    try:
-        import socks
-        from urllib3.contrib.socks import SOCKSProxyManager
-
+    if importlib.util.find_spec("socks") and importlib.util.find_spec(
+        "urllib3.contrib.socks"
+    ):
         logger.debug("SOCKS dependencies found, using full proxy wrapper")
         return SOCKSProxyWrapper(proxy_url)
-    except ImportError as e:
-        logger.warning(f"SOCKS dependencies not available: {e}")
-        logger.warning("Install with: pip install requests[socks] pysocks httpx[socks]")
-        return SimpleProxyWrapper(proxy_url)
+
+    logger.warning("SOCKS dependencies not available.")
+    logger.warning("Install with: pip install requests[socks] pysocks httpx[socks]")
+    return SimpleProxyWrapper(proxy_url)
 
 
-def validate_proxy_url(proxy_url: str) -> Optional[str]:
+def validate_proxy_url(proxy_url: str) -> str | None:
     """Validate proxy URL format. Returns None if valid, else error message.
 
     Now gracefully accepts and normalizes trailing slashes.

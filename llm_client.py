@@ -7,13 +7,15 @@ This class provides a clean abstraction over raw HTTP calls while preserving:
 - Session persistence through session_logger
 """
 
-import os
-from typing import Optional
-import config
+import contextlib
 import logging
-from proxy_wrapper import ProxyWrapper
+import os
 from datetime import datetime
+
 import httpx
+
+import config
+from proxy_wrapper import ProxyWrapper
 from strings import t
 
 logger = logging.getLogger(__name__)
@@ -23,16 +25,16 @@ class LLMClient:
     """Main client for all LLM interactions in Thin Wrap."""
 
     def __init__(
-        self, proxy_wrapper: Optional[ProxyWrapper] = None, session_logger=None
+        self, proxy_wrapper: ProxyWrapper | None = None, session_logger=None
     ) -> None:
         self.conversation_history: list[dict[str, str]] = []
-        self.proxy_wrapper: Optional[ProxyWrapper] = proxy_wrapper
-        self._http_client: Optional[httpx.Client] = None
+        self.proxy_wrapper: ProxyWrapper | None = proxy_wrapper
+        self._http_client: httpx.Client | None = None
         self.current_model = None
         self.current_model_config = None
         self.session_logger = session_logger
-        self.api_key: Optional[str] = None
-        self.api_base_url: Optional[str] = None
+        self.api_key: str | None = None
+        self.api_base_url: str | None = None
 
     # ===================================================================
     # PUBLIC API
@@ -161,10 +163,9 @@ class LLMClient:
 
     def _initialize_client_with_proxy(self):
         """Test proxy setup, then initialise HTTP client and API connection."""
-        try:
+        with contextlib.suppress(Exception):
+            # test_connection warned; continue
             self.proxy_wrapper.test_connection()
-        except Exception:
-            pass  # test_connection warned; continue
         self._initialize_http_client()
         self._test_connection()
 
@@ -322,7 +323,7 @@ class LLMClient:
     # MESSAGE SENDING & CONVERSATION MANAGEMENT
     # ===================================================================
 
-    def _send_message_via_httpx(self) -> tuple[str, Optional[dict]]:
+    def _send_message_via_httpx(self) -> tuple[str, dict | None]:
         """Send to LLM and return (text, usage_dict)."""
         print(t("info.request_sending"))
 
@@ -346,7 +347,7 @@ class LLMClient:
 
         return text, usage
 
-    def send_message(self, message: str) -> tuple[str, Optional[dict]]:
+    def send_message(self, message: str) -> tuple[str, dict | None]:
         """
         Send a message and return (response_text, usage_dict).
         usage_dict contient les vrais tokens de l'API (prompt_tokens, completion_tokens, etc.)
@@ -412,7 +413,7 @@ class LLMClient:
         if self.session_logger:
             self.session_logger.save_session(self.conversation_history)
 
-    def get_current_model(self) -> Optional[str]:
+    def get_current_model(self) -> str | None:
         """Return currently active model name."""
         return self.current_model
 

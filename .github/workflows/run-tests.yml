@@ -29,7 +29,7 @@ jobs:
         
     - name: Run tests
       run: |
-        python -m pytest tests/ -v --tb=short
+        bash test_all.sh
         
     - name: Run specific module tests
       run: |

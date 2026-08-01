@@ -1,12 +1,14 @@
 """Session logging functionality with TOML format and automatic zipped saving"""
 
 import os
+import re
 import zipfile
-import tomlkit
 from datetime import datetime
 from pathlib import Path
+
+import tomlkit
+
 import config
-import re
 from strings import t
 
 
@@ -107,10 +109,9 @@ class SessionLogger:
         Load session from a zipped TOML file.
         """
         try:
-            with zipfile.ZipFile(zip_path, "r") as zipf:
-                with zipf.open("session.toml") as f:
-                    toml_bytes = f.read()
-                    session_data = tomlkit.loads(toml_bytes.decode("utf-8"))
+            with zipfile.ZipFile(zip_path, "r") as zipf, zipf.open("session.toml") as f:
+                toml_bytes = f.read()
+                session_data = tomlkit.loads(toml_bytes.decode("utf-8"))
 
             return session_data
 

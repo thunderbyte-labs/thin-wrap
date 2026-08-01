@@ -1,8 +1,10 @@
 import os
+
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, DirectoryTree, ListView, ListItem, Static
-from textual.containers import Horizontal, Vertical
 from textual.binding import Binding
+from textual.containers import Horizontal, Vertical
+from textual.widgets import DirectoryTree, Footer, Header, ListItem, ListView, Static
+
 from path_utils import resolve_path
 from strings import t
 
@@ -72,7 +74,7 @@ class FileMenuApp(App):
             view.clear()
             for path in sorted(paths):
                 item = ListItem(Static(path))
-                setattr(item, "custom_path", path)
+                item.custom_path = path
                 view.append(item)
 
         populate_list("editable", self.editable_files)

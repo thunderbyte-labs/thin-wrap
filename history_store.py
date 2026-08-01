@@ -4,7 +4,7 @@ import json
 import logging
 from pathlib import Path
 
-from proxy_wrapper import validate_proxy_url, normalize_proxy_url
+from proxy_wrapper import normalize_proxy_url, validate_proxy_url
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +57,7 @@ class HistoryStore:
             if self.history_file.exists():
                 data = json.loads(self.history_file.read_text(encoding="utf-8"))
                 self.recent_roots = [
-                    r
-                    for r in data.get("recent_root_dirs", [])
-                    if Path(r).is_dir()
+                    r for r in data.get("recent_root_dirs", []) if Path(r).is_dir()
                 ]
                 valid_proxies: list[str] = []
                 seen: set[str] = set()

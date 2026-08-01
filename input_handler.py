@@ -1,13 +1,13 @@
-from prompt_toolkit import PromptSession
-from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
-from prompt_toolkit.document import Document
-from prompt_toolkit.styles import Style
-from prompt_toolkit.formatted_text import ANSI
-from prompt_toolkit.formatted_text import FormattedText
-from prompt_toolkit.completion import Completer
-from prompt_toolkit.completion import WordCompleter
-import shutil
 import os
+import shutil
+
+from prompt_toolkit import PromptSession
+from prompt_toolkit.completion import Completer, WordCompleter
+from prompt_toolkit.document import Document
+from prompt_toolkit.formatted_text import ANSI
+from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
+from prompt_toolkit.styles import Style
+
 import config
 from strings import t
 
@@ -32,10 +32,7 @@ class CommandCompleter(Completer):
             # If we're completing a command (word starts with '/')
             if word_before and word_before.startswith("/"):
                 # Delegate to WordCompleter for command completion
-                for completion in self.word_completer.get_completions(
-                    document, complete_event
-                ):
-                    yield completion
+                yield from self.word_completer.get_completions(document, complete_event)
         # Don't trigger for other text (non-command input)
 
 
@@ -171,7 +168,6 @@ class InputHandler:
         @kb.add("pagedown")
         def navigate_history_down(event: KeyPressEvent) -> None:
             """Navigate to next message or save current text as temporary draft."""
-            total_items = self._get_combined_count()
             current_text = event.current_buffer.text
 
             if self.history_index == -1:

@@ -2,6 +2,8 @@
 
 """Main LLM Terminal Chat application"""
 
+# ruff: noqa: E402 -- local imports intentionally follow config.setup_logging()
+
 import argparse
 import json
 import logging
@@ -9,7 +11,6 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 
 from prompt_toolkit.completion import PathCompleter
 
@@ -130,16 +131,16 @@ class LLMChat:
             self.editable_files = []
             self.readable_files = []
         else:
-            assert (
-                self.root_dir is not None
-            ), "root_dir must be set when free_chat_mode is False"
+            assert self.root_dir is not None, (
+                "root_dir must be set when free_chat_mode is False"
+            )
             self.editable_files = self._resolve_file_list(
                 editable_files or [], self.root_dir
             )
             self.readable_files = self._resolve_file_list(
                 readable_files or [], self.root_dir
             )
-        self.first_message = "" if not first_message else first_message
+        self.first_message = first_message if first_message else ""
         self.proxy_wrapper = create_proxy_wrapper(proxy_url) if proxy_url else None
 
         # Add to proxy history if valid
@@ -573,8 +574,8 @@ class LLMChat:
         self,
         query: str,
         response: str,
-        usage: Optional[dict] = None,
-        duration_ms: Optional[float] = None,
+        usage: dict | None = None,
+        duration_ms: float | None = None,
     ):
         """Affiche un tableau clair avec Input, Output, Cache Hit, Time (s), et Output/s."""
         try:

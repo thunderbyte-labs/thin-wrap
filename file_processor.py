@@ -1,16 +1,16 @@
-import os
-import config
 import datetime
+import difflib
 import logging
+import os
 import re
 import shutil
 import tempfile
-import difflib
-from typing import Optional
-from tags import Xml
 from pathlib import Path
+
+import config
 from path_utils import resolve_path
 from strings import t
+from tags import Xml
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +29,15 @@ def _read_file_content(full_path: str, root_dir: str) -> str:
 
         return path.read_text(encoding="utf-8")
     except PermissionError:
-        raise PermissionError(f"Cannot read file due to permissions: {full_path}")
+        raise PermissionError(
+            f"Cannot read file due to permissions: {full_path}"
+        ) from None
     except UnicodeDecodeError:
-        raise UnicodeDecodeError(f"Cannot decode file with UTF-8: {full_path}")
+        raise UnicodeDecodeError(
+            "utf-8", b"", 0, 0, f"Cannot decode file with UTF-8: {full_path}"
+        ) from None
     except Exception as e:
-        raise Exception(f"Error reading file {full_path}: {str(e)}")
+        raise Exception(f"Error reading file {full_path}: {str(e)}") from e
 
 
 def generate_file_query(
@@ -277,9 +281,7 @@ def _compute_git_stat_diff(old_content: str, new_content: str) -> tuple[int, int
     return insertions, deletions
 
 
-def _report_diff(
-    old_content: str | None, new_content: str, filename: str
-) -> None:
+def _report_diff(old_content: str | None, new_content: str, filename: str) -> None:
     """Display concise git-style diff summary from in-memory content."""
     try:
         if old_content is None:

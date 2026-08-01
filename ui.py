@@ -4,10 +4,12 @@ import logging
 import os
 import re
 from pathlib import Path
+
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import PathCompleter
-from rich.markdown import Markdown
 from rich.console import Console
+from rich.markdown import Markdown
+
 from strings import t
 
 logger = logging.getLogger(__name__)
@@ -63,7 +65,7 @@ class UI:
         """Print application banner"""
         banner_file = os.path.join(script_directory, "banner.txt")
         if os.path.exists(banner_file):
-            with open(banner_file, "r", encoding="utf-8") as f:
+            with open(banner_file, encoding="utf-8") as f:
                 banner_content = f.read()
             print(t("startup.banner_content", value=banner_content))
         else:
@@ -97,7 +99,7 @@ class UI:
             console = Console()
             md = Markdown(make_links_visible(text))
             console.print(md)
-        except Exception as e:
+        except Exception:
             # Log error with traceback and fallback to plain print if markdown rendering fails
             logger.exception("Failed to render markdown")
             print(make_links_visible(text))
@@ -221,13 +223,9 @@ class UI:
                     return ("zero", None)
                 if 1 <= idx <= len(items):
                     chosen = items[idx - 1]
-                    print(
-                        f"{t('common.selected_prefix')} {item_formatter(chosen)}"
-                    )
+                    print(f"{t('common.selected_prefix')} {item_formatter(chosen)}")
                     return ("item", chosen)
-                print(
-                    f"{t('common.error_prefix')} {t('common.number_out_of_range')}"
-                )
+                print(f"{t('common.error_prefix')} {t('common.number_out_of_range')}")
                 continue
 
             if allow_manual:

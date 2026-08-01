@@ -1,4 +1,5 @@
-"""
+"""Configuration constants and settings for LLM Terminal Chat.
+
 CROSS-PLATFORM COMPATIBILITY NOTES:
 - This configuration is designed to work on Windows, macOS, and Linux
 - Editor selection prioritizes cross-platform options first (notepad on Windows, nano/vim on Unix)
@@ -7,14 +8,15 @@ CROSS-PLATFORM COMPATIBILITY NOTES:
 - Logging and temp file handling use cross-platform Python stdlib
 """
 
-"""Configuration constants and settings for LLM Terminal Chat"""
-import os
-import logging
-from rich.logging import RichHandler
-from platformdirs import user_config_dir, user_data_dir
 import json
-from pathlib import Path
+import logging
+import os
 import sys
+from pathlib import Path
+
+from platformdirs import user_config_dir, user_data_dir
+from rich.logging import RichHandler
+
 from strings import t
 
 # Application Configuration
@@ -143,8 +145,9 @@ def _load_config_internal(config_path: str | None = None) -> dict:
                     items=[],
                     item_formatter=lambda x: x,
                     allow_new=True,
-                    new_item_validator=lambda p: p.is_file()
-                    and p.name == "config.json",
+                    new_item_validator=lambda p: (
+                        p.is_file() and p.name == "config.json"
+                    ),
                     new_item_error=t("prompts.config_new_item_error"),
                 )
 
@@ -158,7 +161,7 @@ def _load_config_internal(config_path: str | None = None) -> dict:
                     f"  - {script_dir / 'config.json'}\n"
                     f"  - {Path.cwd() / 'config.json'}\n"
                     f"Please create config.json or specify path with --config"
-                )
+                ) from None
 
     _CONFIG_PATH = str(config_file)
 
@@ -170,12 +173,12 @@ def _load_config_internal(config_path: str | None = None) -> dict:
         return _CONFIG_CACHE[cache_key]
 
     try:
-        with open(config_file, "r", encoding="utf-8") as f:
+        with open(config_file, encoding="utf-8") as f:
             config_data = json.load(f)
     except json.JSONDecodeError as e:
         raise json.JSONDecodeError(
             f"Invalid JSON in {config_file}: {e.msg}", e.doc, e.pos
-        )
+        ) from None
 
     if "models" not in config_data:
         raise ValueError(f"Config file {config_file} must have 'models' section")
