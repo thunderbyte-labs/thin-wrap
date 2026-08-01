@@ -15,25 +15,11 @@ from strings import t
 logger = logging.getLogger(__name__)
 
 
-def _resolve_file_path(path: str, root_dir: str) -> str:
-    """
-    Resolve a file path to absolute path.
-
-    Args:
-        path: File path (can be absolute or relative)
-        root_dir: Root directory for resolving relative paths
-
-    Returns:
-        Absolute file path
-    """
-    return resolve_path(path, root_dir)
-
-
 def _read_file_content(full_path: str, root_dir: str) -> str:
     """Read file content with robust error handling and path resolution."""
     try:
         # Resolve the path first
-        resolved_path = _resolve_file_path(full_path, root_dir)
+        resolved_path = resolve_path(full_path, root_dir)
         path = Path(resolved_path)
 
         if not path.exists():

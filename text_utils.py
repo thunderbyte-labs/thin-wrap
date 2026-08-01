@@ -148,12 +148,3 @@ def estimate_tokens(text: Optional[str]) -> int:
     estimate = max(1, estimate)
 
     return int(estimate)
-
-
-def truncate_for_preview(text, max_length=None):
-    """Truncate text for preview display"""
-    if max_length is None:
-        max_length = config.PREVIEW_MAX_LENGTH
-    if len(text) > max_length:
-        return text[:max_length] + "\n... [truncated for preview] ..."
-    return text

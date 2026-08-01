@@ -13,7 +13,6 @@ from typing import cast, Optional
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import PathCompleter
-import platformdirs
 
 # Local application imports (after third-party and standard library)
 import config
@@ -96,7 +95,7 @@ class LLMChat:
             print(f"{t('errors.models_config_load')} {e}")
             sys.exit(1)
 
-        config_dir = Path(platformdirs.user_config_dir(config.APP_NAME))
+        config_dir = Path(config.CONFIG_DIR)
         config_dir.mkdir(parents=True, exist_ok=True)
         history_file = config_dir / "history.json"
         self.recent_roots = self._load_recent_roots(history_file)
@@ -386,8 +385,6 @@ class LLMChat:
         Returns:
             bool: True if successful, False otherwise
         """
-        from proxy_wrapper import create_proxy_wrapper, validate_proxy_url
-
         # Handle disable proxy
         if proxy_url is None or proxy_url.lower() == "off":
             print(t("info.proxy_disabling"))
@@ -725,7 +722,7 @@ class LLMChat:
                 cache_display = "-"
 
             print(
-                f"   {input_tokens:<11} | {output_tokens:<11} | {cache_display:<12} | {duration_display:<11} | {ops_display:<12}"
+                f"   {input_tokens:<12} | {output_tokens:<12} | {cache_display:<14} | {duration_display:<11} | {ops_display:<12}"
             )
 
         except Exception as e:
@@ -754,9 +751,9 @@ def get_location_info() -> str:
     else:
         config_desc = t("help.location_config_default")
 
-    # Data locations (using the same platformdirs logic as the application)
-    config_dir = Path(platformdirs.user_config_dir(config.APP_NAME))
-    data_dir = Path(platformdirs.user_data_dir(config.APP_NAME))
+    # Data locations
+    config_dir = Path(config.CONFIG_DIR)
+    data_dir = Path(config.DATA_DIR)
 
     history_file = config_dir / "history.json"
     conversations_base = data_dir / "conversations"
@@ -811,8 +808,9 @@ def main():
     try:
         args = parse_arguments()
 
-        if args.proxy:
-            proxy_url = args.proxy.rstrip("/")
+        proxy_url = args.proxy.rstrip("/") if args.proxy else None
+
+        if proxy_url:
             error_msg = validate_proxy_url(proxy_url)
             if error_msg:
                 print(
@@ -838,7 +836,7 @@ def main():
             readable_files=args.read,
             editable_files=args.edit,
             first_message=args.message,
-            proxy_url=args.proxy,
+            proxy_url=proxy_url,
             config_path=effective_config_path,  # Prevails if set, None otherwise
         )
         chat.run()

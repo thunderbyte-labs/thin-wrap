@@ -11,7 +11,7 @@ CROSS-PLATFORM COMPATIBILITY NOTES:
 import os
 import logging
 from rich.logging import RichHandler
-from platformdirs import user_data_dir
+from platformdirs import user_config_dir, user_data_dir
 import json
 from pathlib import Path
 import sys
@@ -20,9 +20,10 @@ from strings import t
 # Application Configuration
 APP_NAME = "thin-wrap"
 
-# Session Storage
-SESSION_BASE_DIR = user_data_dir(APP_NAME, appauthor=False, ensure_exists=True)
-CONVERSATIONS_DIR = os.path.join(SESSION_BASE_DIR, "conversations")
+# App directories (appauthor=False for consistent cross-platform paths)
+CONFIG_DIR = user_config_dir(APP_NAME, appauthor=False)
+DATA_DIR = user_data_dir(APP_NAME, appauthor=False, ensure_exists=True)
+CONVERSATIONS_DIR = os.path.join(DATA_DIR, "conversations")
 
 # Logging Configuration
 LOG_LEVEL = logging.WARNING

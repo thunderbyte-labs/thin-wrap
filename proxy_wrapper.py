@@ -11,10 +11,6 @@ from urllib.parse import urlparse
 logger = logging.getLogger(__name__)
 
 
-def set_proxy_log_level(level):
-    logger.setLevel(level)
-
-
 class ProxyWrapper:
     """Base class for proxy wrappers"""
 
@@ -24,9 +20,6 @@ class ProxyWrapper:
     @contextmanager
     def proxy_connection(self):
         raise NotImplementedError("Subclasses must implement proxy_connection")
-
-    def get_session(self):
-        raise NotImplementedError("Subclasses must implement get_session")
 
     def get_connection_info(self):
         raise NotImplementedError("Subclasses must implement get_connection_info")
@@ -192,9 +185,6 @@ class SOCKSProxyWrapper(ProxyWrapper):
                 self.session.close()
                 self.session = None
 
-    def get_session(self):
-        return self.session
-
     def get_connection_info(self):
         if self.proxy_config:
             proxy_type_str = (
@@ -239,9 +229,6 @@ class SimpleProxyWrapper(ProxyWrapper):
             yield self
         finally:
             logger.info("Proxy mode disabled")
-
-    def get_session(self):
-        return requests.Session()
 
     def get_connection_info(self):
         return {"proxy_url": self.proxy_url, "mode": "simplified"}

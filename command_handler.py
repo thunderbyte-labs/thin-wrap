@@ -167,7 +167,7 @@ class CommandHandler:
                         timestamp = name
                 else:
                     timestamp = name
-            except:
+            except Exception:
                 timestamp = name
 
             # Add metadata if available
@@ -277,7 +277,7 @@ class CommandHandler:
         if args:
             # Direct path argument provided
             new_root = resolve_path(args[0])
-            if new_root.is_dir():
+            if Path(new_root).is_dir():
                 try:
                     self.chat_app.set_root_dir(str(new_root))
                 except ValueError as e:
