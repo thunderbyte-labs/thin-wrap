@@ -214,15 +214,34 @@ def _secure_path(full_path: Path, should_exist: bool) -> None:
 
 
 def _write_file(
-    full_path: Path, content: str, src_for_perms: Path | None = None
+    target_path: Path,
+    new_content: str,
+    *,
+    preserve_permissions_from: Path | None = None,
+    encoding: str = "utf-8",
 ) -> None:
-    full_path.parent.mkdir(parents=True, exist_ok=True)
-    full_path.write_text(content, encoding="utf-8")
+    target_path = Path(target_path)
+    parent_dir = target_path.parent
+    parent_dir.mkdir(parents=True, exist_ok=True)
 
-    if src_for_perms and src_for_perms.exists():
-        shutil.copymode(src_for_perms, full_path)
-    else:
-        full_path.chmod(0o644)
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding=encoding,
+        dir=parent_dir,
+        delete=False,
+        prefix=".thinwrap-",
+        suffix=".tmp",
+    ) as tmp_file:
+        tmp_path = Path(tmp_file.name)
+        tmp_file.write(new_content)
+
+    try:
+        if preserve_permissions_from and preserve_permissions_from.exists():
+            shutil.copymode(preserve_permissions_from, tmp_path)
+        os.replace(tmp_path, target_path)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
 
 
 def _compute_git_stat_diff(old_content: str, new_content: str) -> tuple[int, int]:
@@ -258,25 +277,17 @@ def _compute_git_stat_diff(old_content: str, new_content: str) -> tuple[int, int
     return insertions, deletions
 
 
-def _diff_report(old_path: str | None, new_path: str) -> None:
-    """Display concise git-style diff summary without relying on git subprocess."""
-    filename = Path(new_path).name
-
+def _report_diff(
+    old_content: str | None, new_content: str, filename: str
+) -> None:
+    """Display concise git-style diff summary from in-memory content."""
     try:
-        if old_path is None or old_path == "/dev/null":
-            # New file
-            insertions = sum(1 for _ in open(new_path, "r", encoding="utf-8"))
+        if old_content is None:
+            insertions = len(new_content.splitlines())
             deletions = 0
         else:
-            # Read both files and compute diff
-            with open(old_path, "r", encoding="utf-8") as f:
-                old_content = f.read()
-            with open(new_path, "r", encoding="utf-8") as f:
-                new_content = f.read()
-
             insertions, deletions = _compute_git_stat_diff(old_content, new_content)
 
-        # Format output similar to git diff --stat
         if insertions == 0 and deletions == 0:
             print(t("files.no_changes", filename=filename))
         elif deletions == 0:
@@ -292,53 +303,9 @@ def _diff_report(old_path: str | None, new_path: str) -> None:
                     deletions=deletions,
                 )
             )
-
     except Exception as e:
         logger.error(f"Error computing diff for {filename}: {e}")
         print(t("errors.error_computing_diff", filename=filename))
-
-
-def _safe_atomic_write(
-    target_path: Path,
-    new_content: str,
-    *,
-    preserve_permissions_from: Optional[Path] = None,
-    encoding: str = "utf-8",
-) -> None:
-    """
-    Écrit de façon atomique dans target_path.
-    - Crée un fichier temporaire dans le même répertoire.
-    - Copie les permissions si demandé.
-    - Remplace atomiquement le fichier cible (os.replace).
-    - Nettoie le temporaire en cas d'erreur.
-    """
-    target_path = Path(target_path)
-    parent_dir = target_path.parent
-
-    # Création du fichier temporaire dans le même dossier (important pour l'atomicité)
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding=encoding,
-        dir=parent_dir,
-        delete=False,
-        prefix=".thinwrap-",
-        suffix=".tmp",
-    ) as tmp_file:
-        tmp_path = Path(tmp_file.name)
-        tmp_file.write(new_content)
-
-    try:
-        # Préservation des permissions (mode)
-        if preserve_permissions_from and preserve_permissions_from.exists():
-            shutil.copymode(preserve_permissions_from, tmp_path)
-
-        # Remplacement atomique (Linux, macOS, Windows)
-        os.replace(tmp_path, target_path)
-
-    except Exception:
-        # Nettoyage en cas d'échec
-        tmp_path.unlink(missing_ok=True)
-        raise
 
 
 def parse_plain_response(llm_response: str) -> str:
@@ -379,34 +346,12 @@ def parse_xml_response(llm_response: str) -> str:
             if not backup_enabled:
                 # No backup: direct atomic overwrite with permission preservation
                 old_content = path.read_text(encoding="utf-8")
-
-                _safe_atomic_write(
-                    target_path=path,
-                    new_content=content,
-                    preserve_permissions_from=path,
-                )
-
+                _write_file(path, content, preserve_permissions_from=path)
                 print(t("files.edited", path=path))
-
-                insertions, deletions = _compute_git_stat_diff(old_content, content)
-                if insertions == 0 and deletions == 0:
-                    print(t("files.no_changes", filename=path.name))
-                elif deletions == 0:
-                    print(t("files.insertions", filename=path.name, count=insertions))
-                elif insertions == 0:
-                    print(t("files.deletions", filename=path.name, count=deletions))
-                else:
-                    print(
-                        t(
-                            "files.insertions_deletions",
-                            filename=path.name,
-                            insertions=insertions,
-                            deletions=deletions,
-                        )
-                    )
+                _report_diff(old_content, content, path.name)
 
                 logger.info(
-                    f"Edited (no backup): {path}: {insertions} insertions(+), {deletions} deletions(-)"
+                    f"Edited (no backup): {path}: {len(content.splitlines())} lines"
                 )
                 continue
 
@@ -421,16 +366,16 @@ def parse_xml_response(llm_response: str) -> str:
                 backup = path.with_name(f"{path.stem}.{timestamp}{path.suffix}")
 
             if overwrite_original:
-                # Rename original to backup, then write new content to original path
+                old_content = path.read_text(encoding="utf-8")
                 os.replace(path, backup)
-                _write_file(path, content, src_for_perms=backup)
+                _write_file(path, content, preserve_permissions_from=backup)
                 print(t("files.edited", path=path))
-                _diff_report(str(backup), str(path))
+                _report_diff(old_content, content, path.name)
             else:
-                # Write new content to timestamped file, leave original unchanged
-                _write_file(backup, content, src_for_perms=path)
+                old_content = path.read_text(encoding="utf-8")
+                _write_file(backup, content, preserve_permissions_from=path)
                 print(t("files.created_timestamped", path=backup))
-                _diff_report(str(path), str(backup))
+                _report_diff(old_content, content, backup.name)
 
         except Exception as e:
             logger.error(f"Failed to edit {path_str}: {e}")
@@ -441,9 +386,9 @@ def parse_xml_response(llm_response: str) -> str:
             path = Path(path_str)
             _secure_path(path, should_exist=False)
 
-            _write_file(path, content, src_for_perms=None)
+            _write_file(path, content, preserve_permissions_from=None)
             print(t("files.created", path=path))
-            _diff_report(None, str(path))
+            _report_diff(None, content, path.name)
         except Exception as e:
             logger.error(f"Failed to create {path_str}: {e}")
             print(t("files.error_creating", path=path_str, error=e))

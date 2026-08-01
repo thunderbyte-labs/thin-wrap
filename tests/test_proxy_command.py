@@ -67,14 +67,14 @@ def test_proxy_history():
         with open(history_file, "w") as f:
             json.dump(history_data, f)
 
-        # Reload recent_proxies
-        chat.recent_proxies = chat._load_recent_proxies(history_file)
+        # Reload recent_proxies after writing test data
+        chat._history.load()
         assert len(chat.recent_proxies) == 2
         assert "socks5://127.0.0.1:1080" in chat.recent_proxies
         assert "http://proxy.example.com:8080" in chat.recent_proxies
 
         # Add a new proxy
-        chat._add_to_recent_proxies(history_file, "socks5://localhost:9050")
+        chat._history.add_proxy("socks5://localhost:9050")
         assert chat.recent_proxies[0] == "socks5://localhost:9050"
         assert len(chat.recent_proxies) == 3  # But limited to 10
 

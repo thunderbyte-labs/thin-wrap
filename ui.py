@@ -175,3 +175,62 @@ class UI:
                     )
             else:
                 print(f"{t('common.error_prefix')} {t('prompts.enter_valid_number')}")
+
+    @staticmethod
+    def numbered_selection(
+        items,
+        *,
+        title,
+        prompt,
+        zero_label=None,
+        allow_manual=False,
+        completer=None,
+        item_formatter=lambda x: x,
+    ):
+        """
+        Generic numbered-menu selection with an optional "option 0".
+
+        Returns ``(selection_type, value)`` where *selection_type* is one of
+        ``'zero'``, ``'item'`` (a pre-existing list entry) or ``'manual'``
+        (raw user input).  Raises ``KeyboardInterrupt`` on cancel.
+        """
+        session = PromptSession(completer=completer) if completer else PromptSession()
+
+        while True:
+            print(title)
+            if zero_label is not None:
+                print(t("menus.option_zero", label=zero_label))
+            for i, item in enumerate(items, 1):
+                print(t("menus.item_format", index=i, item=item_formatter(item)))
+            print(prompt)
+
+            try:
+                user_input = session.prompt(t("common.prompt_arrow")).strip()
+            except (KeyboardInterrupt, EOFError):
+                print(t("common.selection_cancelled"))
+                raise
+
+            if not user_input:
+                print(f"{t('common.error_prefix')} {t('common.empty_input')}")
+                continue
+
+            if user_input.isdigit():
+                idx = int(user_input)
+                if idx == 0 and zero_label is not None:
+                    print(f"{t('common.selected_prefix')} {zero_label}")
+                    return ("zero", None)
+                if 1 <= idx <= len(items):
+                    chosen = items[idx - 1]
+                    print(
+                        f"{t('common.selected_prefix')} {item_formatter(chosen)}"
+                    )
+                    return ("item", chosen)
+                print(
+                    f"{t('common.error_prefix')} {t('common.number_out_of_range')}"
+                )
+                continue
+
+            if allow_manual:
+                return ("manual", user_input)
+
+            print(f"{t('common.error_prefix')} {t('prompts.enter_valid_number')}")
