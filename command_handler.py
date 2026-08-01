@@ -81,7 +81,7 @@ class CommandHandler:
         cmd = parts[0].lower()
         args = parts[1:]
 
-        if cmd in ["/help", "/?"]:
+        if cmd == "/help":
             self._handle_help(args)
         elif cmd == "/clear":
             self._handle_clear()
