@@ -24,7 +24,7 @@ from history_store import HistoryStore
 from input_handler import InputHandler
 from llm_client import LLMClient
 from path_utils import resolve_path
-from proxy_wrapper import create_proxy_wrapper, validate_proxy_url, normalize_proxy_url
+from proxy_wrapper import create_proxy_wrapper, validate_proxy_url
 from session_logger import SessionLogger
 from strings import t
 from text_utils import clean_text, estimate_tokens
