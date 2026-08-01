@@ -400,6 +400,20 @@ class LLMChat:
         sys.stdout.write(t("prompts.input_hint"))
         sys.stdout.flush()
 
+    def _context_signature(self):
+        """Snapshot of the context shown in the Message header (root + files)."""
+        return (self.root_dir, list(self.editable_files), list(self.readable_files))
+
+    def _print_message_prompt_after_menu(self, context_before):
+        """Re-render the Message header after the Ctrl+B menu, but only when the
+        context (root / files) changed.
+
+        Opening and closing the menu without touching the files would otherwise
+        re-print the header on every Ctrl+B, piling up duplicate blocks.
+        """
+        if self._context_signature() != context_before:
+            self._print_message_prompt()
+
     def _prompt_for_proxy_if_needed(self, selected_model: str) -> bool:
         """
         Prompt for proxy selection if the selected model suggests proxy and no proxy is configured.
@@ -509,8 +523,9 @@ class LLMChat:
             next_default = ""
             if isinstance(user_input, tuple) and user_input[0] == "Ctrl+B":
                 next_default = user_input[1]
+                context_before = self._context_signature()
                 self.command_handler.handle_files_command()
-                self._print_message_prompt()
+                self._print_message_prompt_after_menu(context_before)
                 continue
 
             if not user_input:
