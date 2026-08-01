@@ -73,6 +73,27 @@ def test_print_file_context_block_empty_is_noop(capsys):
     assert capsys.readouterr().out == ""
 
 
+def test_exit_cleanly_erases_message_header(capsys):
+    chat = _chat()
+    chat._message_prompt_shown = True
+    chat.session_logger = Mock()
+    chat.session_logger.get_session_path.return_value = "/tmp/nonexistent"
+    with patch("thin_wrap.UI.show_exit_message"):
+        chat._exit_cleanly()
+    out = capsys.readouterr().out
+    assert "\x1b[4A\x1b[J" in out
+
+
+def test_exit_cleanly_no_erase_without_header(capsys):
+    chat = _chat()
+    chat.session_logger = Mock()
+    chat.session_logger.get_session_path.return_value = "/tmp/nonexistent"
+    with patch("thin_wrap.UI.show_exit_message"):
+        chat._exit_cleanly()
+    out = capsys.readouterr().out
+    assert "\x1b[4A" not in out
+
+
 def test_input_context_provider_wired_into_layout():
     captured = {}
     real_ftc = input_handler.FormattedTextControl

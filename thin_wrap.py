@@ -409,6 +409,7 @@ class LLMChat:
         is shown dynamically below the input while typing (bottom toolbar) and
         kept in the scrollback after sending.
         """
+        self._message_prompt_shown = True
         print()
         sys.stdout.write(t("prompts.input_hint"))
         sys.stdout.flush()
@@ -567,6 +568,13 @@ class LLMChat:
         log_path = self.session_logger.get_session_path()
         if not os.path.exists(log_path):
             log_path = None
+        # The input prompt was erased on exit, but the "Message" header printed
+        # before it (blank line, separator, blank line) is still on screen, and
+        # the blank line printed after the last reply is still there. Erase
+        # them so the exit message follows the conversation cleanly.
+        if getattr(self, "_message_prompt_shown", False):
+            sys.stdout.write("\x1b[4A\x1b[J")
+            sys.stdout.flush()
         UI.show_exit_message(log_path)
 
     def _send_message(self, message):
