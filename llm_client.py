@@ -8,8 +8,12 @@ This class provides a clean abstraction over raw HTTP calls while preserving:
 """
 
 import contextlib
+import json
 import logging
 import os
+import sys
+import threading
+import time
 from datetime import datetime
 
 import httpx
@@ -224,7 +228,9 @@ class LLMClient:
         }
         return url, headers
 
-    def _build_request_params(self, messages: list, max_tokens: int = 0):
+    def _build_request_params(
+        self, messages: list, max_tokens: int = 0, *, stream: bool = False
+    ):
         """Build request payload. For DeepSeek, full messages list is used → prefix caching benefits from stable early turns."""
         model_config = self.current_model_config
         _, input_key = self._get_endpoint_and_input_key()
@@ -248,6 +254,14 @@ class LLMClient:
         extra_arguments = model_config.get("extra_arguments", {})
         if extra_arguments and isinstance(extra_arguments, dict):
             request_params.update(extra_arguments)
+
+        if stream:
+            request_params["stream"] = True
+            # stream_options.include_usage is a /chat/completions feature.
+            # The DashScope /responses API (input_key == "input") always
+            # includes usage in its final event, so skip it there.
+            if input_key != "input":
+                request_params["stream_options"] = {"include_usage": True}
 
         return request_params
 
@@ -308,8 +322,6 @@ class LLMClient:
             try:
                 error_detail = e.response.json()
                 print(t("errors.api_error_details"))
-                import json
-
                 print(json.dumps(error_detail, indent=2))
             except Exception:
                 print(t("errors.api_error_raw"))
@@ -323,34 +335,145 @@ class LLMClient:
     # MESSAGE SENDING & CONVERSATION MANAGEMENT
     # ===================================================================
 
-    def _send_message_via_httpx(self) -> tuple[str, dict | None]:
-        """Send to LLM and return (text, usage_dict)."""
-        print(t("info.request_sending"))
+    def _extract_stream_chunk(self, chunk: dict) -> tuple[str, dict | None]:
+        """Extract (delta_text, usage) from a single streaming chunk.
+
+        Tolerant of both streaming shapes used by the configured endpoints:
+        - OpenAI-compatible /chat/completions: ``choices[0].delta.content``,
+          with ``usage`` on the final chunk (stream_options.include_usage).
+        - DashScope /responses (OpenAI Responses API events):
+          ``response.output_text.delta`` for content, ``response.completed``
+          for usage. Reasoning events are ignored (matching the non-streaming
+          extraction which skips non-message output items).
+        """
+        # === OpenAI Responses API events (DashScope /responses) ===
+        if "type" in chunk:
+            chunk_type = chunk.get("type")
+            if chunk_type == "response.output_text.delta":
+                return chunk.get("delta", "") or "", None
+            if chunk_type == "response.completed":
+                response = chunk.get("response") or {}
+                return "", response.get("usage") or None
+            return "", None
+
+        # === OpenAI /chat/completions chunks ===
+        delta = ""
+        choices = chunk.get("choices") or []
+        if choices:
+            delta_obj = (
+                (choices[0].get("delta") or {}) if isinstance(choices[0], dict) else {}
+            )
+            delta = delta_obj.get("content") or ""
+        return delta, chunk.get("usage") or None
+
+    def _send_message_via_httpx(self, on_progress=None) -> tuple[str, dict | None]:
+        """Stream a chat completion and return (text, usage_dict).
+
+        Uses ``stream=True`` so token-usage statistics can be refreshed live
+        through the optional *on_progress* callback: ``on_progress(text, usage)``
+        is invoked with the accumulated text and any usage seen so far.
+
+        A live "Time to First Token" (TTF) counter is shown on the same line
+        as the "Thinking..." message; it ticks up until the first content
+        chunk arrives, then freezes there.
+        """
+        thinking_line = t("info.request_sending")
+        print(thinking_line, end="", flush=True)
+        ttf_start_ns = time.perf_counter_ns()
+        stop_event = threading.Event()
+        first_token_seen = threading.Event()
+
+        def _ttf_tick():
+            while not stop_event.is_set():
+                elapsed = (time.perf_counter_ns() - ttf_start_ns) / 1_000_000_000.0
+                sys.stdout.write(
+                    f"\r\x1b[2K{thinking_line} "
+                    + t("info.ttf", elapsed=f"{elapsed:.1f}")
+                )
+                sys.stdout.flush()
+                stop_event.wait(0.1)
+
+        def _write_ttf_line(end_with_newline: bool) -> None:
+            elapsed = (time.perf_counter_ns() - ttf_start_ns) / 1_000_000_000.0
+            sys.stdout.write(
+                f"\r\x1b[2K{thinking_line} " + t("info.ttf", elapsed=f"{elapsed:.1f}")
+            )
+            if end_with_newline:
+                sys.stdout.write("\n")
+            sys.stdout.flush()
+
+        def _freeze_ttf():
+            stop_event.set()
+            ticker.join(timeout=1.0)
+            _write_ttf_line(end_with_newline=True)
+
+        ticker = threading.Thread(target=_ttf_tick, daemon=True)
+        ticker.start()
 
         messages = [
             {"role": msg["role"], "content": msg["content"]}
             for msg in self.conversation_history
         ]
 
-        payload = self._build_request_params(messages=messages)
+        payload = self._build_request_params(messages=messages, stream=True)
         url, headers = self._get_request_url_and_headers()
 
-        response = self._http_client.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        data = response.json()
+        def _stream(request_params):
+            text_parts: list[str] = []
+            usage = None
+            with self._http_client.stream(
+                "POST", url, json=request_params, headers=headers
+            ) as response:
+                response.raise_for_status()
+                for line in response.iter_lines():
+                    if not line:
+                        continue
+                    line = line.strip()
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[len("data:") :].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data)
+                    except (ValueError, TypeError):
+                        continue
+                    delta, chunk_usage = self._extract_stream_chunk(chunk)
+                    if chunk_usage:
+                        usage = chunk_usage
+                    if delta:
+                        if not first_token_seen.is_set():
+                            first_token_seen.set()
+                            _freeze_ttf()
+                        text_parts.append(delta)
+                        if on_progress:
+                            on_progress("".join(text_parts), usage)
+            return "".join(text_parts).strip(), usage
 
-        # Extract usage if present (DeepSeek, OpenAI, OpenRouter, DashScope, Gemini, etc.)
-        usage = data.get("usage")
+        try:
+            return _stream(payload)
+        except httpx.HTTPStatusError as e:
+            # Some OpenAI-compatible providers (e.g. Gemini) reject
+            # stream_options. Retry once without it, falling back to
+            # estimated token counts.
+            if payload.get("stream_options") and e.response.status_code in (400, 422):
+                return _stream(
+                    {k: v for k, v in payload.items() if k != "stream_options"}
+                )
+            raise
+        finally:
+            stop_event.set()
+            if not first_token_seen.is_set():
+                ticker.join(timeout=1.0)
+                _write_ttf_line(end_with_newline=True)
 
-        # Extract response text
-        text = self._extract_response_content(data)
-
-        return text, usage
-
-    def send_message(self, message: str) -> tuple[str, dict | None]:
+    def send_message(self, message: str, on_progress=None) -> tuple[str, dict | None]:
         """
         Send a message and return (response_text, usage_dict).
         usage_dict contient les vrais tokens de l'API (prompt_tokens, completion_tokens, etc.)
+
+        *on_progress* (optional) is called as ``on_progress(text, usage)`` on
+        every streamed content chunk, allowing live token statistics.
         """
         try:
             # Append user message
@@ -366,7 +489,7 @@ class LLMClient:
                 self.session_logger.save_session(self.conversation_history)
 
             # Get response + usage from API
-            response_text, usage = self._send_message_via_httpx()
+            response_text, usage = self._send_message_via_httpx(on_progress=on_progress)
 
             # Append assistant response
             self.conversation_history.append(
