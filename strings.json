@@ -109,8 +109,16 @@
     "title_value": {"text": "{value}", "color": "GREEN"},
     "no_items_value": {"text": "{value}", "color": "GREEN"},
     "available_conversations": "Available conversations:",
-    "conversation_enter_number": "Enter a number to select:",
+    "conversation_enter_number": "Enter a conversation number to select:",
     "no_conversations_available": "No conversations available",
+    "reload_enter_number_or_search": "Enter a conversation number or search keywords: ",
+    "reload_enter_keywords": "Enter keywords (space-separated): ",
+    "reload_no_matches": "No conversations matched your keywords.",
+    "reload_search_no_matches": "Enter new keywords or press Enter to go back: ",
+    "reload_showing_matches": "Showing {count} matching conversation(s) (sorted by relevance):",
+    "reload_search_select": "Enter conversation number, new keywords, or press Enter to go back: ",
+    "reload_back_hint": "(press Enter or type 'n' to go back to the full list)",
+    "reload_back_search_hint": "(press Enter or type 'n' to search by keywords)",
     "no_files_in_context": "No files are currently included in the context. What would you like to do?\n  [Y] - Send a plain message (without file context and file creation)\n  [n] - Send with file context (allow thin-wrap to create files)\n  [i] - Insert a file into the context (returns to text editor)\n",
     "yni_prompt": "[Y/n/i]: ",
     "returning_to_editor": "Returning to text editor. Use Ctrl+B to add files before sending.",
@@ -174,7 +182,9 @@
     "format_preview": "{timestamp} · {name} ({count_label}) - {preview}",
     "message": "{count} message",
     "messages": "{count} messages",
-    "no_name": "*no name*"
+    "no_name": "*no name*",
+    "score_label": "score: {score}",
+    "snippet_prefix": "  ... {snippet} ..."
   },
 
   "commands": {
@@ -254,3 +264,4 @@
     "location_config_default": "default searched locations:\n  - $THIN_WRAP_CONFIG_DIR/config.json\n  - ~/.config/thin-wrap/config.json\n  - (same directory as binary)"
   }
 }
+

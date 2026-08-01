@@ -2,6 +2,7 @@
 
 import os
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 from prompt_toolkit.completion import PathCompleter
@@ -11,6 +12,136 @@ from path_utils import resolve_path
 from session_logger import sanitize_conversation_name
 from strings import t
 from ui import UI
+
+
+def _extract_full_text(session_data: dict) -> str:
+    """Concatenate all message contents from a loaded session."""
+    if not session_data:
+        return ""
+    parts = []
+    for msg in session_data.get("conversation_history", []):
+        content = msg.get("content", "")
+        if content:
+            parts.append(content)
+    return "\n".join(parts)
+
+
+def _score_session(
+    keywords: list[str], name: str, content: str
+) -> tuple[int, list[str]]:
+    """
+    Score a session and extract up to 3 snippets using whole-word matching.
+    - Name matches: +3 per occurrence
+    - Content matches: +1 per occurrence
+    Returns (score, list_of_snippets)
+    """
+    if not keywords:
+        return 0, []
+
+    score = 0
+    snippets = []
+    name_lower = name.lower()
+    content_lower = content.lower()
+
+    for kw in keywords:
+        kw_lower = kw.lower()
+        if not kw_lower:
+            continue
+        pattern = re.compile(r'\b' + re.escape(kw_lower) + r'\b', re.IGNORECASE)
+
+        # Title scoring
+        for _ in pattern.finditer(name_lower):
+            score += 3
+
+        # Content scoring + snippet extraction (up to 3 total)
+        for match in pattern.finditer(content_lower):
+            score += 1
+            if len(snippets) >= 3:
+                continue
+
+            start = match.start()
+            ctx_start = max(0, start - 55)
+            ctx_end = min(len(content), start + len(kw) + 55)
+            snippet = content[ctx_start:ctx_end].replace("\n", " ").strip()
+            if snippet and snippet not in snippets:
+                snippets.append(snippet)
+
+    return score, snippets[:3]
+
+
+def _all_keywords_present(name: str, content: str, keywords: list[str]) -> bool:
+    """Return True if every keyword appears as a whole word in name or content."""
+    if not keywords:
+        return True
+    for kw in keywords:
+        kw_lower = kw.lower()
+        pattern = re.compile(r'\b' + re.escape(kw_lower) + r'\b', re.IGNORECASE)
+        if not (pattern.search(name) or pattern.search(content)):
+            return False
+    return True
+
+
+def _show_conversation_menu(
+    items: list[str], item_formatter: Callable[[str], str]
+) -> None:
+    """Print the numbered conversation list (title and items only)."""
+    print(t("prompts.title_value", value=t("prompts.available_conversations")))
+    for i, item in enumerate(items, 1):
+        print(t("menus.item_format", index=i, item=item_formatter(item)))
+
+
+def _select_number(
+    items: list[str],
+    item_formatter: Callable[[str], str],
+    allow_back: bool = False,
+    back_hint: str | None = None,
+) -> str | None:
+    """Pick an item by number from the visible list.
+
+    Returns the chosen item, or ``None`` when *allow_back* is set and the
+    user presses Enter or types ``n`` to fall back to a wider selection.
+    """
+    while True:
+        print(t("prompts.conversation_enter_number"))
+        if allow_back and back_hint:
+            print(back_hint)
+        user_input = input(t("common.prompt_arrow")).strip().lower()
+        if allow_back and (not user_input or user_input in ("n", "no", "back")):
+            return None
+        if not user_input:
+            print(f"{t('common.error_prefix')} {t('common.empty_input')}")
+            _show_conversation_menu(items, item_formatter)
+            continue
+        if user_input.isdigit():
+            idx = int(user_input) - 1
+            if 0 <= idx < len(items):
+                chosen = items[idx]
+                print(f"{t('common.selected_prefix')} {item_formatter(chosen)}")
+                return chosen
+            print(f"{t('common.error_prefix')} {t('common.number_out_of_range')}")
+            _show_conversation_menu(items, item_formatter)
+            continue
+        print(f"{t('common.error_prefix')} {t('prompts.enter_valid_number')}")
+        _show_conversation_menu(items, item_formatter)
+
+
+def _make_search_formatter(
+    metadata_cache: dict, ranked_sessions: list[tuple[int, str, list[str]]]
+) -> Callable[[str], str]:
+    """Build an item formatter that appends score and matching snippets."""
+
+    def search_aware_formatter(path: str) -> str:
+        base = format_session(path, metadata_cache.get(path))
+        for score, p, snippets in ranked_sessions:
+            if p == path:
+                score_str = t("sessions.score_label", score=score)
+                lines = [f"{base}  [{score_str}]"]
+                for snip in snippets:
+                    lines.append(t("sessions.snippet_prefix", snippet=snip))
+                return "\n".join(lines)
+        return base
+
+    return search_aware_formatter
 
 
 def format_session(path: str, meta: dict | None = None) -> str:
@@ -200,7 +331,6 @@ class CommandHandler:
             )
             return
 
-        # Format session names for display
         # Load metadata for all sessions
         metadata_cache = {}
         for session_path in sessions:
@@ -227,23 +357,59 @@ class CommandHandler:
         )
         print()
 
+        def item_formatter(path: str) -> str:
+            return format_session(path, metadata_cache.get(path))
+
+        # Show the full conversation list once
+        _show_conversation_menu(sessions, item_formatter)
+
         try:
-            selected_path = UI.interactive_selection(
-                prompt_title=t("prompts.available_conversations"),
-                prompt_message=t("prompts.conversation_enter_number"),
-                no_items_message=t("prompts.no_conversations_available"),
-                items=sessions,
-                item_formatter=lambda p: format_session(p, metadata_cache.get(p)),
-                allow_new=False,
-            )
+            selected_path = None
+            while selected_path is None:
+                user_input = (
+                    input(t("prompts.reload_enter_number_or_search"))
+                    .strip()
+                    .lower()
+                )
+
+                if not user_input:
+                    # Blank → just redisplay the full list and ask again
+                    _show_conversation_menu(sessions, item_formatter)
+                    continue
+
+                if user_input.isdigit():
+                    idx = int(user_input) - 1
+                    if 0 <= idx < len(sessions):
+                        selected_path = sessions[idx]
+                        print(
+                            f"{t('common.selected_prefix')} "
+                            f"{item_formatter(selected_path)}"
+                        )
+                        break
+                    print(
+                        f"{t('common.error_prefix')} "
+                        f"{t('common.number_out_of_range')}"
+                    )
+                    # Re-show the list so the user can see valid numbers
+                    _show_conversation_menu(sessions, item_formatter)
+                else:
+                    # Treat input as keywords
+                    keywords = user_input.split()
+                    search_result = self._search_flow(
+                        sessions, metadata_cache, keywords
+                    )
+                    if search_result is not None:
+                        selected_path = search_result
+                        break
+                    # None means search was cancelled (Enter in search view),
+                    # so we redisplay the full list and continue
+                    _show_conversation_menu(sessions, item_formatter)
 
             if selected_path:
                 session_data = self.session_logger.load_session(selected_path)
                 if session_data:
-                    # Load the conversation history
                     conversation_history = session_data.get("conversation_history", [])
                     self.llm_client.load_conversation(conversation_history)
-                    # Load user messages into input history
                     self.input_handler.load_from_conversation_history(
                         conversation_history
                     )
@@ -268,6 +434,99 @@ class CommandHandler:
                     print(t("sessions.failed_to_load_conversation"))
         except (KeyboardInterrupt, EOFError):
             print(t("sessions.reload_cancelled"))
+
+    def _rank_sessions(self, sessions, metadata_cache, keywords):
+        """Return sessions matching **all** keywords, ranked by score desc.
+
+        Sessions that do not contain every keyword (whole‑word match) are
+        excluded.  The returned list contains ``(score, path, snippets)``
+        tuples sorted highest score first.
+        """
+        ranked_sessions = []
+        for path in sessions:
+            meta = metadata_cache.get(path) or {}
+            name = meta.get("name", "") or ""
+
+            # Load full content only once per session
+            session_data = self.session_logger.load_session(path)
+            content = _extract_full_text(session_data)
+
+            if not _all_keywords_present(name, content, keywords):
+                continue
+
+            score, snippets = _score_session(keywords, name, content)
+            if score > 0:
+                ranked_sessions.append((score, path, snippets))
+
+        # Sort by score descending
+        ranked_sessions.sort(key=lambda x: x[0], reverse=True)
+        return ranked_sessions
+
+    def _search_flow(self, sessions, metadata_cache, keywords):
+        """Keyword search loop; returns a selected path or None to go back.
+
+        The user can select a conversation, refine the search by typing new
+        keywords, or press Enter to return to the full list.
+        """
+        while True:
+            ranked = self._rank_sessions(sessions, metadata_cache, keywords)
+
+            if not ranked:
+                # No matching sessions with these keywords
+                print(t("prompts.reload_no_matches"))
+                new_input = (
+                    input(t("prompts.reload_search_no_matches"))
+                    .strip()
+                    .lower()
+                )
+                if not new_input:
+                    # Go back to full list
+                    return None
+                keywords = new_input.split()
+                # Loop again with new keywords
+                continue
+
+            # Show ranked results
+            print()
+            print(
+                t("prompts.reload_showing_matches", count=len(ranked))
+            )
+            print()
+            search_formatter = _make_search_formatter(metadata_cache, ranked)
+            ranked_paths = [path for _, path, _ in ranked]
+            _show_conversation_menu(ranked_paths, search_formatter)
+
+            # Single prompt for selection / refine / back
+            user_input = (
+                input(t("prompts.reload_search_select"))
+                .strip()
+                .lower()
+            )
+
+            if not user_input:
+                # Empty → go back to full list
+                return None
+
+            if user_input.isdigit():
+                idx = int(user_input) - 1
+                if 0 <= idx < len(ranked_paths):
+                    chosen = ranked_paths[idx]
+                    print(
+                        f"{t('common.selected_prefix')} "
+                        f"{search_formatter(chosen)}"
+                    )
+                    return chosen
+                print(
+                    f"{t('common.error_prefix')} "
+                    f"{t('common.number_out_of_range')}"
+                )
+                # Re-show the search results (loop will restart without new
+                # input, so we manually re-display)
+                continue
+
+            # Non-numeric → treat as new keywords, refine search
+            keywords = user_input.split()
+            # Loop again with new keywords
 
     def _handle_nameconv(self, args):
         """Name the current conversation (file gets a readable suffix)."""
@@ -393,6 +652,7 @@ class CommandHandler:
             if sel_type == "item":
                 self.chat_app.set_proxy(sel_value)
                 return
-            # manual proxy URL entry — retry on failure
+            # manual proxy URL entry -- retry on failure
             if self.chat_app.set_proxy(sel_value):
                 return
+
