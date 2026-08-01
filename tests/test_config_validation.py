@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Test configuration validation and loading."""
 
-import sys
-import os
-import tempfile
 import json
+import os
+import sys
+import tempfile
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -55,16 +55,16 @@ def test_config_validation():
         assert "model-without-proxy" in models
         assert "model-no-proxy-field" in models
 
-        assert models["model-with-proxy"]["proxy"] == True
-        assert models["model-without-proxy"]["proxy"] == False
-        assert models["model-no-proxy-field"]["proxy"] == False
+        assert models["model-with-proxy"]["proxy"]
+        assert not models["model-without-proxy"]["proxy"]
+        assert not models["model-no-proxy-field"]["proxy"]
 
         # Verify backup config
         backup_conf = config.backup()
-        assert backup_conf["enabled"] == True
+        assert backup_conf["enabled"]
         assert backup_conf["timestamp_format"] == "%Y%m%d%H%M%S"
         assert backup_conf["extra_string"] == "test"
-        assert backup_conf["overwrite_original"] == True
+        assert backup_conf["overwrite_original"]
 
         print("Config validation with proxy fields works")
 
@@ -91,8 +91,10 @@ def test_config_missing_required_fields():
     try:
         config.set_config_path(config_path)
         try:
-            models = config.get_models()
-            assert False, "Should have raised ValueError for missing 'model' field"
+            config.get_models()
+            raise AssertionError(
+                "Should have raised ValueError for missing 'model' field"
+            )
         except ValueError as e:
             if "model" in str(e).lower() and (
                 "missing" in str(e).lower() or "required" in str(e).lower()
@@ -124,8 +126,8 @@ def test_config_invalid_proxy_type():
     try:
         config.set_config_path(config_path)
         try:
-            models = config.get_models()
-            assert False, "Should have raised ValueError for non-boolean proxy"
+            config.get_models()
+            raise AssertionError("Should have raised ValueError for non-boolean proxy")
         except ValueError as e:
             if "must be boolean" in str(e):
                 print("Correctly rejects non-boolean proxy field")
@@ -159,8 +161,10 @@ def test_config_backup_strict_validation():
     try:
         config.set_config_path(config_path)
         try:
-            backup_conf = config.backup()
-            assert False, "Should have raised ValueError for missing backup fields"
+            config.backup()
+            raise AssertionError(
+                "Should have raised ValueError for missing backup fields"
+            )
         except ValueError as e:
             if any(
                 field in str(e)

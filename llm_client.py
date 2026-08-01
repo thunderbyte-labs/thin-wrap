@@ -7,13 +7,15 @@ This class provides a clean abstraction over raw HTTP calls while preserving:
 - Session persistence through session_logger
 """
 
-import os
-from typing import Optional
-import config
+import contextlib
 import logging
-from proxy_wrapper import ProxyWrapper
+import os
 from datetime import datetime
+
 import httpx
+
+import config
+from proxy_wrapper import ProxyWrapper
 from strings import t
 
 logger = logging.getLogger(__name__)
@@ -23,17 +25,16 @@ class LLMClient:
     """Main client for all LLM interactions in Thin Wrap."""
 
     def __init__(
-        self, proxy_wrapper: Optional[ProxyWrapper] = None, session_logger=None
+        self, proxy_wrapper: ProxyWrapper | None = None, session_logger=None
     ) -> None:
         self.conversation_history: list[dict[str, str]] = []
-        self.proxy_wrapper: Optional[ProxyWrapper] = proxy_wrapper
-        self._http_client: Optional[httpx.Client] = None
-        self._proxy_context = None  # for proxy_connection() context manager
+        self.proxy_wrapper: ProxyWrapper | None = proxy_wrapper
+        self._http_client: httpx.Client | None = None
         self.current_model = None
         self.current_model_config = None
         self.session_logger = session_logger
-        self.api_key: Optional[str] = None
-        self.api_base_url: Optional[str] = None
+        self.api_key: str | None = None
+        self.api_base_url: str | None = None
 
     # ===================================================================
     # PUBLIC API
@@ -66,27 +67,24 @@ class LLMClient:
             except Exception as e:
                 logger.error(f"Proxy configuration failed: {e}")
                 print(t("info.direct_without_proxy"))
-                # Fully disconnect proxy: clean up context + clear wrapper
-                self._cleanup_proxy_context()
+                self._cleanup_http_client()
                 self.proxy_wrapper = None
                 self._initialize_http_client()  # direct mode (no proxy)
                 try:
                     self._test_connection()
                     print(t("info.direct_connected"))
                 except Exception as e2:
-                    print(
-                        f"\n{t('common.warning_prefix')} {t('warnings.direct_connection_failed', error=e2)}"
-                    )
-                    print(t("warnings.continue_despite_errors"))
+                    raise RuntimeError(
+                        t("errors.api_connection_failed", model=self.current_model)
+                    ) from e2
         else:
             self._initialize_http_client()
             try:
                 self._test_connection()
             except Exception as e:
-                print(
-                    f"\n{t('common.warning_prefix')} {t('warnings.api_test_failed', error=e)}"
-                )
-                print(t("warnings.continue_despite_errors"))
+                raise RuntimeError(
+                    t("errors.api_connection_failed", model=self.current_model)
+                ) from e
 
     def choose_model(self):
         """Display interactive model selection menu and return selected model key."""
@@ -164,15 +162,12 @@ class LLMClient:
     # ===================================================================
 
     def _initialize_client_with_proxy(self):
-        """Initialize proxy context manager and HTTP client inside it (exact original behaviour)."""
-        try:
-            self._proxy_context = self.proxy_wrapper.proxy_connection()
-            self._proxy_context.__enter__()
-            self._initialize_http_client()
-            self._test_connection()
-        except Exception as e:
-            self._cleanup_proxy_context()
-            raise
+        """Test proxy setup, then initialise HTTP client and API connection."""
+        with contextlib.suppress(Exception):
+            # test_connection warned; continue
+            self.proxy_wrapper.test_connection()
+        self._initialize_http_client()
+        self._test_connection()
 
     def _initialize_http_client(self):
         """Create (or recreate) the httpx client."""
@@ -206,18 +201,6 @@ class LLMClient:
                 logger.debug(f"Error closing HTTP client: {e}")
             finally:
                 self._http_client = None
-
-    def _cleanup_proxy_context(self):
-        """Clean up both HTTP client and proxy context manager."""
-        self._cleanup_http_client()
-
-        if self._proxy_context:
-            try:
-                self._proxy_context.__exit__(None, None, None)
-            except Exception as e:
-                logger.debug(f"Error exiting proxy context: {e}")
-            finally:
-                self._proxy_context = None
 
     # ===================================================================
     # REQUEST HELPERS
@@ -340,7 +323,7 @@ class LLMClient:
     # MESSAGE SENDING & CONVERSATION MANAGEMENT
     # ===================================================================
 
-    def _send_message_via_httpx(self) -> tuple[str, Optional[dict]]:
+    def _send_message_via_httpx(self) -> tuple[str, dict | None]:
         """Send to LLM and return (text, usage_dict)."""
         print(t("info.request_sending"))
 
@@ -364,7 +347,7 @@ class LLMClient:
 
         return text, usage
 
-    def send_message(self, message: str) -> tuple[str, Optional[dict]]:
+    def send_message(self, message: str) -> tuple[str, dict | None]:
         """
         Send a message and return (response_text, usage_dict).
         usage_dict contient les vrais tokens de l'API (prompt_tokens, completion_tokens, etc.)
@@ -430,10 +413,10 @@ class LLMClient:
         if self.session_logger:
             self.session_logger.save_session(self.conversation_history)
 
-    def get_current_model(self) -> Optional[str]:
+    def get_current_model(self) -> str | None:
         """Return currently active model name."""
         return self.current_model
 
     def __del__(self):
-        """Ensure resources are cleaned up when object is destroyed."""
-        self._cleanup_proxy_context()
+        """Ensure HTTP client is cleaned up when object is destroyed."""
+        self._cleanup_http_client()

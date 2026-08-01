@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Tests for visible-URL handling of markdown links in UI rendering."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from ui import make_links_visible, UI
+from ui import UI, make_links_visible
 
 
 def test_labeled_link_gets_visible_url():
@@ -64,8 +64,6 @@ def test_text_without_links_unchanged():
 
 def test_render_markdown_includes_visible_url(capsys):
     """UI.render_markdown must output the URL as visible text."""
-    UI.render_markdown(
-        "[AP News](https://apnews.com/hub/donald-trump)"
-    )
+    UI.render_markdown("[AP News](https://apnews.com/hub/donald-trump)")
     out = capsys.readouterr().out
     assert "https://apnews.com/hub/donald-trump" in out

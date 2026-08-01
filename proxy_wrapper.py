@@ -1,32 +1,23 @@
 """SOCKS5 proxy wrapper for routing LLM client's API traffic"""
 
-import config
-import requests
+import importlib.util
 import logging
-from contextlib import contextmanager
-import socks
-from typing import Optional
 from urllib.parse import urlparse
 
+import requests
+import socks
+
 logger = logging.getLogger(__name__)
-
-
-def set_proxy_log_level(level):
-    logger.setLevel(level)
 
 
 class ProxyWrapper:
     """Base class for proxy wrappers"""
 
-    def __init__(self, proxy_url: Optional[str] = None):
+    def __init__(self, proxy_url: str | None = None):
         self.proxy_url = proxy_url
 
-    @contextmanager
-    def proxy_connection(self):
-        raise NotImplementedError("Subclasses must implement proxy_connection")
-
-    def get_session(self):
-        raise NotImplementedError("Subclasses must implement get_session")
+    def test_connection(self) -> bool:
+        raise NotImplementedError("Subclasses must implement test_connection")
 
     def get_connection_info(self):
         raise NotImplementedError("Subclasses must implement get_connection_info")
@@ -119,8 +110,6 @@ class SOCKSProxyWrapper(ProxyWrapper):
         logging.debug("using SOCKSProxyWrapper")
         super().__init__(proxy_url)
         self.proxy_config = None
-        self.original_socket = None
-        self.session = None
 
     def _setup_proxy_config(self):
         """Setup proxy configuration"""
@@ -137,8 +126,8 @@ class SOCKSProxyWrapper(ProxyWrapper):
             logger.error(f"Failed to setup proxy config: {e}")
             return False
 
-    def _test_proxy_connection(self):
-        """Test proxy connection"""
+    def _probe_connection(self):
+        """Probe connectivity through the proxy (best-effort)."""
         try:
             proxy_url = self.proxy_config.get_proxy_url()
             logger.debug(f"Testing proxy connection: {proxy_url}")
@@ -168,32 +157,16 @@ class SOCKSProxyWrapper(ProxyWrapper):
             logger.error(f"Proxy connection test failed: {e}")
             return False
 
-    @contextmanager
-    def proxy_connection(self):
-        """Context manager for proxy connection"""
-        logger.debug("Setting up proxy connection...")
+    def test_connection(self) -> bool:
+        """Set up proxy config and run connectivity probe."""
         if not self._setup_proxy_config():
-            raise RuntimeError("Failed to setup proxy configuration")
-        if not self._test_proxy_connection():
+            return False
+        if not self._probe_connection():
             logger.warning("Proxy connection test failed, but continuing anyway...")
-
-        self.session = requests.Session()
-        proxy_url = self.proxy_config.get_proxy_url()
-        self.session.proxies = {"http": proxy_url, "https": proxy_url}
-        self.session.timeout = 30
-
-        try:
-            logger.info(
-                f"Proxy connection established: {self.proxy_config.proxy_host}:{self.proxy_config.proxy_port}"
-            )
-            yield self
-        finally:
-            if self.session:
-                self.session.close()
-                self.session = None
-
-    def get_session(self):
-        return self.session
+        logger.info(
+            f"Proxy connection established: {self.proxy_config.proxy_host}:{self.proxy_config.proxy_port}"
+        )
+        return True
 
     def get_connection_info(self):
         if self.proxy_config:
@@ -224,10 +197,8 @@ class SimpleProxyWrapper(ProxyWrapper):
         logging.info("using SimpleProxyWrapper")
         super().__init__(proxy_url)
 
-    @contextmanager
-    def proxy_connection(self):
-        """Simple context manager that just notifies about proxy intent"""
-        logger.info(f"Proxy mode enabled")
+    def test_connection(self) -> bool:
+        logger.info("Proxy mode enabled")
         if self.proxy_url:
             logger.info(f"Proxy URL: {self.proxy_url}")
         logger.info("Note: This is a simplified implementation.")
@@ -235,13 +206,7 @@ class SimpleProxyWrapper(ProxyWrapper):
             "For full proxy functionality, ensure you have the required dependencies installed:"
         )
         logger.info("  pip install requests[socks] pysocks httpx[socks]")
-        try:
-            yield self
-        finally:
-            logger.info("Proxy mode disabled")
-
-    def get_session(self):
-        return requests.Session()
+        return True
 
     def get_connection_info(self):
         return {"proxy_url": self.proxy_url, "mode": "simplified"}
@@ -252,19 +217,18 @@ def create_proxy_wrapper(proxy_url=None):
     if not proxy_url:
         return None
 
-    try:
-        import socks
-        from urllib3.contrib.socks import SOCKSProxyManager
-
+    if importlib.util.find_spec("socks") and importlib.util.find_spec(
+        "urllib3.contrib.socks"
+    ):
         logger.debug("SOCKS dependencies found, using full proxy wrapper")
         return SOCKSProxyWrapper(proxy_url)
-    except ImportError as e:
-        logger.warning(f"SOCKS dependencies not available: {e}")
-        logger.warning("Install with: pip install requests[socks] pysocks httpx[socks]")
-        return SimpleProxyWrapper(proxy_url)
+
+    logger.warning("SOCKS dependencies not available.")
+    logger.warning("Install with: pip install requests[socks] pysocks httpx[socks]")
+    return SimpleProxyWrapper(proxy_url)
 
 
-def validate_proxy_url(proxy_url: str) -> Optional[str]:
+def validate_proxy_url(proxy_url: str) -> str | None:
     """Validate proxy URL format. Returns None if valid, else error message.
 
     Now gracefully accepts and normalizes trailing slashes.

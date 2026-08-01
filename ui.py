@@ -4,10 +4,12 @@ import logging
 import os
 import re
 from pathlib import Path
+
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import PathCompleter
-from rich.markdown import Markdown
 from rich.console import Console
+from rich.markdown import Markdown
+
 from strings import t
 
 logger = logging.getLogger(__name__)
@@ -63,7 +65,7 @@ class UI:
         """Print application banner"""
         banner_file = os.path.join(script_directory, "banner.txt")
         if os.path.exists(banner_file):
-            with open(banner_file, "r", encoding="utf-8") as f:
+            with open(banner_file, encoding="utf-8") as f:
                 banner_content = f.read()
             print(t("startup.banner_content", value=banner_content))
         else:
@@ -97,7 +99,7 @@ class UI:
             console = Console()
             md = Markdown(make_links_visible(text))
             console.print(md)
-        except Exception as e:
+        except Exception:
             # Log error with traceback and fallback to plain print if markdown rendering fails
             logger.exception("Failed to render markdown")
             print(make_links_visible(text))
@@ -175,3 +177,58 @@ class UI:
                     )
             else:
                 print(f"{t('common.error_prefix')} {t('prompts.enter_valid_number')}")
+
+    @staticmethod
+    def numbered_selection(
+        items,
+        *,
+        title,
+        prompt,
+        zero_label=None,
+        allow_manual=False,
+        completer=None,
+        item_formatter=lambda x: x,
+    ):
+        """
+        Generic numbered-menu selection with an optional "option 0".
+
+        Returns ``(selection_type, value)`` where *selection_type* is one of
+        ``'zero'``, ``'item'`` (a pre-existing list entry) or ``'manual'``
+        (raw user input).  Raises ``KeyboardInterrupt`` on cancel.
+        """
+        session = PromptSession(completer=completer) if completer else PromptSession()
+
+        while True:
+            print(title)
+            if zero_label is not None:
+                print(t("menus.option_zero", label=zero_label))
+            for i, item in enumerate(items, 1):
+                print(t("menus.item_format", index=i, item=item_formatter(item)))
+            print(prompt)
+
+            try:
+                user_input = session.prompt(t("common.prompt_arrow")).strip()
+            except (KeyboardInterrupt, EOFError):
+                print(t("common.selection_cancelled"))
+                raise
+
+            if not user_input:
+                print(f"{t('common.error_prefix')} {t('common.empty_input')}")
+                continue
+
+            if user_input.isdigit():
+                idx = int(user_input)
+                if idx == 0 and zero_label is not None:
+                    print(f"{t('common.selected_prefix')} {zero_label}")
+                    return ("zero", None)
+                if 1 <= idx <= len(items):
+                    chosen = items[idx - 1]
+                    print(f"{t('common.selected_prefix')} {item_formatter(chosen)}")
+                    return ("item", chosen)
+                print(f"{t('common.error_prefix')} {t('common.number_out_of_range')}")
+                continue
+
+            if allow_manual:
+                return ("manual", user_input)
+
+            print(f"{t('common.error_prefix')} {t('prompts.enter_valid_number')}")

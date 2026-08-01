@@ -1,0 +1,11 @@
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+extend-exclude = [".swarm"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"

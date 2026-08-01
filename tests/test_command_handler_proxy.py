@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Test command handler proxy functionality."""
 
-import sys
-import os
-import tempfile
 import json
-from unittest.mock import Mock, patch, MagicMock
+import os
+import sys
+import tempfile
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -90,7 +90,7 @@ def test_proxy_command_interactive_logic():
         "http://proxy.example.com:8080",
     ]
 
-    handler = CommandHandler(
+    CommandHandler(
         mock_llm_client, mock_session_logger, mock_input_handler, mock_chat_app
     )
 
@@ -136,11 +136,11 @@ def test_proxy_integration_with_config():
         # Verify model config has proxy field
         model_config = models["model-needs-proxy"]
         assert "proxy" in model_config
-        assert model_config["proxy"] == True
+        assert model_config["proxy"]
 
         # Simulate what thin_wrap.py would check
         should_prompt = model_config.get("proxy", False)
-        assert should_prompt == True
+        assert should_prompt
 
         print("Proxy integration with model config works")
 
@@ -161,7 +161,7 @@ def test_proxy_command_error_handling():
     mock_chat_app.recent_proxies = []
     mock_chat_app.set_proxy = Mock(side_effect=ValueError("Invalid proxy URL"))
 
-    handler = CommandHandler(
+    CommandHandler(
         mock_llm_client, mock_session_logger, mock_input_handler, mock_chat_app
     )
 

@@ -7,12 +7,13 @@ They complement the other proxy test files by testing the actual integration of
 set_proxy with LLMChat, rather than command parsing or suggestion logic.
 """
 
-import sys
-import os
 import json
-import tempfile
+import os
 import shutil
+import sys
+import tempfile
 import unittest.mock as mock
+
 import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -22,13 +23,16 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 def mock_proxy_wrapper():
     """Fixture that patches proxy_wrapper.create_proxy_wrapper and validate_proxy_url."""
     mock_wrapper = mock.MagicMock()
-    mock_wrapper.proxy_connection.return_value.__enter__.return_value = mock_wrapper
-    mock_wrapper.proxy_connection.return_value.__exit__.return_value = None
-    mock_wrapper.get_connection_info.return_value = {"proxy_url": "socks5://127.0.0.1:1080"}
+    mock_wrapper.test_connection.return_value = True
+    mock_wrapper.get_connection_info.return_value = {
+        "proxy_url": "socks5://127.0.0.1:1080"
+    }
 
-    with mock.patch("proxy_wrapper.create_proxy_wrapper", return_value=mock_wrapper):
-        with mock.patch("proxy_wrapper.validate_proxy_url", return_value=None):
-            yield
+    with (
+        mock.patch("proxy_wrapper.create_proxy_wrapper", return_value=mock_wrapper),
+        mock.patch("proxy_wrapper.validate_proxy_url", return_value=None),
+    ):
+        yield
 
 
 @pytest.fixture

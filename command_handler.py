@@ -2,11 +2,13 @@
 
 import os
 from pathlib import Path
-from ui import UI
+
+from prompt_toolkit.completion import PathCompleter
+
 import config
 from path_utils import resolve_path
-from proxy_wrapper import validate_proxy_url
 from strings import t
+from ui import UI
 
 
 class CommandHandler:
@@ -167,7 +169,7 @@ class CommandHandler:
                         timestamp = name
                 else:
                     timestamp = name
-            except:
+            except Exception:
                 timestamp = name
 
             # Add metadata if available
@@ -277,7 +279,7 @@ class CommandHandler:
         if args:
             # Direct path argument provided
             new_root = resolve_path(args[0])
-            if new_root.is_dir():
+            if Path(new_root).is_dir():
                 try:
                     self.chat_app.set_root_dir(str(new_root))
                 except ValueError as e:
@@ -286,121 +288,71 @@ class CommandHandler:
                 print(
                     f"{t('common.error_prefix')} {t('errors.root_arg_not_valid', root=new_root)}"
                 )
-        else:
-            # Interactive selection mode with free chat option
-            from prompt_toolkit import PromptSession
-            from prompt_toolkit.completion import PathCompleter
+            return
 
-            completer = PathCompleter(expanduser=True)
-            session = PromptSession(completer=completer)
-
-            while True:
-                print(t("menus.previous_project_roots"))
-                print(t("menus.option_zero", label=t("menus.free_chat_label")))
-                for i, item in enumerate(self.chat_app.recent_roots, 1):
-                    print(t("menus.item_format", index=i, item=item))
-                print(t("prompts.root_enter"))
-
-                try:
-                    user_input = session.prompt(t("common.prompt_arrow")).strip()
-                except (KeyboardInterrupt, EOFError):
-                    print(t("common.selection_cancelled"))
+        while True:
+            try:
+                sel_type, sel_value = UI.numbered_selection(
+                    items=self.chat_app.recent_roots,
+                    title=t("menus.previous_project_roots"),
+                    prompt=t("prompts.root_enter"),
+                    zero_label=t("menus.free_chat_label"),
+                    allow_manual=True,
+                    completer=PathCompleter(expanduser=True),
+                )
+            except (KeyboardInterrupt, EOFError):
+                print(t("common.selection_cancelled"))
+                return
+            if sel_type == "zero":
+                self.chat_app.set_root_dir(self.chat_app.FREE_CHAT_MODE)
+                return
+            if sel_type == "item":
+                self.chat_app.set_root_dir(sel_value)
+                return
+            # manual path entry
+            try:
+                resolved = resolve_path(sel_value)
+                if Path(resolved).is_dir():
+                    print(f"{t('common.using_prefix')} {resolved}")
+                    self.chat_app.set_root_dir(resolved)
                     return
-
-                if not user_input:
-                    print(f"{t('common.error_prefix')} {t('common.empty_input')}")
-                    continue
-
-                # Numeric selection
-                if user_input.isdigit():
-                    idx = int(user_input)
-                    if idx == 0:
-                        print(
-                            f"{t('common.selected_prefix')} {t('menus.free_chat_label')}"
-                        )
-                        self.chat_app.set_root_dir(self.chat_app.FREE_CHAT_MODE)
-                        return
-                    elif 1 <= idx <= len(self.chat_app.recent_roots):
-                        chosen = self.chat_app.recent_roots[idx - 1]
-                        print(f"{t('common.selected_prefix')} {chosen}")
-                        self.chat_app.set_root_dir(chosen)
-                        return
-                    else:
-                        print(
-                            f"{t('common.error_prefix')} {t('common.number_out_of_range')}"
-                        )
-                        continue
-
-                # Manual path entry
-                try:
-                    resolved_str = resolve_path(user_input)
-                    if Path(resolved_str).is_dir():
-                        print(f"{t('common.using_prefix')} {resolved_str}")
-                        self.chat_app.set_root_dir(resolved_str)
-                        return
-                    else:
-                        print(
-                            f"{t('common.error_prefix')} {t('common.not_valid_directory', input=user_input)}"
-                        )
-                except Exception as e:
-                    print(
-                        f"{t('common.error_prefix')} {t('common.invalid_input', error=e)}"
-                    )
+                print(
+                    f"{t('common.error_prefix')} {t('common.not_valid_directory', input=sel_value)}"
+                )
+            except Exception as e:
+                print(
+                    f"{t('common.error_prefix')} {t('common.invalid_input', error=e)}"
+                )
 
     def _handle_proxy(self, args):
         """Handle /proxy command to manage proxy settings."""
         if args:
-            # Direct proxy URL or "off" argument provided
             proxy_arg = args[0]
             if proxy_arg.lower() == "off":
                 self.chat_app.set_proxy(None)
             else:
                 self.chat_app.set_proxy(proxy_arg)
-        else:
-            # Interactive selection mode
-            from prompt_toolkit import PromptSession
-            from prompt_toolkit.completion import PathCompleter
+            return
 
-            completer = PathCompleter(expanduser=True)
-            session = PromptSession(completer=completer)
-
-            disable_label = t("menus.disable_proxy_label")
-
-            while True:
-                print(t("menus.proxy_management"))
-                print(t("menus.option_zero", label=disable_label))
-                for i, proxy in enumerate(self.chat_app.recent_proxies, 1):
-                    print(t("menus.item_format", index=i, item=proxy))
-                print(t("prompts.proxy_enter"))
-
-                try:
-                    user_input = session.prompt(t("common.prompt_arrow")).strip()
-                except (KeyboardInterrupt, EOFError):
-                    print(t("common.selection_cancelled"))
-                    return
-
-                if not user_input:
-                    print(f"{t('common.error_prefix')} {t('common.empty_input')}")
-                    continue
-
-                # Numeric selection
-                if user_input.isdigit():
-                    idx = int(user_input)
-                    if idx == 0:
-                        print(f"{t('common.selected_prefix')} {disable_label}")
-                        self.chat_app.set_proxy(None)
-                        return
-                    elif 1 <= idx <= len(self.chat_app.recent_proxies):
-                        chosen = self.chat_app.recent_proxies[idx - 1]
-                        print(f"{t('common.selected_prefix')} {chosen}")
-                        self.chat_app.set_proxy(chosen)
-                        return
-                    else:
-                        print(
-                            f"{t('common.error_prefix')} {t('common.number_out_of_range')}"
-                        )
-                        continue
-
-                # Manual proxy URL entry
-                self.chat_app.set_proxy(user_input)
+        while True:
+            try:
+                sel_type, sel_value = UI.numbered_selection(
+                    items=self.chat_app.recent_proxies,
+                    title=t("menus.proxy_management"),
+                    prompt=t("prompts.proxy_enter"),
+                    zero_label=t("menus.disable_proxy_label"),
+                    allow_manual=True,
+                    completer=None,
+                )
+            except (KeyboardInterrupt, EOFError):
+                print(t("common.selection_cancelled"))
+                return
+            if sel_type == "zero":
+                self.chat_app.set_proxy(None)
+                return
+            if sel_type == "item":
+                self.chat_app.set_proxy(sel_value)
+                return
+            # manual proxy URL entry — retry on failure
+            if self.chat_app.set_proxy(sel_value):
                 return

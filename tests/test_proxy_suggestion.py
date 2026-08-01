@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Test proxy suggestion feature."""
 
-import sys
-import os
-import tempfile
 import json
-from unittest.mock import Mock, patch, MagicMock
+import os
+import sys
+import tempfile
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -63,9 +62,9 @@ def test_proxy_suggestion_logic():
         if not model_config.get("proxy", False):
             should_prompt = False
 
-        assert (
-            should_prompt == tc["should_prompt"]
-        ), f"Failed for {tc['name']}: expected {tc['should_prompt']}, got {should_prompt}"
+        assert should_prompt == tc["should_prompt"], (
+            f"Failed for {tc['name']}: expected {tc['should_prompt']}, got {should_prompt}"
+        )
 
         print(f"  Passed {tc['name']}")
 
@@ -94,9 +93,9 @@ def test_config_proxy_field_default():
         config.set_config_path(config_path)
         models = config.get_models()
 
-        assert (
-            models["test-model"]["proxy"] == False
-        ), "Proxy should default to False when not specified"
+        assert not models["test-model"]["proxy"], (
+            "Proxy should default to False when not specified"
+        )
 
         print("Proxy field defaults to False when not specified")
     finally:
@@ -135,8 +134,8 @@ def test_proxy_suggestion_integration():
         assert len(models) == 2
 
         # Verify proxy values
-        assert models["model-needs-proxy"]["proxy"] == True
-        assert models["model-no-proxy"]["proxy"] == False
+        assert models["model-needs-proxy"]["proxy"]
+        assert not models["model-no-proxy"]["proxy"]
 
         # Simulate what thin_wrap.py would do
         model1_config = models["model-needs-proxy"]
@@ -146,8 +145,8 @@ def test_proxy_suggestion_integration():
         should_prompt1 = model1_config.get("proxy", False)  # True
         should_prompt2 = model2_config.get("proxy", False)  # False
 
-        assert should_prompt1 == True
-        assert should_prompt2 == False
+        assert should_prompt1
+        assert not should_prompt2
 
         print("Proxy suggestion integration test passed")
     finally:
@@ -201,7 +200,7 @@ def test_proxy_field_validation():
         config.set_config_path(config_path)
         try:
             models = config.get_models()
-            assert False, "Should have raised ValueError for non-boolean proxy"
+            raise AssertionError("Should have raised ValueError for non-boolean proxy")
         except ValueError as e:
             if "must be boolean" in str(e):
                 print("Proxy field validation rejects non-boolean values")

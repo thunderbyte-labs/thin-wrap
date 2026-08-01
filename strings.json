@@ -30,6 +30,7 @@
     "api_error_details": "Error details returned by the provider:",
     "api_error_raw": "Raw error body:",
     "unexpected_connection_error": "Unexpected error during connection test: {error}",
+    "api_connection_failed": "Could not connect to '{model}'. Select another model.",
     "error_communicating": "Error communicating with {model}: {error}",
     "disable_proxy_failed": "Failed to disable proxy",
     "create_proxy_wrapper_failed": "Failed to create proxy wrapper",
@@ -222,8 +223,9 @@
 
   "tokens": {
     "token_usage_title": "\nUsage ({source}):",
-    "token_header": "Input       | Output      | Cache Hit    | Time (s)    | Output/s    ",
-    "token_separator": "────────────|─────────────|──────────────|─────────────|────────────",
+    "token_header": " Input Tokens  | Output Tokens | Cache Hit   | Time (s)    | Out Tokens/s",
+    "token_separator": " ───────────── | ───────────── | ─────────── | ─────────── | ────────────",
+    "token_row": " {input_tokens:<13} | {output_tokens:<13} | {cache_display:<11} | {duration_display:<11} | {ops_display:<12}",
     "token_error": "?? Could not get token usage: {error}"
   },
 

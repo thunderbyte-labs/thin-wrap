@@ -2,6 +2,8 @@
 
 """Main LLM Terminal Chat application"""
 
+# ruff: noqa: E402 -- local imports intentionally follow config.setup_logging()
+
 import argparse
 import json
 import logging
@@ -9,11 +11,8 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import cast, Optional
 
-from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import PathCompleter
-import platformdirs
 
 # Local application imports (after third-party and standard library)
 import config
@@ -21,11 +20,12 @@ import config
 config.setup_logging()
 
 from command_handler import CommandHandler
-from file_processor import generate_query, generate_plain_query, parse_plain_response
+from file_processor import generate_query
+from history_store import HistoryStore
 from input_handler import InputHandler
 from llm_client import LLMClient
 from path_utils import resolve_path
-from proxy_wrapper import create_proxy_wrapper, validate_proxy_url, normalize_proxy_url
+from proxy_wrapper import create_proxy_wrapper, validate_proxy_url
 from session_logger import SessionLogger
 from strings import t
 from text_utils import clean_text, estimate_tokens
@@ -96,11 +96,10 @@ class LLMChat:
             print(f"{t('errors.models_config_load')} {e}")
             sys.exit(1)
 
-        config_dir = Path(platformdirs.user_config_dir(config.APP_NAME))
+        config_dir = Path(config.CONFIG_DIR)
         config_dir.mkdir(parents=True, exist_ok=True)
         history_file = config_dir / "history.json"
-        self.recent_roots = self._load_recent_roots(history_file)
-        self.recent_proxies = self._load_recent_proxies(history_file)
+        self._history = HistoryStore(history_file)
         self.history_file = history_file
 
         # Process root directory
@@ -112,7 +111,7 @@ class LLMChat:
                 )
             self.root_dir = root_path
             self.free_chat_mode = False
-            self._add_to_recent_roots(history_file, self.root_dir)
+            self._history.add_root(self.root_dir)
             print(
                 f"{t('common.info_prefix')} {t('info.using_project_root', path=self.root_dir)}"
             )
@@ -124,7 +123,7 @@ class LLMChat:
                 self.root_dir = None
             else:
                 self.free_chat_mode = False
-                self._add_to_recent_roots(history_file, self.root_dir)
+                self._history.add_root(self.root_dir)
 
         # Resolve file paths
         if self.free_chat_mode:
@@ -132,21 +131,21 @@ class LLMChat:
             self.editable_files = []
             self.readable_files = []
         else:
-            assert (
-                self.root_dir is not None
-            ), "root_dir must be set when free_chat_mode is False"
+            assert self.root_dir is not None, (
+                "root_dir must be set when free_chat_mode is False"
+            )
             self.editable_files = self._resolve_file_list(
                 editable_files or [], self.root_dir
             )
             self.readable_files = self._resolve_file_list(
                 readable_files or [], self.root_dir
             )
-        self.first_message = "" if not first_message else first_message
+        self.first_message = first_message if first_message else ""
         self.proxy_wrapper = create_proxy_wrapper(proxy_url) if proxy_url else None
 
         # Add to proxy history if valid
         if proxy_url and validate_proxy_url(proxy_url) is None:
-            self._add_to_recent_proxies(self.history_file, proxy_url)
+            self._history.add_proxy(proxy_url)
 
         # Initialize components
         self.session_logger = SessionLogger(self.script_directory, self.root_dir)
@@ -167,141 +166,37 @@ class LLMChat:
                 logger.warning(f"Skipping unresolvable file {f}: {e}")
         return resolved
 
-    def _load_recent_roots(self, history_file: Path) -> list[str]:
-        """Load recent root_dirs from history file."""
-        try:
-            if history_file.exists():
-                data = json.loads(history_file.read_text(encoding="utf-8"))
-                return [r for r in data.get("recent_root_dirs", []) if Path(r).is_dir()]
-        except Exception as e:
-            logger.debug(f"Failed to load root history: {e}")
-        return []
+    @property
+    def recent_roots(self) -> list[str]:
+        return self._history.recent_roots
 
-    def _save_recent_roots(self, history_file: Path) -> None:
-        """Save current recent_roots list along with existing proxies."""
-        try:
-            # Load existing data to preserve proxies
-            existing_data = {}
-            if history_file.exists():
-                existing_data = json.loads(history_file.read_text(encoding="utf-8"))
-
-            # Update roots, keep proxies and any other fields
-            existing_data["recent_root_dirs"] = self.recent_roots[:10]
-
-            history_file.write_text(
-                json.dumps(existing_data, indent=2), encoding="utf-8"
-            )
-        except Exception as e:
-            logger.debug(f"Failed to save root history: {e}")
-
-    def _add_to_recent_roots(self, history_file: Path, root: str) -> None:
-        """Add root to history: move to front if already present, limit to 10."""
-        root = str(Path(root).resolve())
-        if root in self.recent_roots:
-            self.recent_roots.remove(root)
-        self.recent_roots.insert(0, root)
-        self.recent_roots = self.recent_roots[:10]
-        self._save_recent_roots(history_file)
-
-    def _load_recent_proxies(self, history_file: Path) -> list[str]:
-        """Load recent proxy URLs from history file and normalize them to prevent duplicates."""
-        try:
-            if history_file.exists():
-                data = json.loads(history_file.read_text(encoding="utf-8"))
-                valid_proxies = []
-                seen = set()  # Deduplicate after normalization
-                for proxy in data.get("recent_proxies", []):
-                    error_msg = validate_proxy_url(proxy)
-                    if error_msg is None:
-                        normalized = normalize_proxy_url(proxy)
-                        if normalized not in seen:
-                            seen.add(normalized)
-                            valid_proxies.append(normalized)  # Store clean version
-                return valid_proxies
-        except Exception as e:
-            logger.debug(f"Failed to load proxy history: {e}")
-        return []
-
-    def _save_recent_proxies(self, history_file: Path) -> None:
-        """Save current recent_proxies list (already normalized) along with existing roots."""
-        try:
-            existing_data = {}
-            if history_file.exists():
-                existing_data = json.loads(history_file.read_text(encoding="utf-8"))
-            existing_data["recent_proxies"] = self.recent_proxies[:10]
-            history_file.write_text(
-                json.dumps(existing_data, indent=2), encoding="utf-8"
-            )
-        except Exception as e:
-            logger.debug(f"Failed to save proxy history: {e}")
-
-    def _add_to_recent_proxies(self, history_file: Path, proxy_url: str) -> None:
-        """Add proxy URL to history using normalized form to prevent duplicates."""
-        if not proxy_url:
-            return
-
-        # Normalize before any comparison or storage
-        normalized = normalize_proxy_url(proxy_url)
-
-        # Remove existing entry (if present in either original or normalized form)
-        if normalized in self.recent_proxies:
-            self.recent_proxies.remove(normalized)
-        elif proxy_url in self.recent_proxies:  # fallback for very old entries
-            self.recent_proxies.remove(proxy_url)
-
-        self.recent_proxies.insert(0, normalized)  # Store clean normalized version
-        self.recent_proxies = self.recent_proxies[:10]
-        self._save_recent_proxies(history_file)
+    @property
+    def recent_proxies(self) -> list[str]:
+        return self._history.recent_proxies
 
     def _interactive_root_selection(self) -> str:
-        """Interactive prompt for root selection with history, Tab autocompletion, and free chat option."""
-
-        completer = PathCompleter(expanduser=True)
-        session = PromptSession(completer=completer)
-
-        free_chat_label = t("menus.free_chat_label")
-
         while True:
-            print(t("menus.previous_project_roots"))
-            print(t("menus.option_zero", label=free_chat_label))
-            for i, item in enumerate(self.recent_roots, 1):
-                print(t("menus.item_format", index=i, item=item))
-            print(t("prompts.root_enter"))
+            sel_type, sel_value = UI.numbered_selection(
+                items=self.recent_roots,
+                title=t("menus.previous_project_roots"),
+                prompt=t("prompts.root_enter"),
+                zero_label=t("menus.free_chat_label"),
+                allow_manual=True,
+                completer=PathCompleter(expanduser=True),
+            )
+            if sel_type == "zero":
+                return self.FREE_CHAT_MODE
+            if sel_type == "item":
+                return sel_value
+            # manual path entry
             try:
-                user_input = session.prompt(t("common.prompt_arrow")).strip()
-            except (KeyboardInterrupt, EOFError):
-                print(t("common.selection_cancelled"))
-                raise
-
-            if not user_input:
-                print(f"{t('common.error_prefix')} {t('common.empty_input')}")
-                continue
-
-            # Numeric selection
-            if user_input.isdigit():
-                idx = int(user_input)
-                if idx == 0:
-                    print(f"{t('common.selected_prefix')} {free_chat_label}")
-                    return self.FREE_CHAT_MODE
-                elif 1 <= idx <= len(self.recent_roots):
-                    chosen = self.recent_roots[idx - 1]
-                    print(f"{t('common.selected_prefix')} {chosen}")
-                    return chosen
-                else:
-                    print(
-                        f"{t('common.error_prefix')} {t('common.number_out_of_range')}"
-                    )
-                    continue
-            # Manual path entry
-            try:
-                resolved_str = resolve_path(user_input)
-                if Path(resolved_str).is_dir():
-                    print(f"{t('common.using_prefix')} {resolved_str}")
-                    return resolved_str
-                else:
-                    print(
-                        f"{t('common.error_prefix')} {t('common.not_valid_directory', input=user_input)}"
-                    )
+                resolved = resolve_path(sel_value)
+                if Path(resolved).is_dir():
+                    print(f"{t('common.using_prefix')} {resolved}")
+                    return resolved
+                print(
+                    f"{t('common.error_prefix')} {t('common.not_valid_directory', input=sel_value)}"
+                )
             except Exception as e:
                 print(
                     f"{t('common.error_prefix')} {t('common.invalid_input', error=e)}"
@@ -325,6 +220,7 @@ class LLMChat:
             # Update session logger with None root (free chat mode)
             self.session_logger = SessionLogger(self.script_directory, self.root_dir)
             self.llm_client.session_logger = self.session_logger
+            self.command_handler.session_logger = self.session_logger
 
             print(f"{t('common.success_prefix')} {t('commands.switched_free_chat')}")
             return
@@ -345,7 +241,10 @@ class LLMChat:
         should_clear_files = True
         if old_root is not None:
             # Compare resolved paths to see if it's the same directory
-            old_resolved = resolve_path(old_root)
+            try:
+                old_resolved = resolve_path(old_root)
+            except (OSError, RuntimeError, ValueError):
+                old_resolved = None
             if old_resolved == root_path:
                 should_clear_files = False
 
@@ -354,13 +253,14 @@ class LLMChat:
             self.readable_files = []
 
         # Update history
-        self._add_to_recent_roots(self.history_file, self.root_dir)
+        self._history.add_root(self.root_dir)
 
         # Update session logger with new root
         self.session_logger = SessionLogger(self.script_directory, self.root_dir)
 
         # Update LLM client's session logger reference
         self.llm_client.session_logger = self.session_logger
+        self.command_handler.session_logger = self.session_logger
 
         print(
             f"{t('common.success_prefix')} {t('commands.root_changed', old=old_root, new=self.root_dir)}"
@@ -386,8 +286,6 @@ class LLMChat:
         Returns:
             bool: True if successful, False otherwise
         """
-        from proxy_wrapper import create_proxy_wrapper, validate_proxy_url
-
         # Handle disable proxy
         if proxy_url is None or proxy_url.lower() == "off":
             print(t("info.proxy_disabling"))
@@ -421,8 +319,8 @@ class LLMChat:
                 )
                 return False
 
-            # Try to enter proxy context (which tests connection)
-            test_wrapper.proxy_connection()
+            # Test proxy connection
+            test_wrapper.test_connection()
 
             # Connection test passed, now switch
             old_proxy = self.proxy_wrapper
@@ -430,7 +328,7 @@ class LLMChat:
 
             if self.llm_client.update_proxy(test_wrapper):
                 # Add to recent proxies history
-                self._add_to_recent_proxies(self.history_file, proxy_url)
+                self._history.add_proxy(proxy_url)
                 print(
                     f"{t('common.success_prefix')} {t('info.proxy_switched', url=proxy_url)}"
                 )
@@ -545,31 +443,31 @@ class LLMChat:
             print()
             logger.debug("Displayed proxy information")
 
-        try:
-            model = self.llm_client.choose_model()
-        except KeyboardInterrupt as e:
-            print(f"\n{t('info.exiting_during_setup')}")
-            self._save_and_exit()
-            return
-        # Prompt for proxy if model suggests it and no proxy configured
-        if model is None:
-            # This shouldn't happen during initialization, but handle gracefully
-            logger.warning("Model selection returned None, skipping proxy prompt")
-        else:
+        while True:
             try:
-                if not self._prompt_for_proxy_if_needed(model):
-                    # User cancelled proxy selection, continue without proxy
-                    print(t("warnings.continuing_without_proxy"))
+                model = self.llm_client.choose_model()
             except KeyboardInterrupt:
-                print(f"\n{t('warnings.proxy_setup_cancelled')}")
-        # Now set up API key (may fail if proxy still needed but not configured)
-        try:
-            self.llm_client.setup_api_key(model)
-            logger.debug("Set up API key successfully")
-        except KeyboardInterrupt as e:
-            print(f"\n{t('info.exiting_during_setup')}")
-            self._save_and_exit()
-            return
+                print(f"\n{t('info.exiting_during_setup')}")
+                self._save_and_exit()
+                return
+            if model is None:
+                logger.warning("Model selection returned None, skipping proxy prompt")
+            else:
+                try:
+                    if not self._prompt_for_proxy_if_needed(model):
+                        print(t("warnings.continuing_without_proxy"))
+                except KeyboardInterrupt:
+                    print(f"\n{t('warnings.proxy_setup_cancelled')}")
+            try:
+                self.llm_client.setup_api_key(model)
+                logger.debug("Set up API key successfully")
+                break
+            except KeyboardInterrupt:
+                print(f"\n{t('info.exiting_during_setup')}")
+                self._save_and_exit()
+                return
+            except RuntimeError as e:
+                print(f"\n{t('common.error_prefix')} {e}\n")
 
         UI.show_startup_message()
         self._print_files_summary()
@@ -635,19 +533,16 @@ class LLMChat:
 
         print(t("separators.message_line"))
 
-        if self.free_chat_mode:
-            # Free chat mode: plain message without file context
-            query = generate_plain_query(message)
-            response_parser = parse_plain_response
-        else:
-            # In non-free chat mode, root_dir must be a string
-            root_dir_str = cast(str, self.root_dir)
-            query, response_parser = generate_query(
-                root_dir_str, self.readable_files, self.editable_files, message
-            )
-            # Check if user chose to insert files (abort send)
-            if query is None and response_parser is None:
-                return "insert_files"
+        query, response_parser = generate_query(
+            self.root_dir or "",
+            self.readable_files,
+            self.editable_files,
+            message,
+            force_plain=self.free_chat_mode,
+        )
+        # Check if user chose to insert files (abort send)
+        if query is None and response_parser is None:
+            return "insert_files"
 
         assert query is not None
         query = clean_text(query)
@@ -679,8 +574,8 @@ class LLMChat:
         self,
         query: str,
         response: str,
-        usage: Optional[dict] = None,
-        duration_ms: Optional[float] = None,
+        usage: dict | None = None,
+        duration_ms: float | None = None,
     ):
         """Affiche un tableau clair avec Input, Output, Cache Hit, Time (s), et Output/s."""
         try:
@@ -725,7 +620,14 @@ class LLMChat:
                 cache_display = "-"
 
             print(
-                f"   {input_tokens:<11} | {output_tokens:<11} | {cache_display:<12} | {duration_display:<11} | {ops_display:<12}"
+                t(
+                    "tokens.token_row",
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cache_display=cache_display,
+                    duration_display=duration_display,
+                    ops_display=ops_display,
+                )
             )
 
         except Exception as e:
@@ -754,9 +656,9 @@ def get_location_info() -> str:
     else:
         config_desc = t("help.location_config_default")
 
-    # Data locations (using the same platformdirs logic as the application)
-    config_dir = Path(platformdirs.user_config_dir(config.APP_NAME))
-    data_dir = Path(platformdirs.user_data_dir(config.APP_NAME))
+    # Data locations
+    config_dir = Path(config.CONFIG_DIR)
+    data_dir = Path(config.DATA_DIR)
 
     history_file = config_dir / "history.json"
     conversations_base = data_dir / "conversations"
@@ -811,8 +713,9 @@ def main():
     try:
         args = parse_arguments()
 
-        if args.proxy:
-            proxy_url = args.proxy.rstrip("/")
+        proxy_url = args.proxy.rstrip("/") if args.proxy else None
+
+        if proxy_url:
             error_msg = validate_proxy_url(proxy_url)
             if error_msg:
                 print(
@@ -838,7 +741,7 @@ def main():
             readable_files=args.read,
             editable_files=args.edit,
             first_message=args.message,
-            proxy_url=args.proxy,
+            proxy_url=proxy_url,
             config_path=effective_config_path,  # Prevails if set, None otherwise
         )
         chat.run()

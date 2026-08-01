@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Tests for the centralized strings.json system."""
 
-import sys
+import json
 import os
 import re
-import json
+import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from strings import t, _load
+from strings import _load, t
 
 STRINGS_FILE = os.path.join(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..")), "strings.json"
@@ -34,7 +34,7 @@ def _leaf_entries():
 
 def test_strings_file_is_valid_json():
     """strings.json must be parseable JSON."""
-    with open(STRINGS_FILE, "r", encoding="utf-8") as f:
+    with open(STRINGS_FILE, encoding="utf-8") as f:
         data = json.load(f)
     assert isinstance(data, dict)
     for required in ("common", "errors", "info", "prompts", "menus", "commands"):
@@ -68,7 +68,7 @@ def test_all_used_keys_exist():
     for fname in os.listdir(src_root):
         if not fname.endswith(".py"):
             continue
-        with open(os.path.join(src_root, fname), "r", encoding="utf-8") as f:
+        with open(os.path.join(src_root, fname), encoding="utf-8") as f:
             text = f.read()
         used.update(re.findall(r"\bt\(\s*(['\"])([a-z_][a-z0-9_.]*)\1", text))
 

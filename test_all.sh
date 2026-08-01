@@ -4,6 +4,13 @@
 echo "Running all tests..."
 echo "===================="
 
+# Enforce formatting and lint before running tests.
+# Fails the pipeline when the code is not formatted/clean (e.g. on GitHub CI).
+./check_all.sh --check || {
+    echo "❌ Code is not formatted/clean. Run: ./check_all.sh"
+    exit 1
+}
+
 # Use python from venv if available
 if [ -f ".venv/bin/python" ]; then
     PYTHON=".venv/bin/python"
