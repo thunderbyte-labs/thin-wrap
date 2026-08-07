@@ -347,42 +347,124 @@ class LLMChat:
             )
             return False
 
+    def _format_files_line(self, file_list, label):
+        """Format a files-summary line as ``(label_part, value_part)``.
+
+        e.g. ``("Editable (2):", "a.py, b.py")`` or ``("Readable:", "None")``.
+        """
+        if not file_list:
+            return t("files.none_label", label=label), t("files.none_value")
+        # Convert to relative paths
+        rel_paths = []
+        for f in file_list:
+            try:
+                rel_path = os.path.relpath(f, self.root_dir)
+            except ValueError:
+                rel_path = f
+            rel_paths.append(rel_path)
+        # Truncate if too many
+        max_show = 5
+        if len(rel_paths) <= max_show:
+            files_str = ", ".join(rel_paths)
+        else:
+            shown = rel_paths[:max_show]
+            files_str = ", ".join(shown) + t(
+                "files.and_more", count=len(rel_paths) - max_show
+            )
+        return (
+            t("files.list_label", label=label, count=len(rel_paths)),
+            files_str,
+        )
+
     def _print_files_summary(self):
         """Print a compact summary of editable and readable files."""
         if not self.editable_files and not self.readable_files:
             return
 
-        def format_files(file_list, label):
-            if not file_list:
-                return t("files.none", label=label)
-            # Convert to relative paths
-            rel_paths = []
-            for f in file_list:
-                try:
-                    rel_path = os.path.relpath(f, self.root_dir)
-                except ValueError:
-                    rel_path = f
-                rel_paths.append(rel_path)
-            # Truncate if too many
-            max_show = 5
-            if len(rel_paths) <= max_show:
-                files_str = ", ".join(rel_paths)
-                return t(
-                    "files.list", label=label, count=len(rel_paths), files=files_str
-                )
-            else:
-                shown = rel_paths[:max_show]
-                files_str = ", ".join(shown) + t(
-                    "files.and_more", count=len(rel_paths) - max_show
-                )
-                return t(
-                    "files.list", label=label, count=len(rel_paths), files=files_str
-                )
+        print()
+        for file_list, label in (
+            (self.editable_files, t("files.label_editable")),
+            (self.readable_files, t("files.label_readable")),
+        ):
+            label_part, value_part = self._format_files_line(file_list, label)
+            print(f"{label_part} {value_part}")
+        print()
 
+    def _file_context_block(self) -> str:
+        """ANSI block shown below the input (following it while typing) and
+        kept in the scrollback after sending: a blank line, then "File
+        context:" and the files summary. Only the labels ("File context:",
+        "Editable:", "Readable:") are green; the values stay in the default
+        color. Empty when there is no context."""
+        if not self.editable_files and not self.readable_files:
+            return ""
+        lines = ["", UI.colorize(t("files.context_title"), "GREEN")]
+        for file_list, label in (
+            (self.editable_files, t("files.label_editable")),
+            (self.readable_files, t("files.label_readable")),
+        ):
+            label_part, value_part = self._format_files_line(file_list, label)
+            lines.append(f"{UI.colorize(label_part, 'GREEN')} {value_part}")
+        return "\n".join(lines)
+
+    def _print_file_context_block(self):
+        """Print the file-context block into the scrollback (after sending)."""
+        block = self._file_context_block()
+        if block:
+            sys.stdout.write(block + "\n")
+            sys.stdout.flush()
+
+    def _print_message_prompt(self):
+        """Render the input header: a blank line, then the Message separator.
+
+        The header is owned by the app (not prompt_toolkit) so it is printed
+        once per input. The files context is no longer part of the header: it
+        is shown dynamically below the input while typing (bottom toolbar) and
+        kept in the scrollback after sending.
+        """
+        self._message_prompt_shown = True
         print()
-        print(format_files(self.editable_files, t("files.label_editable")))
-        print(format_files(self.readable_files, t("files.label_readable")))
-        print()
+        sys.stdout.write(t("prompts.input_hint"))
+        sys.stdout.flush()
+
+    def _erase_pending_message_prompt(self):
+        """Erase the "Message" header printed before the current input.
+
+        Called before running a command whose own output / prompt supersedes
+        the header, so consecutive app outputs don't pile up redundant
+        "Message" separators (e.g. before /nameconv, /model, /reload, ...).
+        """
+        if getattr(self, "_message_prompt_shown", False):
+            sys.stdout.write("\x1b[3A\x1b[J")
+            sys.stdout.flush()
+
+    def _print_command_header(self, command: str):
+        """Render the command echo header that replaces the "Message" header.
+
+        Called right after erasing the pending "Message" header and before
+        the command runs, so the command the user typed is echoed and
+        consecutive commands are visually separated like messages are.
+        """
+        command = command.strip()
+        # Match the "Message" header width (50 chars) by giving the remaining
+        # width to the dash runs, split evenly (+/-1) like the message header
+        # (which uses 20 dashes then 21).
+        header_width = (
+            50  # same as "-------------------- Message ---------------------"
+        )
+        fixed_chars = len(" Command: ") + len(command) + 1  # trailing space
+        dash_total = max(header_width - fixed_chars, 0)
+        dashes_left = dash_total // 2
+        dashes_right = dash_total - dashes_left
+        sys.stdout.write(
+            t(
+                "prompts.command_hint",
+                command=command,
+                dashes_left="-" * dashes_left,
+                dashes_right="-" * dashes_right,
+            )
+        )
+        sys.stdout.flush()
 
     def _prompt_for_proxy_if_needed(self, selected_model: str) -> bool:
         """
@@ -420,6 +502,21 @@ class LLMChat:
         # Return True regardless - if user selected "No proxy", proxy_wrapper remains None
         return True
 
+    def _ensure_proxy_for_model(self, model: str | None) -> None:
+        """Ensure a proxy is configured when the model suggests one.
+
+        Single entry point shared by the startup flow and the /model command:
+        prompts the user to configure a proxy when the selected model has
+        ``"proxy": true`` in config and none is configured yet.
+        """
+        if model is None:
+            return
+        try:
+            if not self._prompt_for_proxy_if_needed(model):
+                print(t("warnings.continuing_without_proxy"))
+        except KeyboardInterrupt:
+            print(f"\n{t('warnings.proxy_setup_cancelled')}")
+
     def run(self):
         """Main chat loop"""
         logger.debug("Starting run method")
@@ -454,11 +551,7 @@ class LLMChat:
             if model is None:
                 logger.warning("Model selection returned None, skipping proxy prompt")
             else:
-                try:
-                    if not self._prompt_for_proxy_if_needed(model):
-                        print(t("warnings.continuing_without_proxy"))
-                except KeyboardInterrupt:
-                    print(f"\n{t('warnings.proxy_setup_cancelled')}")
+                self._ensure_proxy_for_model(model)
             try:
                 self.llm_client.setup_api_key(model)
                 logger.debug("Set up API key successfully")
@@ -471,19 +564,21 @@ class LLMChat:
                 print(f"\n{t('common.error_prefix')} {e}\n")
 
         UI.show_startup_message()
-        self._print_files_summary()
+        self._print_message_prompt()
         logger.debug("Showed startup message")
 
         next_default = self.first_message
 
         while True:
             logger.debug("Entering main chat loop iteration")
-            user_input = self.input_handler.get_input_with_editing(default=next_default)
+            user_input = self.input_handler.get_input_with_editing(
+                default=next_default,
+                context_provider=self._file_context_block,
+            )
             next_default = ""
             if isinstance(user_input, tuple) and user_input[0] == "Ctrl+B":
                 next_default = user_input[1]
                 self.command_handler.handle_files_command()
-                self._print_files_summary()
                 continue
 
             if not user_input:
@@ -494,11 +589,23 @@ class LLMChat:
             logger.debug(f"Processing user input: {user_input[:50]}...")
 
             if user_input.startswith("/"):
+                cmd = user_input.split()[0].lower()
+                if cmd == "/files":
+                    self.command_handler.handle_files_command()
+                    continue
                 logger.debug("Detected command input")
+                if cmd != "/bye":
+                    # The command's own output/prompt supersedes the header
+                    # printed for this input; erase it and echo the command
+                    # in its place so the typed command is visible and
+                    # consecutive commands are separated.
+                    self._erase_pending_message_prompt()
+                    self._print_command_header(user_input)
                 should_quit = self.command_handler.handle_command(user_input)
                 if should_quit:
                     logger.debug("Command requested quit")
                     break
+                self._print_message_prompt()
                 continue
 
             logger.debug("Handling non-command user message")
@@ -507,9 +614,11 @@ class LLMChat:
             # If user chose to insert files, return to editor with the message
             if send_result == "insert_files":
                 next_default = user_input
+                self._print_message_prompt()
                 continue
             else:
                 self.input_handler.add_to_history(user_input)
+                self._print_message_prompt()
         logger.debug("Exiting main chat loop")
         self._exit_cleanly()
 
@@ -518,6 +627,13 @@ class LLMChat:
         log_path = self.session_logger.get_session_path()
         if not os.path.exists(log_path):
             log_path = None
+        # The input prompt was erased on exit, but the "Message" header printed
+        # before it (blank line, separator, blank line) is still on screen, and
+        # the blank line printed after the last reply is still there. Erase
+        # them so the exit message follows the conversation cleanly.
+        if getattr(self, "_message_prompt_shown", False):
+            sys.stdout.write("\x1b[4A\x1b[J")
+            sys.stdout.flush()
         UI.show_exit_message(log_path)
 
     def _send_message(self, message):
@@ -530,8 +646,6 @@ class LLMChat:
         model = self.llm_client.get_current_model()
         logger.debug(f"Using model: {model}")
 
-        print(t("separators.message_line"))
-
         query, response_parser = generate_query(
             self.root_dir or "",
             self.readable_files,
@@ -542,6 +656,12 @@ class LLMChat:
         # Check if user chose to insert files (abort send)
         if query is None and response_parser is None:
             return "insert_files"
+
+        # Echo the sent message and keep the files context in the scrollback,
+        # one line below it, before the message separator.
+        print(message)
+        self._print_file_context_block()
+        print(t("separators.message_line"))
 
         assert query is not None
         query = clean_text(query)
@@ -646,7 +766,6 @@ class LLMChat:
             print(t("info.no_explanation"))
 
         print(t("separators.response_line"))
-        print()
         logger.debug("Message sent and response processed successfully")
 
     def _token_usage_numbers(

@@ -24,12 +24,18 @@ def sanitize_conversation_name(raw: str) -> tuple[str | None, str | None]:
     candidate = raw.strip().lower()
     if not candidate:
         return "nameconv_empty", None
-    if not re.fullmatch(r"[a-z0-9 ]+", candidate):
+    if not re.fullmatch(r"[a-z0-9 -]+", candidate):
         return "nameconv_invalid_chars", None
-    words = candidate.split()
-    if len(words) > CONVERSATION_NAME_MAX_WORDS:
+    # Split on whitespace, then on hyphens: "wesh-alors", "wesh - alors" and
+    # "wesh--alors" all normalize to "wesh-alors". Empty fragments are dropped.
+    tokens = []
+    for token in candidate.split():
+        tokens.extend(frag for frag in token.strip("-").split("-") if frag)
+    if not tokens:
+        return "nameconv_invalid_chars", None
+    if len(tokens) > CONVERSATION_NAME_MAX_WORDS:
         return "nameconv_too_many_words", None
-    return None, "-".join(words)
+    return None, "-".join(tokens)
 
 
 class SessionLogger:

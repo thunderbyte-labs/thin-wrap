@@ -46,7 +46,7 @@
     "invalid_input_yni": "Invalid input. Please enter 'y', 'n', or 'i' (or press Enter for default 'y').",
     "root_arg_not_valid": "{root} is not a valid directory",
     "nameconv_empty": "Name cannot be empty. Please enter a name.",
-    "nameconv_invalid_chars": "Only lowercase letters (a-z), digits (0-9) and spaces are allowed.",
+    "nameconv_invalid_chars": "Only lowercase letters (a-z), digits (0-9), spaces and hyphens (-) are allowed.",
     "nameconv_too_many_words": "Too many words. Maximum is 12.",
     "nameconv_ai_failed": "The AI could not suggest a name.",
     "nameconv_suggestion_unusable": "The AI suggestion was not usable. Please enter a name manually."
@@ -91,7 +91,7 @@
     "history_preserved": {"text": "Conversation history preserved.", "color": "GREEN"},
     "llm_explanation": {"text": "===================== Reply ======================\n", "color": "GREEN"},
     "no_explanation": "\nNo explanation provided by the LLM.",
-    "request_sending": "⏳ Thinking... (Press Ctrl+C to interrupt)",
+    "request_sending": "⏳ Thinking (Press Ctrl+C to interrupt)... ",
     "ttf": "Time To First token \"TTF\" : {elapsed} s",
     "request_interrupted": {"text": "Request interrupted by user (Ctrl+C)", "color": "GREEN"},
     "empty_message_hint": {"text": "Empty message or KeyboardInterrupt. Type /help to see command or /bye (then Alt+Enter) to quit.\n\n", "color": "BOLD"},
@@ -132,7 +132,8 @@
     "nameconv_llm_query": "Name this conversation with less than 12 keywords (no more than 12) in a way that would make it easily recoverable by the user in a list of conversations. Answer this query with only such keywords, nothing else.",
     "nameconv_suggestion": "Suggested name: {name}",
     "nameconv_confirm": "Press Enter to accept, type a new name, or 'c' to cancel: ",
-    "input_hint": {"text": "-------------------- Message ---------------------\n\n" , "color": "BRIGHT_GREEN"}
+    "input_hint": {"text": "-------------------- Message ---------------------\n\n" , "color": "BRIGHT_GREEN"},
+    "command_hint": {"text": "\n{dashes_left} Command: {command} {dashes_right}\n\n", "color": "BRIGHT_GREEN"}
   },
 
   "menus": {
@@ -168,8 +169,10 @@
     "insertions_deletions": "{filename}: {insertions} insertions(+), {deletions} deletions(-)",
     "label_editable": "Editable",
     "label_readable": "Readable",
-    "none": "{label}: None",
-    "list": "{label} ({count}): {files}",
+    "context_title": "File context:",
+    "none_label": "{label}:",
+    "none_value": "None",
+    "list_label": "{label} ({count}):",
     "and_more": " ... and {count} more"
   },
 

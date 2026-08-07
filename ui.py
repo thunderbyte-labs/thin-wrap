@@ -78,6 +78,7 @@ class UI:
         """Show startup help message"""
         print("\n" + t("startup.welcome"))
         print(t("separators.startup_line"))
+        print()
         print(t("startup.send_part1") + t("keys.alt_enter") + t("startup.send_part2"))
         print(t("startup.files_part1") + t("keys.ctrl_b") + t("startup.files_part2"))
         print(t("startup.help_part1") + t("keys.slash_help") + t("startup.help_part2"))

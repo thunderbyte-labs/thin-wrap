@@ -201,10 +201,99 @@ def test_proxy_history_management():
     print("Proxy history management tests passed")
 
 
+def test_handle_model_prompts_proxy_before_switch_interactive():
+    """Switching models must offer the proxy prompt before connecting."""
+    calls = []
+    mock_llm_client = Mock()
+    mock_llm_client.get_current_model.return_value = "deepseek"
+    mock_llm_client.choose_model.return_value = "gemini-2.5-flash"
+
+    def fake_switch(model):
+        calls.append(("switch", model))
+        return False  # avoid _prompt_clear_after_model_switch (would block on input)
+
+    mock_llm_client.switch_model = fake_switch
+    mock_chat_app = Mock()
+    mock_chat_app._ensure_proxy_for_model = lambda model: calls.append(("proxy", model))
+
+    handler = CommandHandler(mock_llm_client, Mock(), Mock(), mock_chat_app)
+    handler._handle_model([])
+
+    assert calls == [("proxy", "gemini-2.5-flash"), ("switch", "gemini-2.5-flash")]
+
+
+def test_handle_model_prompts_proxy_before_switch_args():
+    """`/model <name>` must offer the proxy prompt before connecting."""
+    calls = []
+    mock_llm_client = Mock()
+    mock_llm_client.get_current_model.return_value = "deepseek"
+    mock_llm_client.choose_model = Mock()
+
+    def fake_switch(model):
+        calls.append(("switch", model))
+        return False
+
+    mock_llm_client.switch_model = fake_switch
+    mock_chat_app = Mock()
+    mock_chat_app._ensure_proxy_for_model = lambda model: calls.append(("proxy", model))
+
+    handler = CommandHandler(mock_llm_client, Mock(), Mock(), mock_chat_app)
+    handler._handle_model(["gemini-2.5-flash"])
+
+    assert calls == [("proxy", "gemini-2.5-flash"), ("switch", "gemini-2.5-flash")]
+    mock_llm_client.choose_model.assert_not_called()
+
+
+# =========================================================================
+# LLMChat._ensure_proxy_for_model
+# =========================================================================
+
+
+def _proxy_chat():
+    from thin_wrap import LLMChat
+
+    chat = LLMChat.__new__(LLMChat)
+    chat._prompt_for_proxy_if_needed = Mock()
+    return chat
+
+
+def test_ensure_proxy_for_model_skips_when_model_none():
+    chat = _proxy_chat()
+    chat._ensure_proxy_for_model(None)
+    chat._prompt_for_proxy_if_needed.assert_not_called()
+
+
+def test_ensure_proxy_for_model_warns_when_prompt_cancelled(capsys):
+    chat = _proxy_chat()
+    chat._prompt_for_proxy_if_needed.return_value = False
+    chat._ensure_proxy_for_model("gemini-2.5-flash")
+    assert "continuing without proxy" in capsys.readouterr().out.lower()
+
+
+def test_ensure_proxy_for_model_no_warning_when_prompt_succeeds(capsys):
+    chat = _proxy_chat()
+    chat._prompt_for_proxy_if_needed.return_value = True
+    chat._ensure_proxy_for_model("gemini-2.5-flash")
+    assert "continuing without proxy" not in capsys.readouterr().out.lower()
+
+
+def test_ensure_proxy_for_model_handles_keyboard_interrupt(capsys):
+    chat = _proxy_chat()
+    chat._prompt_for_proxy_if_needed.side_effect = KeyboardInterrupt
+    chat._ensure_proxy_for_model("gemini-2.5-flash")
+    assert "cancelled" in capsys.readouterr().out.lower()
+
+
 if __name__ == "__main__":
     test_proxy_command_parsing()
     test_proxy_command_interactive_logic()
     test_proxy_integration_with_config()
     test_proxy_command_error_handling()
     test_proxy_history_management()
+    test_handle_model_prompts_proxy_before_switch_interactive()
+    test_handle_model_prompts_proxy_before_switch_args()
+    test_ensure_proxy_for_model_skips_when_model_none()
+    test_ensure_proxy_for_model_warns_when_prompt_cancelled()
+    test_ensure_proxy_for_model_no_warning_when_prompt_succeeds()
+    test_ensure_proxy_for_model_handles_keyboard_interrupt()
     print("\nAll command handler proxy tests passed!")

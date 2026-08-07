@@ -42,12 +42,40 @@ def test_sanitize_collapses_spaces():
 
 
 def test_sanitize_rejects_invalid_chars():
-    """Only a-z, 0-9 and spaces are allowed."""
+    """Only a-z, 0-9, spaces and hyphens are allowed."""
     error, slug = sanitize_conversation_name("hello/world")
     assert error == "nameconv_invalid_chars"
     assert slug is None
     error, _ = sanitize_conversation_name("a b@c")
     assert error == "nameconv_invalid_chars"
+
+
+def test_sanitize_allows_hyphens():
+    """Typed hyphens are preserved in the slug."""
+    assert sanitize_conversation_name("wesh-alors") == (None, "wesh-alors")
+    assert sanitize_conversation_name("bug fix-42") == (None, "bug-fix-42")
+
+
+def test_sanitize_normalizes_hyphens():
+    """Hyphen fragments around spaces and repeated hyphens collapse to one."""
+    assert sanitize_conversation_name("wesh - alors") == (None, "wesh-alors")
+    assert sanitize_conversation_name("wesh--alors") == (None, "wesh-alors")
+    assert sanitize_conversation_name("-wesh-alors-") == (None, "wesh-alors")
+
+
+def test_sanitize_rejects_hyphen_only():
+    """A lone hyphen produces no usable name."""
+    error, slug = sanitize_conversation_name("-")
+    assert error == "nameconv_invalid_chars"
+    assert slug is None
+
+
+def test_sanitize_hyphen_word_limit():
+    """Hyphen-separated words count toward the 12-word limit."""
+    name = "-".join(f"w{i}" for i in range(13))
+    error, slug = sanitize_conversation_name(name)
+    assert error == "nameconv_too_many_words"
+    assert slug is None
 
 
 def test_sanitize_rejects_empty():
@@ -329,6 +357,10 @@ if __name__ == "__main__":
     test_sanitize_valid_name()
     test_sanitize_collapses_spaces()
     test_sanitize_rejects_invalid_chars()
+    test_sanitize_allows_hyphens()
+    test_sanitize_normalizes_hyphens()
+    test_sanitize_rejects_hyphen_only()
+    test_sanitize_hyphen_word_limit()
     test_sanitize_rejects_empty()
     test_sanitize_rejects_too_many_words()
     test_set_name_renames_existing_file()

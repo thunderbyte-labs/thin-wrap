@@ -291,6 +291,7 @@ class CommandHandler:
             # No arguments provided - show interactive model selection menu
             selected_model = self.llm_client.choose_model()
             if selected_model:
+                self.chat_app._ensure_proxy_for_model(selected_model)
                 success = self.llm_client.switch_model(selected_model)
                 if success:
                     self._prompt_clear_after_model_switch()
@@ -300,6 +301,7 @@ class CommandHandler:
         else:
             # Arguments provided - use the old behavior
             new_model = args[0]
+            self.chat_app._ensure_proxy_for_model(new_model)
             success = self.llm_client.switch_model(new_model)
             if success:
                 self._prompt_clear_after_model_switch()
