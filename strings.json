@@ -132,7 +132,8 @@
     "nameconv_llm_query": "Name this conversation with less than 12 keywords (no more than 12) in a way that would make it easily recoverable by the user in a list of conversations. Answer this query with only such keywords, nothing else.",
     "nameconv_suggestion": "Suggested name: {name}",
     "nameconv_confirm": "Press Enter to accept, type a new name, or 'c' to cancel: ",
-    "input_hint": {"text": "-------------------- Message ---------------------\n\n" , "color": "BRIGHT_GREEN"}
+    "input_hint": {"text": "-------------------- Message ---------------------\n\n" , "color": "BRIGHT_GREEN"},
+    "command_hint": {"text": "-------------------- Command: {command} ---------------------\n", "color": "BRIGHT_GREEN"}
   },
 
   "menus": {

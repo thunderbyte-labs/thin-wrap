@@ -104,6 +104,20 @@ def test_erase_pending_message_prompt_no_header(capsys):
     assert capsys.readouterr().out == ""
 
 
+def test_print_command_header_echoes_command(capsys):
+    chat = _chat()
+    chat._print_command_header("/reload")
+    out = capsys.readouterr().out
+    assert "Command: /reload" in out
+    assert "\x1b[92m" in out  # BRIGHT_GREEN header
+
+
+def test_print_command_header_strips_whitespace(capsys):
+    chat = _chat()
+    chat._print_command_header("  /nameconv  ")
+    assert "Command: /nameconv" in capsys.readouterr().out
+
+
 def test_exit_cleanly_erases_message_header(capsys):
     chat = _chat()
     chat._message_prompt_shown = True

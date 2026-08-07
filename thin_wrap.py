@@ -438,6 +438,16 @@ class LLMChat:
             sys.stdout.write("\x1b[3A\x1b[J")
             sys.stdout.flush()
 
+    def _print_command_header(self, command: str):
+        """Render the command echo header that replaces the "Message" header.
+
+        Called right after erasing the pending "Message" header and before
+        the command runs, so the command the user typed is echoed and
+        consecutive commands are visually separated like messages are.
+        """
+        sys.stdout.write(t("prompts.command_hint", command=command.strip()))
+        sys.stdout.flush()
+
     def _prompt_for_proxy_if_needed(self, selected_model: str) -> bool:
         """
         Prompt for proxy selection if the selected model suggests proxy and no proxy is configured.
@@ -568,9 +578,11 @@ class LLMChat:
                 logger.debug("Detected command input")
                 if cmd != "/bye":
                     # The command's own output/prompt supersedes the header
-                    # printed for this input; erase it to avoid a redundant
-                    # "Message" separator (e.g. before /nameconv, /model, ...).
+                    # printed for this input; erase it and echo the command
+                    # in its place so the typed command is visible and
+                    # consecutive commands are separated.
                     self._erase_pending_message_prompt()
+                    self._print_command_header(user_input)
                 should_quit = self.command_handler.handle_command(user_input)
                 if should_quit:
                     logger.debug("Command requested quit")
