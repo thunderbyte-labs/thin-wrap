@@ -46,7 +46,7 @@
     "invalid_input_yni": "Invalid input. Please enter 'y', 'n', or 'i' (or press Enter for default 'y').",
     "root_arg_not_valid": "{root} is not a valid directory",
     "nameconv_empty": "Name cannot be empty. Please enter a name.",
-    "nameconv_invalid_chars": "Only lowercase letters (a-z), digits (0-9) and spaces are allowed.",
+    "nameconv_invalid_chars": "Only lowercase letters (a-z), digits (0-9), spaces and hyphens (-) are allowed.",
     "nameconv_too_many_words": "Too many words. Maximum is 12.",
     "nameconv_ai_failed": "The AI could not suggest a name.",
     "nameconv_suggestion_unusable": "The AI suggestion was not usable. Please enter a name manually."
