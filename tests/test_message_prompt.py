@@ -1,6 +1,7 @@
 """Tests for the app-owned "Message" prompt header and file-context block."""
 
 import os
+import re
 import sys
 from unittest.mock import Mock, patch
 
@@ -116,6 +117,21 @@ def test_print_command_header_strips_whitespace(capsys):
     chat = _chat()
     chat._print_command_header("  /nameconv  ")
     assert "Command: /nameconv" in capsys.readouterr().out
+
+
+def test_command_header_is_50_chars_with_symmetric_dashes(capsys):
+    for cmd in ("/h", "/help", "/reload", "/nameconv", "/rootdir"):
+        chat = _chat()
+        chat._print_command_header(cmd)
+    out = capsys.readouterr().out
+    lines = [line for line in out.splitlines() if "Command:" in line]
+    assert len(lines) == len(("/h", "/help", "/reload", "/nameconv", "/rootdir"))
+    for line in lines:
+        plain = line.replace("\x1b[92m", "").replace("\x1b[0m", "")
+        assert len(plain) == 50, plain
+        dash_runs = re.findall(r"-+", plain)
+        assert len(dash_runs) == 2, plain
+        assert abs(len(dash_runs[0]) - len(dash_runs[1])) <= 1, plain
 
 
 def test_exit_cleanly_erases_message_header(capsys):

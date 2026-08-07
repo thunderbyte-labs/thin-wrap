@@ -445,7 +445,25 @@ class LLMChat:
         the command runs, so the command the user typed is echoed and
         consecutive commands are visually separated like messages are.
         """
-        sys.stdout.write(t("prompts.command_hint", command=command.strip()))
+        command = command.strip()
+        # Match the "Message" header width (50 chars) by giving the remaining
+        # width to the dash runs, split evenly (+/-1) like the message header
+        # (which uses 20 dashes then 21).
+        header_width = (
+            50  # same as "-------------------- Message ---------------------"
+        )
+        fixed_chars = len(" Command: ") + len(command) + 1  # trailing space
+        dash_total = max(header_width - fixed_chars, 0)
+        dashes_left = dash_total // 2
+        dashes_right = dash_total - dashes_left
+        sys.stdout.write(
+            t(
+                "prompts.command_hint",
+                command=command,
+                dashes_left="-" * dashes_left,
+                dashes_right="-" * dashes_right,
+            )
+        )
         sys.stdout.flush()
 
     def _prompt_for_proxy_if_needed(self, selected_model: str) -> bool:

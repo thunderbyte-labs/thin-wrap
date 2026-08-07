@@ -133,7 +133,7 @@
     "nameconv_suggestion": "Suggested name: {name}",
     "nameconv_confirm": "Press Enter to accept, type a new name, or 'c' to cancel: ",
     "input_hint": {"text": "-------------------- Message ---------------------\n\n" , "color": "BRIGHT_GREEN"},
-    "command_hint": {"text": "-------------------- Command: {command} ---------------------\n", "color": "BRIGHT_GREEN"}
+    "command_hint": {"text": "{dashes_left} Command: {command} {dashes_right}\n", "color": "BRIGHT_GREEN"}
   },
 
   "menus": {
