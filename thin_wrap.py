@@ -131,9 +131,9 @@ class LLMChat:
             self.editable_files = []
             self.readable_files = []
         else:
-            assert (
-                self.root_dir is not None
-            ), "root_dir must be set when free_chat_mode is False"
+            assert self.root_dir is not None, (
+                "root_dir must be set when free_chat_mode is False"
+            )
             self.editable_files = self._resolve_file_list(
                 editable_files or [], self.root_dir
             )
