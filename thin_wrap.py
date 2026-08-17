@@ -20,6 +20,7 @@ import config
 config.setup_logging()
 
 from command_handler import CommandHandler
+from directory_tree import build_directory_tree
 from file_processor import generate_query
 from history_store import HistoryStore
 from input_handler import InputHandler
@@ -142,6 +143,10 @@ class LLMChat:
             )
         self.first_message = first_message if first_message else ""
         self.proxy_wrapper = create_proxy_wrapper(proxy_url) if proxy_url else None
+
+        # Directory tree context (optional, off by default)
+        self.tree_context_enabled = False
+        self.tree_depth = 5
 
         # Add to proxy history if valid
         if proxy_url and validate_proxy_url(proxy_url) is None:
@@ -395,10 +400,20 @@ class LLMChat:
         kept in the scrollback after sending: a blank line, then "File
         context:" and the files summary. Only the labels ("File context:",
         "Editable:", "Readable:") are green; the values stay in the default
-        color. Empty when there is no context."""
-        if not self.editable_files and not self.readable_files:
+        color. Empty when there is no context and no directory tree context."""
+        tree_note = ""
+        tree_on = (
+            bool(getattr(self, "root_dir", None))
+            and getattr(self, "tree_context_enabled", False)
+            and not getattr(self, "free_chat_mode", False)
+        )
+        if tree_on:
+            tree_note = " " + t(
+                "files.context_tree_note", depth=getattr(self, "tree_depth", 5)
+            )
+        if not self.editable_files and not self.readable_files and not tree_on:
             return ""
-        lines = ["", UI.colorize(t("files.context_title"), "GREEN")]
+        lines = ["", UI.colorize(t("files.context_title"), "GREEN") + tree_note]
         for file_list, label in (
             (self.editable_files, t("files.label_editable")),
             (self.readable_files, t("files.label_readable")),
@@ -646,12 +661,17 @@ class LLMChat:
         model = self.llm_client.get_current_model()
         logger.debug(f"Using model: {model}")
 
+        directory_tree = None
+        if not self.free_chat_mode and self.tree_context_enabled and self.root_dir:
+            directory_tree = build_directory_tree(self.root_dir, self.tree_depth)
+
         query, response_parser = generate_query(
             self.root_dir or "",
             self.readable_files,
             self.editable_files,
             message,
             force_plain=self.free_chat_mode,
+            directory_tree=directory_tree,
         )
         # Check if user chose to insert files (abort send)
         if query is None and response_parser is None:
@@ -661,6 +681,11 @@ class LLMChat:
         # one line below it, before the message separator.
         print(message)
         self._print_file_context_block()
+        # The directory tree is one-shot per message: it stays on across
+        # Ctrl+B menu opens (in memory), but resets to off once used so the
+        # following messages default to not including it. The chosen depth is
+        # kept for the next activation.
+        self.tree_context_enabled = False
         print(t("separators.message_line"))
 
         assert query is not None

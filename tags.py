@@ -5,6 +5,7 @@ class Xml:
     """
 
     # Query tags
+    DIRECTORY_TREE = "prompt_engineering_query_directory_tree"
     SOURCE_CODE_FILES = "prompt_engineering_query_source_code_files"
     ROOT_DIRECTORY_OF_PROJECT = "prompt_engineering_query_root_directory_of_project"
     READ_ONLY_FILES = "prompt_engineering_query_read_only_files"

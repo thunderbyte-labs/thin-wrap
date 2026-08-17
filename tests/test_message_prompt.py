@@ -91,6 +91,72 @@ def test_print_file_context_block_empty_is_noop(capsys):
     assert capsys.readouterr().out == ""
 
 
+def test_file_context_block_shows_tree_note_on_title_line(capsys):
+    chat = _chat()
+    chat.editable_files = ["/proj/hello.s"]
+    chat.readable_files = ["/proj/notes.md"]
+    chat.root_dir = "/proj"
+    chat.free_chat_mode = False
+    chat.tree_context_enabled = True
+    chat.tree_depth = 8
+    block = chat._file_context_block()
+    assert "(tree ON, depth 8)" in block
+    # still exactly 3 non-empty lines (no 4th line added)
+    non_empty = [line for line in block.splitlines() if line]
+    assert len(non_empty) == 3
+    assert "\x1b[32mFile context:\x1b[0m (tree ON, depth 8)" in block
+    assert "Editable (1):" in block
+    assert "Readable (1):" in block
+
+    # when toggled off, no tree note
+    chat.tree_context_enabled = False
+    block = chat._file_context_block()
+    assert "tree ON" not in block
+    assert "File context:" in block
+
+
+def test_file_context_block_renders_with_tree_only(capsys):
+    chat = _chat()
+    chat.editable_files = []
+    chat.readable_files = []
+    chat.root_dir = "/proj"
+    chat.free_chat_mode = False
+    chat.tree_context_enabled = True
+    chat.tree_depth = 5
+    block = chat._file_context_block()
+    assert "File context:" in block
+    assert "(tree ON, depth 5)" in block
+    assert "\x1b[32mEditable:\x1b[0m None" in block
+    assert "\x1b[32mReadable:\x1b[0m None" in block
+
+
+def test_send_message_resets_tree_toggle_after_use(capsys, monkeypatch):
+    from file_processor import parse_plain_response
+
+    chat = _chat()
+    chat.root_dir = "/proj"
+    chat.free_chat_mode = False
+    chat.tree_context_enabled = True
+    chat.tree_depth = 8
+    chat.readable_files = []
+    chat.editable_files = []
+    chat.llm_client = Mock()
+    chat.llm_client.get_current_model.return_value = "model"
+    chat.llm_client.send_message.return_value = ("reply", None)
+    chat.session_logger = Mock()
+
+    monkeypatch.setattr(
+        "thin_wrap.generate_query", lambda *a, **k: ("q", parse_plain_response)
+    )
+    monkeypatch.setattr("thin_wrap.UI.render_markdown", lambda *a, **k: None)
+
+    result = chat._send_message("hi")
+    assert result is None
+    # toggle consumed: off for following messages, depth kept in memory
+    assert chat.tree_context_enabled is False
+    assert chat.tree_depth == 8
+
+
 def test_erase_pending_message_prompt(capsys):
     chat = _chat()
     chat._message_prompt_shown = True

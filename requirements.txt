@@ -8,3 +8,4 @@ tomlkit==0.14.0
 textual==7.4.0
 pytest==9.0.2
 ruff==0.16.1
+pathspec==0.12.1

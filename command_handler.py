@@ -612,11 +612,15 @@ class CommandHandler:
                 editable_files=self.chat_app.editable_files,
                 readable_files=self.chat_app.readable_files,
                 root_dir=self.chat_app.root_dir,
+                tree_context_enabled=self.chat_app.tree_context_enabled,
+                tree_depth=self.chat_app.tree_depth,
             )
             app.run()
             # Update the files lists after menu closes
             self.chat_app.editable_files = app.editable_files
             self.chat_app.readable_files = app.readable_files
+            self.chat_app.tree_context_enabled = app.tree_context_enabled
+            self.chat_app.tree_depth = app.tree_depth
         except Exception as e:
             print(t("errors.error_opening_file_menu", error=e))
 
