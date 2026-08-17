@@ -151,13 +151,17 @@
     "tree_context_line": "Tree context [{marker}] (t)",
     "tree_depth_label": "  depth: {depth}",
     "tree_chars_label": "{count} chars",
+    "multiselect_locked": "Press Escape to clear the current multi-selection first",
     "shortcuts": {
       "quit": "Quit",
-      "readable": "Readable",
-      "editable": "Editable",
-      "delete": "Delete",
-      "clear_all": "Clear All",
-      "tree": "Directory Tree"
+      "readable": "Read",
+      "editable": "Edit",
+      "delete": "Del",
+      "clear_all": "Clear",
+      "tree": "Dir Tree",
+      "clear_selection": "Clear",
+      "multiselect_toggle": "Select",
+      "multiselect_range": "Range"
     }
   },
 
