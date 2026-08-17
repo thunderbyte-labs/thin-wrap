@@ -206,6 +206,21 @@ def test_dot_gitignore_itself_visible(tmp_path):
     assert "app.py" in tree
 
 
+def test_binary_heavy_subdir_under_text_heavy_parent(tmp_path):
+    # parent has only text files (text-heavy -> expanded), but its subdir
+    # is full of binary files -> must render as "name/ -> N files"
+    _touch(tmp_path, "notes.md", "# notes")
+    _mkdirs(tmp_path, "assets")
+    for i in range(10):
+        _touch(tmp_path, f"assets/asset{i}.bin", "\x00")
+
+    tree = build_directory_tree(tmp_path, max_depth=3)
+    assert "notes.md" in tree
+    assert "assets/" in tree
+    assert "→ 10 files" in tree
+    assert "asset0.bin" not in tree
+
+
 def test_tree_section_emitted_above_source_code_files(tmp_path):
     _touch(tmp_path, "app.py", "print(1)")
     tree = build_directory_tree(tmp_path, max_depth=2)
