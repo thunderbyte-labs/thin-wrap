@@ -148,12 +148,16 @@
     "editable_files_menu": "Editable Files\n(d: delete, r: move to readable)",
     "readable_files_menu": "Readable Files\n(d: delete, e: move to editable)",
     "navigator_menu": "Navigator (Project Files)\nr: readable\ne: editable\nd: remove",
+    "tree_context_line": "Communicate directory Tree context  [{marker}]  (press t to toggle)",
+    "tree_depth_label": "Depth: {depth}",
+    "tree_chars_label": "Tree: {count} chars",
     "shortcuts": {
       "quit": "Quit",
       "readable": "Readable",
       "editable": "Editable",
       "delete": "Delete",
-      "clear_all": "Clear All"
+      "clear_all": "Clear All",
+      "tree": "Directory Tree"
     }
   },
 

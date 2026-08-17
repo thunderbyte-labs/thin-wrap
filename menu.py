@@ -3,14 +3,27 @@ import os
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widgets import DirectoryTree, Footer, Header, ListItem, ListView, Static
+from textual.widgets import (
+    Button,
+    DirectoryTree,
+    Footer,
+    Header,
+    ListItem,
+    ListView,
+    Static,
+)
 
+from directory_tree import build_directory_tree
 from path_utils import resolve_path
 from strings import t
 
 
 class FileMenuApp(App):
     """Three-column file context menu."""
+
+    DEFAULT_TREE_DEPTH = 5
+    MIN_TREE_DEPTH = 1
+    MAX_TREE_DEPTH = 20
 
     ENABLE_COMMAND_PALETTE = False
     BINDINGS = [
@@ -28,14 +41,20 @@ class FileMenuApp(App):
             key_display="Ctrl+D",
             show=True,
         ),
+        Binding("t", "toggle_tree_context", t("menus.shortcuts.tree")),
     ]
     CSS = """
-    Horizontal { height: 100%; }
-    Vertical { width: 1fr; border: tall white; }
+    #columns { height: 100%; }
+    #left-pane { width: 2fr; border: none; }
+    #file-columns { height: 1fr; }
+    #file-columns > Vertical { width: 1fr; border: tall white; }
+    #navigator-pane { width: 1fr; border: tall white; }
+    #tree-controls { height: 1; border: none; align: left middle; padding: 0 1; }
     Static { text-align: left; background: $primary-background; color: $text; padding: 0 1; }
     ListView { border: tall $primary; }
     ListItem { height: 1; min-height: 1; padding: 0; }
     DirectoryTree { border: tall $primary; }
+    Button.tree-btn { width: 3; min-width: 3; height: 1; min-height: 1; padding: 0; }
     """
 
     def __init__(
@@ -47,23 +66,34 @@ class FileMenuApp(App):
         self.root_dir = resolve_path(root_dir)
         self.editable_set = set(editable_files)
         self.readable_set = set(readable_files)
+        self.tree_context_enabled = False
+        self.tree_depth = self.DEFAULT_TREE_DEPTH
 
     def compose(self) -> ComposeResult:
         yield Header()
-        with Horizontal():
-            with Vertical():
-                yield Static(t("menus.editable_files_menu"))
-                yield ListView(id="editable")
-            with Vertical():
-                yield Static(t("menus.readable_files_menu"))
-                yield ListView(id="readable")
-            with Vertical():
+        with Horizontal(id="columns"):
+            with Vertical(id="left-pane"):
+                with Horizontal(id="tree-controls"):
+                    yield Static(id="tree-toggle")
+                    yield Button("−", id="depth-down", classes="tree-btn")
+                    yield Static(id="tree-depth")
+                    yield Button("+", id="depth-up", classes="tree-btn")
+                    yield Static(id="tree-charcount")
+                with Horizontal(id="file-columns"):
+                    with Vertical():
+                        yield Static(t("menus.editable_files_menu"))
+                        yield ListView(id="editable")
+                    with Vertical():
+                        yield Static(t("menus.readable_files_menu"))
+                        yield ListView(id="readable")
+            with Vertical(id="navigator-pane"):
                 yield Static(t("menus.navigator_menu"))
                 yield DirectoryTree(self.root_dir, id="navigator")
         yield Footer()
 
     def on_mount(self) -> None:
         self.refresh_lists()
+        self._refresh_tree_controls()
         self.query_one("#navigator", DirectoryTree).focus()
 
     def refresh_lists(self) -> None:
@@ -79,6 +109,47 @@ class FileMenuApp(App):
 
         populate_list("editable", self.editable_files)
         populate_list("readable", self.readable_files)
+
+    def _refresh_tree_controls(self) -> None:
+        """Update toggle checkbox, depth label, and live tree character count."""
+        marker = "x" if self.tree_context_enabled else " "
+        self.query_one("#tree-toggle", Static).update(
+            t("menus.tree_context_line", marker=marker)
+        )
+        self.query_one("#tree-depth", Static).update(
+            t("menus.tree_depth_label", depth=self.tree_depth)
+        )
+        count = 0
+        if self.tree_context_enabled:
+            try:
+                tree = build_directory_tree(self.root_dir, self.tree_depth)
+                count = len(tree)
+            except Exception:
+                count = 0
+        self.query_one("#tree-charcount", Static).update(
+            t("menus.tree_chars_label", count=count)
+        )
+
+    def action_toggle_tree_context(self) -> None:
+        """Global 't': toggle the directory tree context feature."""
+        self.tree_context_enabled = not self.tree_context_enabled
+        self._refresh_tree_controls()
+
+    def action_increase_depth(self) -> None:
+        if self.tree_depth < self.MAX_TREE_DEPTH:
+            self.tree_depth += 1
+            self._refresh_tree_controls()
+
+    def action_decrease_depth(self) -> None:
+        if self.tree_depth > self.MIN_TREE_DEPTH:
+            self.tree_depth -= 1
+            self._refresh_tree_controls()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "depth-up":
+            self.action_increase_depth()
+        elif event.button.id == "depth-down":
+            self.action_decrease_depth()
 
     def action_delete_selected(self) -> None:
         """Global 'd': delete/remove selected item or from navigator."""

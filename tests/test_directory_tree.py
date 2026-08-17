@@ -13,6 +13,7 @@ from directory_tree import (
     tree_char_count,
 )
 from file_processor import generate_file_query
+from menu import FileMenuApp
 from tags import Xml
 
 
@@ -223,3 +224,52 @@ def test_tree_section_omitted_when_disabled(tmp_path):
     query = generate_file_query(str(tmp_path), ["app.py"], [], "do something")
     assert f"<{Xml.DIRECTORY_TREE}" not in query
     assert f"</{Xml.DIRECTORY_TREE}>" not in query
+
+
+def _menu_app(tmp_path):
+    import asyncio
+
+    from strings import t as _t
+
+    app = FileMenuApp([], [], str(tmp_path))
+
+    async def scenario():
+        async with app.run_test() as pilot:
+            app.action_toggle_tree_context()
+            await pilot.pause()
+            assert app.tree_context_enabled is True
+            assert app.query_one("#tree-toggle").content == _t(
+                "menus.tree_context_line", marker="x"
+            )
+            count_text = app.query_one("#tree-charcount").content
+            assert "Tree:" in count_text
+            assert "0" not in count_text
+            assert "chars" in count_text
+
+            app.action_toggle_tree_context()
+            await pilot.pause()
+            assert app.tree_context_enabled is False
+            assert app.query_one("#tree-charcount").content == _t(
+                "menus.tree_chars_label", count=0
+            )
+
+            app.action_toggle_tree_context()
+            app.action_increase_depth()
+            await pilot.pause()
+            assert app.tree_depth == 6
+            assert app.query_one("#tree-depth").content == "Depth: 6"
+            app.action_decrease_depth()
+            app.action_decrease_depth()
+            await pilot.pause()
+            assert app.tree_depth == 4
+            app.action_toggle_tree_context()
+
+    asyncio.run(scenario())
+    return app
+
+
+def test_menu_toggle_depth_and_char_count(tmp_path):
+    _touch(tmp_path, "app.py", "print(1)")
+    app = _menu_app(tmp_path)
+    assert app.tree_context_enabled is False
+    assert app.tree_depth == 4
