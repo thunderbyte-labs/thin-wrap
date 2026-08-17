@@ -338,6 +338,42 @@ def _count_files(dir_path: Path, rules: GitIgnoreRules) -> int:
     return total
 
 
+def _scan_entries(dir_path: Path, rules: GitIgnoreRules) -> list[tuple[str, bool]]:
+    """List (name, is_dir) entries of ``dir_path``, gitignore-filtered."""
+    items: list[tuple[str, bool]] = []
+    try:
+        with os.scandir(dir_path) as it:
+            entries = list(it)
+    except OSError:
+        return items
+    for entry in entries:
+        if entry.name == ".git":
+            continue
+        try:
+            is_dir = entry.is_dir(follow_symlinks=False)
+        except OSError:
+            is_dir = False
+        if rules.check(dir_path / entry.name, is_dir):
+            continue
+        items.append((entry.name, is_dir))
+    items.sort(key=lambda item: (not item[1], item[0]))
+    return items
+
+
+def _non_text_ratio(dir_path: Path, rules: GitIgnoreRules) -> float:
+    """Ratio of non-text files among the direct files of ``dir_path``."""
+    files = [name for name, is_dir in _scan_entries(dir_path, rules) if not is_dir]
+    if not files:
+        return 0.0
+    non_text = sum(1 for name in files if not _is_text(name))
+    return non_text / len(files)
+
+
+def _is_binary_heavy(dir_path: Path, rules: GitIgnoreRules) -> bool:
+    """True when a directory's direct non-text file ratio exceeds the threshold."""
+    return _non_text_ratio(dir_path, rules) > RATIO_THRESHOLD
+
+
 def _walk(
     dir_path: Path,
     depth: int,
@@ -349,29 +385,8 @@ def _walk(
     if depth >= max_depth:
         return
 
-    try:
-        with os.scandir(dir_path) as it:
-            entries = list(it)
-    except OSError:
-        return
-
-    items: list[tuple[str, bool]] = []
-    for entry in entries:
-        if entry.name == ".git":
-            continue
-        try:
-            is_dir = entry.is_dir(follow_symlinks=False)
-        except OSError:
-            is_dir = False
-        if rules.check(dir_path / entry.name, is_dir):
-            continue
-        items.append((entry.name, is_dir))
-
-    items.sort(key=lambda item: (not item[1], item[0]))
-
-    direct_files = [name for name, is_dir in items if not is_dir]
-    non_text = sum(1 for name in direct_files if not _is_text(name))
-    summarize = bool(direct_files) and (non_text / len(direct_files)) > RATIO_THRESHOLD
+    items = _scan_entries(dir_path, rules)
+    summarize_here = _is_binary_heavy(dir_path, rules)
 
     for i, (name, is_dir) in enumerate(items):
         last = i == len(items) - 1
@@ -379,15 +394,20 @@ def _walk(
         child_prefix = prefix + ("    " if last else "│   ")
         if is_dir:
             child = dir_path / name
-            if depth + 1 >= max_depth or summarize:
-                count = _count_files(child, rules)
-                lines.append(f"{prefix}{branch}{name}/      → {count} files")
-            else:
+            expand = (
+                depth + 1 < max_depth
+                and not summarize_here
+                and not _is_binary_heavy(child, rules)
+            )
+            if expand:
                 lines.append(f"{prefix}{branch}{name}/")
                 rules.add_nested(child)
                 _walk(child, depth + 1, child_prefix, lines, rules, max_depth)
+            else:
+                count = _count_files(child, rules)
+                lines.append(f"{prefix}{branch}{name}/      → {count} files")
         else:
-            if summarize and not _is_text(name):
+            if summarize_here and not _is_text(name):
                 continue
             lines.append(f"{prefix}{branch}{name}")
 
