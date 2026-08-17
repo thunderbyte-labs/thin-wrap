@@ -299,8 +299,9 @@ def _menu_app(tmp_path):
             await pilot.pause()
             assert app.tree_context_enabled is True
             toggle = app.query_one("#tree-toggle")
-            assert toggle.content == _t("menus.tree_context_line", marker="x")
+            assert "Tree context" in rendered_text(toggle)
             assert "[x]" in rendered_text(toggle)
+            assert "(press" in rendered_text(toggle)
             count_text = app.query_one("#tree-charcount").content
             assert count_text.endswith("chars")
             assert "0 chars" not in count_text
