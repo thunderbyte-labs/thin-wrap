@@ -7,7 +7,6 @@ from textual.widgets import (
     Button,
     DirectoryTree,
     Footer,
-    Header,
     ListItem,
     ListView,
     Static,
@@ -71,7 +70,6 @@ class FileMenuApp(App):
         self.tree_depth = self.DEFAULT_TREE_DEPTH
 
     def compose(self) -> ComposeResult:
-        yield Header()
         with Horizontal(id="columns"):
             with Vertical(id="left-pane"):
                 with Horizontal(id="tree-controls"):
