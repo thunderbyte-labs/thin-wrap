@@ -265,6 +265,115 @@ def test_real_click_routing_smoke(tmp_path):
     asyncio.run(scenario())
 
 
+async def _wait_tree(app, pilot):
+    tree = app.query_one("#navigator", MultiSelectDirectoryTree)
+    for _ in range(200):
+        await pilot.pause()
+        if tree.last_line >= 0:
+            return tree
+    raise AssertionError("tree did not load")
+
+
+def _tree_line_of_path(tree, abs_path):
+    for y in range(tree.last_line + 1):
+        node = tree.get_node_at_line(y)
+        if (
+            node is not None
+            and node.data is not None
+            and str(node.data.path) == str(abs_path)
+        ):
+            return y
+    raise AssertionError(f"tree node not found: {abs_path}")
+
+
+def test_shift_click_range_with_real_clicks(tmp_path):
+    import asyncio
+
+    _touch(tmp_path, "a.py")
+    _touch(tmp_path, "b.py")
+    _touch(tmp_path, "c.py")
+    _touch(tmp_path, "d.py")
+    app = FileMenuApp(["a.py", "b.py", "c.py", "d.py"], [], str(tmp_path))
+
+    async def scenario():
+        async with app.run_test() as pilot:
+            items = _items(app, "editable")
+            await pilot.click(items[0])
+            await pilot.pause()
+            await pilot.click(items[2], shift=True)
+            await pilot.pause()
+            assert app._left_selection == {"a.py", "b.py", "c.py"}
+
+    asyncio.run(scenario())
+
+
+def test_tree_shift_click_range_with_real_clicks(tmp_path):
+    import asyncio
+
+    _touch(tmp_path, "n1.py")
+    _touch(tmp_path, "n2.py")
+    _touch(tmp_path, "n3.py")
+    app = FileMenuApp([], [], str(tmp_path))
+
+    async def scenario():
+        async with app.run_test() as pilot:
+            tree = await _wait_tree(app, pilot)
+            n1 = os.path.join(tmp_path, "n1.py")
+            n3 = os.path.join(tmp_path, "n3.py")
+            # tree has a border, so content row == line + 1
+            await pilot.click(
+                tree, offset=(10, _tree_line_of_path(tree, n1) + 1), control=True
+            )
+            await pilot.pause()
+            await pilot.click(
+                tree, offset=(10, _tree_line_of_path(tree, n3) + 1), shift=True
+            )
+            await pilot.pause()
+            assert app._right_selection == {n1, os.path.join(tmp_path, "n2.py"), n3}
+
+    asyncio.run(scenario())
+
+
+def test_zone_lock_is_symmetric_with_real_clicks(tmp_path):
+    import asyncio
+
+    _touch(tmp_path, "a.py")
+    _touch(tmp_path, "n1.py")
+    app = FileMenuApp(["a.py"], [], str(tmp_path))
+
+    async def scenario():
+        async with app.run_test() as pilot:
+            tree = await _wait_tree(app, pilot)
+            n1 = os.path.join(tmp_path, "n1.py")
+            left_items = _items(app, "editable")
+
+            # left selection blocks ctrl+click in navigator
+            await pilot.click(left_items[0], control=True)
+            await pilot.pause()
+            assert app._left_selection == {"a.py"}
+            await pilot.click(
+                tree, offset=(10, _tree_line_of_path(tree, n1) + 1), control=True
+            )
+            await pilot.pause()
+            assert app._right_selection == set()
+
+            # clear, then navigator selection blocks ctrl+click in left
+            await pilot.press("escape")
+            await pilot.pause()
+            assert app._left_selection == set()
+            await pilot.click(
+                tree, offset=(10, _tree_line_of_path(tree, n1) + 1), control=True
+            )
+            await pilot.pause()
+            assert app._right_selection == {n1}
+            await pilot.click(left_items[0], control=True)
+            await pilot.pause()
+            assert app._left_selection == set()
+            assert app._right_selection == {n1}
+
+    asyncio.run(scenario())
+
+
 def test_footer_labels_shortened():
     assert t("menus.shortcuts.clear_all") == "Clear"
     assert t("menus.shortcuts.tree") == "Dir Tree"

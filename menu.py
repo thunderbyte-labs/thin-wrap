@@ -236,7 +236,7 @@ class FileMenuApp(App):
         for y in range(tree.last_line + 1):
             node = tree.get_node_at_line(y)
             if node is not None and node.data is not None:
-                node_path = getattr(node.data, "path", None)
+                node_path = str(getattr(node.data, "path", ""))
                 if node_path:
                     line_of[node_path] = y
         if anchor not in line_of or path not in line_of:
@@ -343,9 +343,14 @@ class FileMenuApp(App):
         self.query_one("#tree-charcount", Static).update(
             t("menus.tree_chars_label", count=formatted)
         )
-        self.query_one("#depth-up", Button).disabled = (
-            self.tree_depth >= self._depth_cap
-        )
+        # The natural-depth cap only makes sense when the tree is actually
+        # being generated; otherwise the '+' button is simply bounded by the
+        # hard maximum depth.
+        if self.tree_context_enabled:
+            plus_disabled = self.tree_depth >= self._depth_cap
+        else:
+            plus_disabled = self.tree_depth >= self.MAX_TREE_DEPTH
+        self.query_one("#depth-up", Button).disabled = plus_disabled
 
     def action_toggle_tree_context(self) -> None:
         """Global 't': toggle the directory tree context feature."""
@@ -353,12 +358,14 @@ class FileMenuApp(App):
         self._refresh_tree_controls()
 
     def action_increase_depth(self) -> None:
-        if self.tree_depth >= self._depth_cap:
+        if self.tree_context_enabled and self.tree_depth >= self._depth_cap:
             return
         current = self.tree_depth
         new = current + 1
         if new <= self.MAX_TREE_DEPTH:
-            if self._tree_count(new) == self._tree_count(current):
+            if self.tree_context_enabled and self._tree_count(new) == self._tree_count(
+                current
+            ):
                 # Tree stopped growing: current depth is the natural maximum.
                 self.tree_max_depth = current
             else:
@@ -369,7 +376,9 @@ class FileMenuApp(App):
         if self.tree_depth > self.MIN_TREE_DEPTH:
             current = self.tree_depth
             new = current - 1
-            if self._tree_count(new) == self._tree_count(current):
+            if self.tree_context_enabled and self._tree_count(new) == self._tree_count(
+                current
+            ):
                 # Current depth was already useless; the cap is one lower.
                 self.tree_depth = new
                 self.tree_max_depth = new

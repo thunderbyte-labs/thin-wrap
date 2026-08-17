@@ -382,6 +382,7 @@ def test_menu_depth_increase_capped_at_plateau(tmp_path):
         async with app.run_test() as pilot:
             app.query_one("#depth-up").active_effect_duration = 0
             app.query_one("#depth-down").active_effect_duration = 0
+            app.action_toggle_tree_context()  # cap only applies when enabled
             app.tree_depth = 1
             app._refresh_tree_controls()
             await pilot.pause()
@@ -413,6 +414,7 @@ def test_menu_depth_decrease_caps_and_disables_plus(tmp_path):
         async with app.run_test() as pilot:
             app.query_one("#depth-up").active_effect_duration = 0
             app.query_one("#depth-down").active_effect_duration = 0
+            app.action_toggle_tree_context()  # cap only applies when enabled
             assert app.tree_depth == FileMenuApp.DEFAULT_TREE_DEPTH
             assert app.query_one("#depth-up").disabled is False
             for _ in range(FileMenuApp.DEFAULT_TREE_DEPTH - FileMenuApp.MIN_TREE_DEPTH):
@@ -425,6 +427,29 @@ def test_menu_depth_decrease_caps_and_disables_plus(tmp_path):
             await pilot.click("#depth-up")
             await pilot.pause()
             assert app.tree_depth == FileMenuApp.MIN_TREE_DEPTH
+
+    asyncio.run(scenario())
+
+
+def test_menu_depth_cap_not_applied_when_toggle_off(tmp_path):
+    import asyncio
+
+    # flat tree: identical counts at every depth, but the cap only applies
+    # when the tree toggle is enabled
+    _touch(tmp_path, "app.py", "print(1)")
+    app = FileMenuApp([], [], str(tmp_path))
+
+    async def scenario():
+        async with app.run_test() as pilot:
+            app.query_one("#depth-up").active_effect_duration = 0
+            app.query_one("#depth-down").active_effect_duration = 0
+            assert app.tree_context_enabled is False
+            assert app.query_one("#depth-up").disabled is False
+            await pilot.click("#depth-up")
+            await pilot.pause()
+            assert app.tree_depth == FileMenuApp.DEFAULT_TREE_DEPTH + 1
+            assert app.query_one("#depth-up").disabled is False
+            assert app.tree_max_depth is None
 
     asyncio.run(scenario())
 
