@@ -20,6 +20,7 @@ import config
 config.setup_logging()
 
 from command_handler import CommandHandler
+from directory_tree import build_directory_tree
 from file_processor import generate_query
 from history_store import HistoryStore
 from input_handler import InputHandler
@@ -142,6 +143,10 @@ class LLMChat:
             )
         self.first_message = first_message if first_message else ""
         self.proxy_wrapper = create_proxy_wrapper(proxy_url) if proxy_url else None
+
+        # Directory tree context (optional, off by default)
+        self.tree_context_enabled = False
+        self.tree_depth = 5
 
         # Add to proxy history if valid
         if proxy_url and validate_proxy_url(proxy_url) is None:
@@ -646,12 +651,17 @@ class LLMChat:
         model = self.llm_client.get_current_model()
         logger.debug(f"Using model: {model}")
 
+        directory_tree = None
+        if not self.free_chat_mode and self.tree_context_enabled and self.root_dir:
+            directory_tree = build_directory_tree(self.root_dir, self.tree_depth)
+
         query, response_parser = generate_query(
             self.root_dir or "",
             self.readable_files,
             self.editable_files,
             message,
             force_plain=self.free_chat_mode,
+            directory_tree=directory_tree,
         )
         # Check if user chose to insert files (abort send)
         if query is None and response_parser is None:
