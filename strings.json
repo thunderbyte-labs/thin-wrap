@@ -175,6 +175,7 @@
     "label_editable": "Editable",
     "label_readable": "Readable",
     "context_title": "File context:",
+    "context_tree_note": "(tree ON, depth {depth})",
     "none_label": "{label}:",
     "none_value": "None",
     "list_label": "{label} ({count}):",

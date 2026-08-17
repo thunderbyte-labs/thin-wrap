@@ -455,6 +455,51 @@ def test_menu_depth_cap_not_applied_when_toggle_off(tmp_path):
     asyncio.run(scenario())
 
 
+def test_menu_accepts_persisted_tree_state(tmp_path):
+    _touch(tmp_path, "a.py", "print(1)")
+    app = FileMenuApp([], [], str(tmp_path), tree_context_enabled=True, tree_depth=8)
+    assert app.tree_context_enabled is True
+    assert app.tree_depth == 8
+
+    app2 = FileMenuApp([], [], str(tmp_path))
+    assert app2.tree_context_enabled is False
+    assert app2.tree_depth == FileMenuApp.DEFAULT_TREE_DEPTH
+
+
+def test_handle_files_command_passes_tree_state(tmp_path):
+    from unittest.mock import Mock, patch
+
+    import menu as menu_module
+    from command_handler import CommandHandler
+
+    _touch(tmp_path, "a.py", "print(1)")
+    chat_app = Mock()
+    chat_app.free_chat_mode = False
+    chat_app.editable_files = ["a.py"]
+    chat_app.readable_files = []
+    chat_app.root_dir = str(tmp_path)
+    chat_app.tree_context_enabled = True
+    chat_app.tree_depth = 8
+
+    handler = CommandHandler(Mock(), Mock(), Mock(), chat_app)
+    fake_app = Mock()
+    fake_app.editable_files = ["a.py"]
+    fake_app.readable_files = []
+    fake_app.tree_context_enabled = True
+    fake_app.tree_depth = 8
+    fake_cls = Mock(return_value=fake_app)
+
+    with patch.object(menu_module, "FileMenuApp", fake_cls):
+        handler.handle_files_command()
+
+    kwargs = fake_cls.call_args.kwargs
+    assert kwargs["tree_context_enabled"] is True
+    assert kwargs["tree_depth"] == 8
+    assert kwargs["root_dir"] == str(tmp_path)
+    assert chat_app.tree_context_enabled is True
+    assert chat_app.tree_depth == 8
+
+
 def test_menu_single_line_control_bar(tmp_path):
     import asyncio
     import re

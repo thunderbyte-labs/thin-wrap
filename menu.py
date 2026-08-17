@@ -59,7 +59,13 @@ class FileMenuApp(App):
     """
 
     def __init__(
-        self, editable_files: list[str], readable_files: list[str], root_dir: str
+        self,
+        editable_files: list[str],
+        readable_files: list[str],
+        root_dir: str,
+        *,
+        tree_context_enabled: bool = False,
+        tree_depth: int | None = None,
     ):
         super().__init__()
         self.editable_files = editable_files
@@ -67,8 +73,10 @@ class FileMenuApp(App):
         self.root_dir = resolve_path(root_dir)
         self.editable_set = set(editable_files)
         self.readable_set = set(readable_files)
-        self.tree_context_enabled = False
-        self.tree_depth = self.DEFAULT_TREE_DEPTH
+        self.tree_context_enabled = tree_context_enabled
+        self.tree_depth = (
+            tree_depth if tree_depth is not None else self.DEFAULT_TREE_DEPTH
+        )
         self.tree_max_depth: int | None = None
 
     def compose(self) -> ComposeResult:
