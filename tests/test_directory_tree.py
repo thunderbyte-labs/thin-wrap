@@ -248,31 +248,46 @@ def _menu_app(tmp_path):
 
     app = FileMenuApp([], [], str(tmp_path))
 
+    def rendered_text(widget):
+        from io import StringIO
+
+        from rich.console import Console
+
+        console = Console(force_terminal=True, width=120)
+        buffer = StringIO()
+        console.file = buffer
+        console.print(widget.render())
+        return buffer.getvalue()
+
     async def scenario():
         async with app.run_test() as pilot:
+            # toggle ON: checkbox shows [x] (markup-safe), count is live
             app.action_toggle_tree_context()
             await pilot.pause()
             assert app.tree_context_enabled is True
-            assert app.query_one("#tree-toggle").content == _t(
-                "menus.tree_context_line", marker="x"
-            )
+            toggle = app.query_one("#tree-toggle")
+            assert toggle.content == _t("menus.tree_context_line", marker="x")
+            assert "[x]" in rendered_text(toggle)
             count_text = app.query_one("#tree-charcount").content
-            assert "Tree:" in count_text
-            assert "0" not in count_text
-            assert "chars" in count_text
+            assert count_text.endswith("chars")
+            assert "0 chars" not in count_text
 
+            # toggle OFF: checkbox shows [ ], count is 0
             app.action_toggle_tree_context()
             await pilot.pause()
             assert app.tree_context_enabled is False
+            toggle = app.query_one("#tree-toggle")
+            assert "[ ]" in rendered_text(toggle)
             assert app.query_one("#tree-charcount").content == _t(
                 "menus.tree_chars_label", count=0
             )
 
+            # depth controls
             app.action_toggle_tree_context()
             app.action_increase_depth()
             await pilot.pause()
             assert app.tree_depth == 6
-            assert app.query_one("#tree-depth").content == "Depth: 6"
+            assert app.query_one("#tree-depth").content == "depth: 6"
             app.action_decrease_depth()
             app.action_decrease_depth()
             await pilot.pause()
@@ -288,3 +303,31 @@ def test_menu_toggle_depth_and_char_count(tmp_path):
     app = _menu_app(tmp_path)
     assert app.tree_context_enabled is False
     assert app.tree_depth == 4
+
+
+def test_menu_depth_buttons_clickable(tmp_path):
+    import asyncio
+
+    _touch(tmp_path, "app.py", "print(1)")
+    app = FileMenuApp([], [], str(tmp_path))
+
+    async def scenario():
+        async with app.run_test() as pilot:
+            # disable Button's 0.2s active-animation so rapid clicks always register
+            app.query_one("#depth-up").active_effect_duration = 0
+            app.query_one("#depth-down").active_effect_duration = 0
+            assert app.tree_depth == FileMenuApp.DEFAULT_TREE_DEPTH
+            await pilot.click("#depth-up")
+            await pilot.pause()
+            assert app.tree_depth == FileMenuApp.DEFAULT_TREE_DEPTH + 1
+            await pilot.click("#depth-down")
+            await pilot.pause()
+            await pilot.click("#depth-down")
+            await pilot.pause()
+            assert app.tree_depth == FileMenuApp.DEFAULT_TREE_DEPTH - 1
+            assert (
+                app.query_one("#tree-depth").content
+                == f"depth: {FileMenuApp.DEFAULT_TREE_DEPTH - 1}"
+            )
+
+    asyncio.run(scenario())

@@ -49,12 +49,15 @@ class FileMenuApp(App):
     #file-columns { height: 1fr; }
     #file-columns > Vertical { width: 1fr; border: tall white; }
     #navigator-pane { width: 1fr; border: tall white; }
-    #tree-controls { height: 1; border: none; align: left middle; padding: 0 1; }
+    #tree-controls { height: 2; border: none; }
+    #tree-depth-row { height: 1; align: left middle; }
+    #tree-toggle { padding: 0; width: auto; height: 1; }
+    #tree-depth, #tree-charcount { padding: 0; width: auto; height: 1; }
     Static { text-align: left; background: $primary-background; color: $text; padding: 0 1; }
     ListView { border: tall $primary; }
     ListItem { height: 1; min-height: 1; padding: 0; }
     DirectoryTree { border: tall $primary; }
-    Button.tree-btn { width: 3; min-width: 3; height: 1; min-height: 1; padding: 0; }
+    Button.tree-btn { width: 3; min-width: 3; height: 1; min-height: 1; padding: 0; margin: 0; }
     """
 
     def __init__(
@@ -73,12 +76,13 @@ class FileMenuApp(App):
         yield Header()
         with Horizontal(id="columns"):
             with Vertical(id="left-pane"):
-                with Horizontal(id="tree-controls"):
-                    yield Static(id="tree-toggle")
-                    yield Button("−", id="depth-down", classes="tree-btn")
-                    yield Static(id="tree-depth")
-                    yield Button("+", id="depth-up", classes="tree-btn")
-                    yield Static(id="tree-charcount")
+                with Vertical(id="tree-controls"):
+                    yield Static(id="tree-toggle", markup=False)
+                    with Horizontal(id="tree-depth-row"):
+                        yield Button("−", id="depth-down", classes="tree-btn")
+                        yield Static(id="tree-depth", markup=False)
+                        yield Button("+", id="depth-up", classes="tree-btn")
+                        yield Static(id="tree-charcount", markup=False)
                 with Horizontal(id="file-columns"):
                     with Vertical():
                         yield Static(t("menus.editable_files_menu"))
@@ -126,8 +130,9 @@ class FileMenuApp(App):
                 count = len(tree)
             except Exception:
                 count = 0
+        formatted = f"{count:,}".replace(",", " ")
         self.query_one("#tree-charcount", Static).update(
-            t("menus.tree_chars_label", count=count)
+            t("menus.tree_chars_label", count=formatted)
         )
 
     def action_toggle_tree_context(self) -> None:

@@ -149,8 +149,8 @@
     "readable_files_menu": "Readable Files\n(d: delete, e: move to editable)",
     "navigator_menu": "Navigator (Project Files)\nr: readable\ne: editable\nd: remove",
     "tree_context_line": "Communicate directory Tree context  [{marker}]  (press t to toggle)",
-    "tree_depth_label": "Depth: {depth}",
-    "tree_chars_label": "Tree: {count} chars",
+    "tree_depth_label": "depth: {depth}",
+    "tree_chars_label": "{count} chars",
     "shortcuts": {
       "quit": "Quit",
       "readable": "Readable",
