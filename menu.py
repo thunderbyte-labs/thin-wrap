@@ -68,6 +68,7 @@ class FileMenuApp(App):
         self.readable_set = set(readable_files)
         self.tree_context_enabled = False
         self.tree_depth = self.DEFAULT_TREE_DEPTH
+        self.tree_max_depth: int | None = None
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="columns"):
@@ -109,6 +110,20 @@ class FileMenuApp(App):
         populate_list("editable", self.editable_files)
         populate_list("readable", self.readable_files)
 
+    def _tree_count(self, depth: int) -> int:
+        """Character count of the final tree string at the given depth."""
+        try:
+            return len(build_directory_tree(self.root_dir, depth))
+        except Exception:
+            return 0
+
+    @property
+    def _depth_cap(self) -> int:
+        """Highest useful depth; the '+' button is disabled at or above it."""
+        if self.tree_max_depth is not None:
+            return self.tree_max_depth
+        return self.MAX_TREE_DEPTH
+
     def _refresh_tree_controls(self) -> None:
         """Update toggle checkbox, depth label, and live tree character count."""
         marker = "x" if self.tree_context_enabled else " "
@@ -118,16 +133,13 @@ class FileMenuApp(App):
         self.query_one("#tree-depth", Static).update(
             t("menus.tree_depth_label", depth=self.tree_depth)
         )
-        count = 0
-        if self.tree_context_enabled:
-            try:
-                tree = build_directory_tree(self.root_dir, self.tree_depth)
-                count = len(tree)
-            except Exception:
-                count = 0
+        count = self._tree_count(self.tree_depth) if self.tree_context_enabled else 0
         formatted = f"{count:,}".replace(",", " ")
         self.query_one("#tree-charcount", Static).update(
             t("menus.tree_chars_label", count=formatted)
+        )
+        self.query_one("#depth-up", Button).disabled = (
+            self.tree_depth >= self._depth_cap
         )
 
     def action_toggle_tree_context(self) -> None:
@@ -136,14 +148,29 @@ class FileMenuApp(App):
         self._refresh_tree_controls()
 
     def action_increase_depth(self) -> None:
-        if self.tree_depth < self.MAX_TREE_DEPTH:
-            self.tree_depth += 1
-            self._refresh_tree_controls()
+        if self.tree_depth >= self._depth_cap:
+            return
+        current = self.tree_depth
+        new = current + 1
+        if new <= self.MAX_TREE_DEPTH:
+            if self._tree_count(new) == self._tree_count(current):
+                # Tree stopped growing: current depth is the natural maximum.
+                self.tree_max_depth = current
+            else:
+                self.tree_depth = new
+        self._refresh_tree_controls()
 
     def action_decrease_depth(self) -> None:
         if self.tree_depth > self.MIN_TREE_DEPTH:
-            self.tree_depth -= 1
-            self._refresh_tree_controls()
+            current = self.tree_depth
+            new = current - 1
+            if self._tree_count(new) == self._tree_count(current):
+                # Current depth was already useless; the cap is one lower.
+                self.tree_depth = new
+                self.tree_max_depth = new
+            else:
+                self.tree_depth = new
+        self._refresh_tree_controls()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "depth-up":

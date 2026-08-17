@@ -494,7 +494,8 @@ def generate_query(
     Args:
         force_plain: If True (free-chat mode), skip file context entirely.
         directory_tree: Optional smart tree of the project root to include as
-            context in the generated file query.
+            context in the generated file query. When set, the empty-context
+            prompt is skipped (the tree itself provides context).
 
     Returns:
         (query_string, parser_function) or (None, None) if user chose to insert files
@@ -503,7 +504,7 @@ def generate_query(
     if force_plain:
         return generate_plain_query(user_request), parse_plain_response
 
-    if not readable_files and not writable_files:
+    if not readable_files and not writable_files and not directory_tree:
         action = _prompt_send_plain_or_insert(readable_files, writable_files)
         if action == "insert_files":
             print(t("prompts.returning_to_editor"))

@@ -241,11 +241,44 @@ def test_tree_section_omitted_when_disabled(tmp_path):
     assert f"</{Xml.DIRECTORY_TREE}>" not in query
 
 
+def test_generate_query_skips_empty_prompt_when_tree(tmp_path, capsys):
+    from file_processor import generate_query
+
+    _touch(tmp_path, "app.py", "print(1)")
+    tree = build_directory_tree(tmp_path, 2)
+    query, parser = generate_query(str(tmp_path), [], [], "hi", directory_tree=tree)
+    assert parser is not None
+    assert f"<{Xml.SOURCE_CODE_FILES}" in query
+    assert f"<{Xml.DIRECTORY_TREE}" in query
+    out = capsys.readouterr().out
+    assert "No files are currently included" not in out
+
+
+def test_generate_query_still_prompts_without_tree(tmp_path, monkeypatch, capsys):
+    from file_processor import generate_query
+
+    _touch(tmp_path, "app.py", "print(1)")
+    monkeypatch.setattr("builtins.input", lambda *a, **k: "y")
+    query, parser = generate_query(str(tmp_path), [], [], "hi")
+    assert query == "hi"  # 'y' -> plain message, unchanged behavior
+    assert parser is not None
+    assert "No files are currently included" in capsys.readouterr().out
+
+
+def _make_deep_tree(tmp_path, levels=8):
+    """Nested text dirs so the tree count changes up to depth ``levels``."""
+    path = tmp_path
+    for i in range(levels):
+        path = os.path.join(path, f"d{i}")
+    _touch(path, "deep.py", "print(1)")
+
+
 def _menu_app(tmp_path):
     import asyncio
 
     from strings import t as _t
 
+    _make_deep_tree(tmp_path)
     app = FileMenuApp([], [], str(tmp_path))
 
     def rendered_text(widget):
@@ -282,7 +315,7 @@ def _menu_app(tmp_path):
                 "menus.tree_chars_label", count=0
             )
 
-            # depth controls
+            # depth controls (tree is deep enough that depth still matters)
             app.action_toggle_tree_context()
             app.action_increase_depth()
             await pilot.pause()
@@ -301,7 +334,7 @@ def _menu_app(tmp_path):
 
 
 def test_menu_toggle_depth_and_char_count(tmp_path):
-    _touch(tmp_path, "app.py", "print(1)")
+    _make_deep_tree(tmp_path)
     app = _menu_app(tmp_path)
     assert app.tree_context_enabled is False
     assert app.tree_depth == 4
@@ -310,7 +343,9 @@ def test_menu_toggle_depth_and_char_count(tmp_path):
 def test_menu_depth_buttons_clickable(tmp_path):
     import asyncio
 
-    _touch(tmp_path, "app.py", "print(1)")
+    from strings import t as _t
+
+    _make_deep_tree(tmp_path)
     app = FileMenuApp([], [], str(tmp_path))
 
     async def scenario():
@@ -327,11 +362,69 @@ def test_menu_depth_buttons_clickable(tmp_path):
             await pilot.click("#depth-down")
             await pilot.pause()
             assert app.tree_depth == FileMenuApp.DEFAULT_TREE_DEPTH - 1
-            from strings import t as _t
-
             assert app.query_one("#tree-depth").content == _t(
                 "menus.tree_depth_label", depth=FileMenuApp.DEFAULT_TREE_DEPTH - 1
             )
+            assert app.query_one("#depth-up").disabled is False
+
+    asyncio.run(scenario())
+
+
+def test_menu_depth_increase_capped_at_plateau(tmp_path):
+    import asyncio
+
+    # a/b/c/deep.py: count changes up to depth 4, then stays identical
+    _mkdirs(tmp_path, "a/b/c")
+    _touch(tmp_path, "a/b/c/deep.py", "print(1)")
+    app = FileMenuApp([], [], str(tmp_path))
+
+    async def scenario():
+        async with app.run_test() as pilot:
+            app.query_one("#depth-up").active_effect_duration = 0
+            app.query_one("#depth-down").active_effect_duration = 0
+            app.tree_depth = 1
+            app._refresh_tree_controls()
+            await pilot.pause()
+            for _ in range(3):
+                await pilot.click("#depth-up")
+                await pilot.pause()
+            assert app.tree_depth == 4
+            assert app.query_one("#depth-up").disabled is False
+            # next increase hits the plateau: capped at 4, '+' disabled
+            await pilot.click("#depth-up")
+            await pilot.pause()
+            assert app.tree_depth == 4
+            assert app.tree_max_depth == 4
+            assert app.query_one("#depth-up").disabled is True
+
+    asyncio.run(scenario())
+
+
+def test_menu_depth_decrease_caps_and_disables_plus(tmp_path):
+    import asyncio
+
+    # binary-heavy dir: the tree is identical at every depth (natural max = 1)
+    _mkdirs(tmp_path, "data")
+    for i in range(8):
+        _touch(tmp_path, f"data/b{i}.bin", "\x00")
+    app = FileMenuApp([], [], str(tmp_path))
+
+    async def scenario():
+        async with app.run_test() as pilot:
+            app.query_one("#depth-up").active_effect_duration = 0
+            app.query_one("#depth-down").active_effect_duration = 0
+            assert app.tree_depth == FileMenuApp.DEFAULT_TREE_DEPTH
+            assert app.query_one("#depth-up").disabled is False
+            for _ in range(FileMenuApp.DEFAULT_TREE_DEPTH - FileMenuApp.MIN_TREE_DEPTH):
+                await pilot.click("#depth-down")
+                await pilot.pause()
+            assert app.tree_depth == FileMenuApp.MIN_TREE_DEPTH
+            assert app.tree_max_depth == FileMenuApp.MIN_TREE_DEPTH
+            assert app.query_one("#depth-up").disabled is True
+            # '+' is disabled: clicking it changes nothing
+            await pilot.click("#depth-up")
+            await pilot.pause()
+            assert app.tree_depth == FileMenuApp.MIN_TREE_DEPTH
 
     asyncio.run(scenario())
 
