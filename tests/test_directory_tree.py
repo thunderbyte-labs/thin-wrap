@@ -287,7 +287,9 @@ def _menu_app(tmp_path):
             app.action_increase_depth()
             await pilot.pause()
             assert app.tree_depth == 6
-            assert app.query_one("#tree-depth").content == "depth: 6"
+            assert app.query_one("#tree-depth").content == _t(
+                "menus.tree_depth_label", depth=6
+            )
             app.action_decrease_depth()
             app.action_decrease_depth()
             await pilot.pause()
@@ -325,9 +327,39 @@ def test_menu_depth_buttons_clickable(tmp_path):
             await pilot.click("#depth-down")
             await pilot.pause()
             assert app.tree_depth == FileMenuApp.DEFAULT_TREE_DEPTH - 1
-            assert (
-                app.query_one("#tree-depth").content
-                == f"depth: {FileMenuApp.DEFAULT_TREE_DEPTH - 1}"
+            from strings import t as _t
+
+            assert app.query_one("#tree-depth").content == _t(
+                "menus.tree_depth_label", depth=FileMenuApp.DEFAULT_TREE_DEPTH - 1
             )
+
+    asyncio.run(scenario())
+
+
+def test_menu_single_line_control_bar(tmp_path):
+    import asyncio
+    import re
+
+    _touch(tmp_path, "app.py", "print(1)")
+    app = FileMenuApp([], [], str(tmp_path))
+
+    async def scenario():
+        async with app.run_test() as pilot:
+            app.action_toggle_tree_context()
+            await pilot.pause()
+            row = app.query_one("#tree-controls")
+            assert row.region.height == 1
+            ys = {child.region.y for child in row.children}
+            assert len(ys) == 1, f"controls must share a single line, y={ys}"
+            assert app.query_one("#depth-up").region.height == 1
+            assert app.query_one("#depth-down").region.height == 1
+
+            svg = app.export_screenshot()
+            svg2 = re.sub(r"<style>.*?</style>", "", svg, flags=re.S)
+            txt = re.sub(r"<[^>]+>", "", svg2).replace("&#160;", " ")
+            lines = [ln for ln in txt.splitlines() if "Tree context" in ln]
+            assert len(lines) == 1, "toggle + controls must render on a single line"
+            for token in ("Tree context", "[x]", "depth:", "−", "+", "chars"):
+                assert token in lines[0], token
 
     asyncio.run(scenario())
