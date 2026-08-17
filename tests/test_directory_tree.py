@@ -12,6 +12,8 @@ from directory_tree import (
     build_directory_tree,
     tree_char_count,
 )
+from file_processor import generate_file_query
+from tags import Xml
 
 
 def _mkdirs(base, rel):
@@ -201,3 +203,23 @@ def test_dot_gitignore_itself_visible(tmp_path):
     tree = build_directory_tree(tmp_path, max_depth=2)
     assert ".gitignore" in tree
     assert "app.py" in tree
+
+
+def test_tree_section_emitted_above_source_code_files(tmp_path):
+    _touch(tmp_path, "app.py", "print(1)")
+    tree = build_directory_tree(tmp_path, max_depth=2)
+    query = generate_file_query(
+        str(tmp_path), ["app.py"], [], "do something", directory_tree=tree
+    )
+    open_tag = f"<{Xml.DIRECTORY_TREE}"
+    close_tag = f"</{Xml.DIRECTORY_TREE}>"
+    assert open_tag in query
+    assert close_tag in query
+    assert query.index(open_tag) < query.index(f"<{Xml.SOURCE_CODE_FILES}")
+
+
+def test_tree_section_omitted_when_disabled(tmp_path):
+    _touch(tmp_path, "app.py", "print(1)")
+    query = generate_file_query(str(tmp_path), ["app.py"], [], "do something")
+    assert f"<{Xml.DIRECTORY_TREE}" not in query
+    assert f"</{Xml.DIRECTORY_TREE}>" not in query

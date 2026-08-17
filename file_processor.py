@@ -45,12 +45,33 @@ def generate_file_query(
     readable_files: list[str],
     writable_files: list[str],
     user_request: str,
+    directory_tree: str | None = None,
 ) -> str:
     """
     Generate the LLM query in the requested XML format using absolute paths.
     Minimal whitespace and no unnecessary blank lines.
+
+    Args:
+        directory_tree: Optional smart tree of the project root. When set, a
+            <prompt_engineering_query_directory_tree> section is emitted above
+            the source code files block; when None/empty, nothing is added.
     """
-    query = (
+    query = ""
+
+    if directory_tree:
+        query += (
+            Xml.o(
+                Xml.DIRECTORY_TREE,
+                'guidance="DIRECTORY TREE CONTEXT OF THE PROJECT ROOT (RESPECTS GITIGNORE AND SUMMARIZES BINARY-HEAVY DIRECTORIES)"',
+            )
+            + "\n"
+            + directory_tree.strip()
+            + "\n"
+            + Xml.c(Xml.DIRECTORY_TREE)
+            + "\n\n"
+        )
+
+    query += (
         Xml.o(
             Xml.SOURCE_CODE_FILES,
             'guidance="USER\'S REQUEST SOURCE CODE FILES CONTEXT FOR THIS SOLE REQUEST (THIS CONTEXT SHALL PREVAIL ON ANY PAST CONTEXT)"',
@@ -465,12 +486,15 @@ def generate_query(
     user_request: str,
     *,
     force_plain: bool = False,
+    directory_tree: str | None = None,
 ) -> tuple[str, callable]:
     """
     Generate the query and return the appropriate parser function.
 
     Args:
         force_plain: If True (free-chat mode), skip file context entirely.
+        directory_tree: Optional smart tree of the project root to include as
+            context in the generated file query.
 
     Returns:
         (query_string, parser_function) or (None, None) if user chose to insert files
@@ -488,6 +512,12 @@ def generate_query(
             return generate_plain_query(user_request), parse_plain_response
 
     return (
-        generate_file_query(root_dir, readable_files, writable_files, user_request),
+        generate_file_query(
+            root_dir,
+            readable_files,
+            writable_files,
+            user_request,
+            directory_tree=directory_tree,
+        ),
         parse_xml_response,
     )
