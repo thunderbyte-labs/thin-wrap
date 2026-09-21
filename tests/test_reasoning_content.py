@@ -49,11 +49,7 @@ def test_extract_response_content_null_content_uses_reasoning():
 def test_extract_response_content_empty_content_uses_reasoning():
     client = _client()
     text = client._extract_response_content(
-        {
-            "choices": [
-                {"message": {"content": "", "reasoning_content": "think"}}
-            ]
-        }
+        {"choices": [{"message": {"content": "", "reasoning_content": "think"}}]}
     )
     assert text == "think"
 
@@ -80,12 +76,8 @@ def test_build_request_params_enable_thinking_false():
     client = _client(
         model_config={
             "model": "local-qwen",
-            "extra_arguments": {
-                "chat_template_kwargs": {"enable_thinking": False}
-            },
+            "extra_arguments": {"chat_template_kwargs": {"enable_thinking": False}},
         }
     )
-    params = client._build_request_params(
-        messages=[{"role": "user", "content": "hi"}]
-    )
+    params = client._build_request_params(messages=[{"role": "user", "content": "hi"}])
     assert params["chat_template_kwargs"]["enable_thinking"] is False
