@@ -198,14 +198,12 @@ class LLMClient:
                 self._http_client = None
 
     def _get_endpoint_and_input_key(self) -> tuple[str, str]:
-        """Declarative normalization for endpoint and payload key."""
         model_config = self.current_model_config
         endpoint = model_config.get("endpoint", "/chat/completions")
         input_key = model_config.get("input_key", "messages")
         return endpoint.rstrip("/"), input_key
 
     def _get_request_url_and_headers(self) -> tuple[str, dict]:
-        """Now supports per-model endpoint (OpenCode-style)."""
         endpoint, _ = self._get_endpoint_and_input_key()
         base = self.api_base_url
         url = f"{base}{endpoint}"
@@ -218,7 +216,6 @@ class LLMClient:
     def _build_request_params(
         self, messages: list, max_tokens: int = 0, *, stream: bool = False
     ):
-        """Build request payload. For DeepSeek, full messages list is used → prefix caching benefits from stable early turns."""
         model_config = self.current_model_config
         _, input_key = self._get_endpoint_and_input_key()
 
@@ -286,14 +283,11 @@ class LLMClient:
             )
 
     def _test_connection(self):
-        """Validate API key with a minimal request + detailed error reporting."""
         payload = self._build_request_params(
             messages=[{"role": "user", "content": "Hi"}],
             max_tokens=10,
         )
-
         url, headers = self._get_request_url_and_headers()
-
         try:
             response = self._http_client.post(url, json=payload, headers=headers)
             response.raise_for_status()
@@ -324,11 +318,6 @@ class LLMClient:
             raise
 
     def _extract_stream_chunk(self, chunk: dict) -> tuple[str, dict | None]:
-        """Extract (delta_text, usage) from a single streaming chunk.
-
-        OpenAI-compatible /chat/completions: content and optional
-        reasoning_content (vLLM Qwen). DashScope /responses events unchanged.
-        """
         if "type" in chunk:
             chunk_type = chunk.get("type")
             if chunk_type == "response.output_text.delta":
@@ -348,3 +337,165 @@ class LLMClient:
             content = delta_obj.get("content") or ""
             delta = reasoning + content
         return delta, chunk.get("usage") or None
+
+    def _send_message_via_httpx(self, on_progress=None) -> tuple[str, dict | None]:
+        thinking_line = t("info.request_sending")
+        print(thinking_line, end="", flush=True)
+        ttf_start_ns = time.perf_counter_ns()
+        stop_event = threading.Event()
+        first_token_seen = threading.Event()
+
+        def _ttf_tick():
+            while not stop_event.is_set():
+                elapsed = (time.perf_counter_ns() - ttf_start_ns) / 1_000_000_000.0
+                sys.stdout.write(
+                    f"\r\x1b[2K{thinking_line} "
+                    + t("info.ttf", elapsed=f"{elapsed:.1f}")
+                )
+                sys.stdout.flush()
+                stop_event.wait(0.1)
+
+        def _write_ttf_line(end_with_newline: bool) -> None:
+            elapsed = (time.perf_counter_ns() - ttf_start_ns) / 1_000_000_000.0
+            sys.stdout.write(
+                f"\r\x1b[2K{thinking_line} " + t("info.ttf", elapsed=f"{elapsed:.1f}")
+            )
+            if end_with_newline:
+                sys.stdout.write("\n")
+            sys.stdout.flush()
+
+        def _freeze_ttf():
+            stop_event.set()
+            ticker.join(timeout=1.0)
+            _write_ttf_line(end_with_newline=True)
+
+        ticker = threading.Thread(target=_ttf_tick, daemon=True)
+        ticker.start()
+
+        messages = [
+            {"role": msg["role"], "content": msg["content"]}
+            for msg in self.conversation_history
+        ]
+
+        payload = self._build_request_params(messages=messages, stream=True)
+        url, headers = self._get_request_url_and_headers()
+
+        def _stream(request_params):
+            text_parts: list[str] = []
+            usage = None
+            with self._http_client.stream(
+                "POST", url, json=request_params, headers=headers
+            ) as response:
+                response.raise_for_status()
+                for line in response.iter_lines():
+                    if not line:
+                        continue
+                    line = line.strip()
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[len("data:") :].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data)
+                    except (ValueError, TypeError):
+                        continue
+                    delta, chunk_usage = self._extract_stream_chunk(chunk)
+                    if chunk_usage:
+                        usage = chunk_usage
+                    if delta:
+                        if not first_token_seen.is_set():
+                            first_token_seen.set()
+                            _freeze_ttf()
+                        text_parts.append(delta)
+                        if on_progress:
+                            on_progress("".join(text_parts), usage)
+            return "".join(text_parts).strip(), usage
+
+        try:
+            return _stream(payload)
+        except httpx.HTTPStatusError as e:
+            if payload.get("stream_options") and e.response.status_code in (400, 422):
+                return _stream(
+                    {k: v for k, v in payload.items() if k != "stream_options"}
+                )
+            raise
+        finally:
+            stop_event.set()
+            if not first_token_seen.is_set():
+                ticker.join(timeout=1.0)
+                _write_ttf_line(end_with_newline=True)
+
+    def send_message(self, message: str, on_progress=None) -> tuple[str, dict | None]:
+        try:
+            self.conversation_history.append(
+                {
+                    "role": "user",
+                    "content": message,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+            if self.session_logger:
+                self.session_logger.save_session(self.conversation_history)
+            response_text, usage = self._send_message_via_httpx(on_progress=on_progress)
+            self.conversation_history.append(
+                {
+                    "role": "assistant",
+                    "content": response_text,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+            if self.session_logger:
+                self.session_logger.save_session(self.conversation_history)
+            return response_text, usage
+        except KeyboardInterrupt:
+            print(f"\n{t('info.request_interrupted')}")
+            if (
+                self.conversation_history
+                and self.conversation_history[-1]["role"] == "user"
+            ):
+                self.conversation_history.pop()
+                if self.session_logger:
+                    self.session_logger.save_session(self.conversation_history)
+            return "", None
+        except Exception as e:
+            if self.session_logger:
+                self.session_logger.save_session(self.conversation_history)
+            return (
+                t("errors.error_communicating", model=self.current_model, error=e),
+                None,
+            )
+
+    def generate(self, instruction: str) -> str | None:
+        print(t("info.request_sending"))
+        messages = [
+            {"role": msg["role"], "content": msg["content"]}
+            for msg in self.conversation_history
+        ]
+        messages.append({"role": "user", "content": instruction})
+        payload = self._build_request_params(messages=messages)
+        url, headers = self._get_request_url_and_headers()
+        try:
+            response = self._http_client.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            return self._extract_response_content(data)
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:
+            print(t("errors.error_communicating", model=self.current_model, error=e))
+            return None
+
+    def clear_conversation(self):
+        self.conversation_history = []
+
+    def load_conversation(self, conversation_history: list):
+        self.conversation_history = conversation_history
+        if self.session_logger:
+            self.session_logger.save_session(self.conversation_history)
+
+    def get_current_model(self) -> str | None:
+        return self.current_model
+
+    def __del__(self):
+        self._cleanup_http_client()
