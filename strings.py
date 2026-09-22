@@ -10,17 +10,25 @@ Usage:
 """
 
 import json
+import sys
 from pathlib import Path
 
 _STRINGS = None
+
+
+def _resource_dir() -> Path:
+    """Directory that contains strings.json (source tree or PyInstaller bundle)."""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS)
+    return Path(__file__).parent.resolve()
 
 
 def _load() -> dict:
     """Load strings.json once and cache it."""
     global _STRINGS
     if _STRINGS is None:
-        base = Path(__file__).parent.resolve()
-        _STRINGS = json.loads((base / "strings.json").read_text(encoding="utf-8"))
+        path = _resource_dir() / "strings.json"
+        _STRINGS = json.loads(path.read_text(encoding="utf-8"))
     return _STRINGS
 
 
