@@ -176,3 +176,22 @@ jobs:
             windows-x86_64/thin-wrap-Windows-x86_64.zip
           fail_on_unmatched_files: true
           generate_release_notes: true
+
+  notify-homebrew-tap:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch Homebrew tap formula bump
+        env:
+          TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "HOMEBREW_TAP_TOKEN is not set."
+            echo "The hourly workflow on thunderbyte-labs/homebrew-tap will pick up this release."
+            exit 0
+          fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/thunderbyte-labs/homebrew-tap/dispatches \
+            -d '{"event_type":"thin-wrap-release","client_payload":{"tag":"${{ github.ref_name }}"}}'
