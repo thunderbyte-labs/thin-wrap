@@ -3,6 +3,9 @@
 # XDG mode only (modern default)
 # POSIX-compliant, no bash required
 # Usage: curl -fsSL .../install.sh | sh
+#
+# On macOS, Homebrew is the recommended install path:
+#   brew install thunderbyte-labs/tap/thin-wrap
 
 set -e
 
@@ -190,6 +193,14 @@ if [ ! -f "${CONFIG_TARGET}/config.json" ]; then
     fi
 fi
 
+# macOS: drop Gatekeeper quarantine inherited from the GitHub download
+if [ "$PLATFORM" = "Darwin" ]; then
+    if command -v xattr >/dev/null 2>&1; then
+        xattr -cr "$APP_DIR" 2>/dev/null || true
+        xattr -cr "${BINDIR}/thin-wrap" 2>/dev/null || true
+    fi
+fi
+
 # Cleanup temp dir
 cd - >/dev/null 2>&1 || true
 rm -rf "$TMPDIR"
@@ -211,15 +222,12 @@ if [ "$PLATFORM" = "Linux" ]; then
     add_path_to_file "${HOME}/.bashrc"
     add_path_to_file "${HOME}/.profile"
 elif [ "$PLATFORM" = "Darwin" ]; then
+    add_path_to_file "${HOME}/.zprofile"
+    add_path_to_file "${HOME}/.zshrc"
     add_path_to_file "${HOME}/.bash_profile"
     if basename "$SHELL" 2>/dev/null | grep -q bash; then
         add_path_to_file "${HOME}/.bashrc"
     fi
-fi
-
-# macOS Gatekeeper note
-if [ "$PLATFORM" = "Darwin" ]; then
-    echo "macOS: if 'cannot be verified' see README for xattr command."
 fi
 
 if [ $UPDATE_MODE -eq 1 ]; then
@@ -234,6 +242,11 @@ echo "NOTE: To use thin-wrap in this terminal, run:"
 if [ "$PLATFORM" = "Linux" ]; then
     echo "  source ~/.bashrc"
 elif [ "$PLATFORM" = "Darwin" ]; then
-    echo "  source ~/.bash_profile"
+    SHELL_NAME=$(basename "${SHELL:-/bin/zsh}")
+    case "$SHELL_NAME" in
+        zsh) echo "  source ~/.zshrc" ;;
+        bash) echo "  source ~/.bash_profile" ;;
+        *) echo "  export PATH=\"${BINDIR}:\$PATH\"" ;;
+    esac
 fi
 echo "Or open a new terminal window."
