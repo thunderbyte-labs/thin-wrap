@@ -21,6 +21,7 @@ config.setup_logging()
 
 from command_handler import CommandHandler
 from directory_tree import build_directory_tree
+from file_hash_cache import FileHashCache
 from file_processor import generate_query
 from history_store import HistoryStore
 from input_handler import InputHandler
@@ -148,6 +149,10 @@ class LLMChat:
         self.tree_context_enabled = False
         self.tree_depth = 5
 
+        # Tracks file content already sent to the LLM so unchanged files are
+        # not re-sent (see file_hash_cache.FileHashCache).
+        self.file_hash_cache = FileHashCache()
+
         # Add to proxy history if valid
         if proxy_url and validate_proxy_url(proxy_url) is None:
             self._history.add_proxy(proxy_url)
@@ -212,6 +217,8 @@ class LLMChat:
         self.session_logger = SessionLogger(self.script_directory, self.root_dir)
         self.llm_client.session_logger = self.session_logger
         self.command_handler.session_logger = self.session_logger
+        # A fresh session means a fresh LLM context: nothing is "already sent".
+        self.file_hash_cache = FileHashCache()
         return self.session_logger
 
     def set_root_dir(self, new_root: str, ask_to_reload: bool = True) -> None:
@@ -665,6 +672,8 @@ class LLMChat:
         if not self.free_chat_mode and self.tree_context_enabled and self.root_dir:
             directory_tree = build_directory_tree(self.root_dir, self.tree_depth)
 
+        file_hash_cache = getattr(self, "file_hash_cache", None)
+
         query, response_parser = generate_query(
             self.root_dir or "",
             self.readable_files,
@@ -672,6 +681,7 @@ class LLMChat:
             message,
             force_plain=self.free_chat_mode,
             directory_tree=directory_tree,
+            file_hash_cache=file_hash_cache,
         )
         # Check if user chose to insert files (abort send)
         if query is None and response_parser is None:
@@ -742,6 +752,16 @@ class LLMChat:
 
         response, usage = self.llm_client.send_message(query, on_progress=_on_progress)
         end_time_ns = time.perf_counter_ns()
+
+        # Confirm the staged file hashes only when the send *and* the reply
+        # both succeeded (usage is present on a completed stream). Otherwise
+        # roll back so unchanged files are not assumed to have been delivered.
+        if file_hash_cache is not None:
+            if usage is not None:
+                file_hash_cache.commit()
+            else:
+                file_hash_cache.rollback()
+
         duration_ms = (
             end_time_ns - start_time_ns
         ) / 1_000_000.0  # Millisecond precision

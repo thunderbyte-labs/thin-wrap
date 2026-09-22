@@ -8,11 +8,36 @@ import tempfile
 from pathlib import Path
 
 import config
+from file_hash_cache import FileHashCache
 from path_utils import resolve_path
 from strings import t
 from tags import Xml
 
 logger = logging.getLogger(__name__)
+
+_FILE_UNCHANGED_NOTICE = (
+    "[THIN-WRAP FILE DEDUPLICATION NOTICE: the content of this file is "
+    "byte-for-byte identical (md5 {digest}) to the copy of this file already "
+    "sent to you earlier in this conversation. Do NOT request its content "
+    "again. Reuse the exact copy you already received.]"
+)
+
+
+def _file_body(path: str, content: str, cache: FileHashCache | None) -> str:
+    """Return the body to embed for *path*, or a short notice when unchanged.
+
+    When *cache* is set and the file's current content hashes identically to
+    the last committed version, the full content is replaced by a notice so
+    tokens are not wasted re-sending it. New or changed files are staged for
+    commit once the send (and the LLM's reply) succeed.
+    """
+    if cache is None:
+        return content
+    digest = cache.hash_content(content)
+    if cache.is_unchanged(path, digest):
+        return _FILE_UNCHANGED_NOTICE.format(digest=digest)
+    cache.stage(path, digest)
+    return content
 
 
 def _read_file_content(full_path: str, root_dir: str) -> str:
@@ -46,6 +71,7 @@ def generate_file_query(
     writable_files: list[str],
     user_request: str,
     directory_tree: str | None = None,
+    file_hash_cache: FileHashCache | None = None,
 ) -> str:
     """
     Generate the LLM query in the requested XML format using absolute paths.
@@ -55,6 +81,10 @@ def generate_file_query(
         directory_tree: Optional smart tree of the project root. When set, a
             <prompt_engineering_query_directory_tree> section is emitted above
             the source code files block; when None/empty, nothing is added.
+        file_hash_cache: Optional cache tracking file content already sent to
+            the LLM. When set, unchanged files are replaced by a short notice
+            instead of their full content (to save tokens); new/changed files
+            are staged for commit once the send succeeds.
     """
     query = ""
 
@@ -98,7 +128,7 @@ def generate_file_query(
                 query += (
                     Xml.o(Xml.READ_ONLY_FILE, f'path="{path}"')
                     + "\n"
-                    + content
+                    + _file_body(path, content, file_hash_cache)
                     + "\n"
                     + Xml.c(Xml.READ_ONLY_FILE)
                     + "\n"
@@ -127,7 +157,7 @@ def generate_file_query(
                 query += (
                     Xml.o(Xml.EDITABLE_FILE, f'path="{path}"')
                     + "\n"
-                    + content
+                    + _file_body(path, content, file_hash_cache)
                     + "\n"
                     + Xml.c(Xml.EDITABLE_FILE)
                     + "\n"
@@ -487,6 +517,7 @@ def generate_query(
     *,
     force_plain: bool = False,
     directory_tree: str | None = None,
+    file_hash_cache: FileHashCache | None = None,
 ) -> tuple[str, callable]:
     """
     Generate the query and return the appropriate parser function.
@@ -496,6 +527,8 @@ def generate_query(
         directory_tree: Optional smart tree of the project root to include as
             context in the generated file query. When set, the empty-context
             prompt is skipped (the tree itself provides context).
+        file_hash_cache: Optional cache tracking file content already sent to
+            the LLM (see generate_file_query).
 
     Returns:
         (query_string, parser_function) or (None, None) if user chose to insert files
@@ -519,6 +552,7 @@ def generate_query(
             writable_files,
             user_request,
             directory_tree=directory_tree,
+            file_hash_cache=file_hash_cache,
         ),
         parse_xml_response,
     )

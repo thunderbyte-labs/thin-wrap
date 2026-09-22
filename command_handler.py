@@ -426,6 +426,12 @@ class CommandHandler:
                 if session_data:
                     conversation_history = session_data.get("conversation_history", [])
                     self.llm_client.load_conversation(conversation_history)
+                    # The reloaded history becomes the LLM's context, but the
+                    # in-memory file-hash cache does not know what it contains:
+                    # reset it so files are re-sent in full once, then deduped.
+                    file_hash_cache = getattr(self.chat_app, "file_hash_cache", None)
+                    if file_hash_cache is not None:
+                        file_hash_cache.clear()
                     self.input_handler.load_from_conversation_history(
                         conversation_history
                     )
