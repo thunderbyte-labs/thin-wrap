@@ -45,12 +45,12 @@
       "api_base_url": "https://hera-llm.thunderbyte.ovh/v1"
     },
     "hephaistos/qwen3.6": {
-      "model": "/root/.cache/huggingface/hub/models--nvidia--Qwen3.6-35B-A3B-NVFP4",
+      "model": "Qwen3.6-35B-A3B",
       "api_key": "HEPHAISTOS_API_KEY",
       "api_base_url": "https://hephaistos-llm.thunderbyte.ovh/v1"
     },
     "hephaistos/qwen3.6-no-think": {
-      "model": "/root/.cache/huggingface/hub/models--nvidia--Qwen3.6-35B-A3B-NVFP4",
+      "model": "Qwen3.6-35B-A3B",
       "api_key": "HEPHAISTOS_API_KEY",
       "api_base_url": "https://hephaistos-llm.thunderbyte.ovh/v1",
       "extra_arguments": {
@@ -59,8 +59,8 @@
         }
       }
     },
-    "kangxi/qwen": {
-      "model": "kangxi/qwen",
+    "hestia/qwen": {
+      "model": "hestia/qwen",
       "api_key": "HERA_API_KEY",
       "api_base_url": "http://192.168.10.20:8080"
     },

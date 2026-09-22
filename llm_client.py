@@ -40,6 +40,10 @@ class LLMClient:
         self.api_key: str | None = None
         self.api_base_url: str | None = None
 
+    # ===================================================================
+    # PUBLIC API
+    # ===================================================================
+
     def setup_api_key(self, model: str):
         """Initialize connection for the selected model (called on startup and model switch)."""
         if model is None:
@@ -69,7 +73,7 @@ class LLMClient:
                 print(t("info.direct_without_proxy"))
                 self._cleanup_http_client()
                 self.proxy_wrapper = None
-                self._initialize_http_client()
+                self._initialize_http_client()  # direct mode (no proxy)
                 try:
                     self._test_connection()
                     print(t("info.direct_connected"))
@@ -157,9 +161,14 @@ class LLMClient:
                 return False
         return True
 
+    # ===================================================================
+    # PROXY & HTTP CLIENT MANAGEMENT
+    # ===================================================================
+
     def _initialize_client_with_proxy(self):
         """Test proxy setup, then initialise HTTP client and API connection."""
         with contextlib.suppress(Exception):
+            # test_connection warned; continue
             self.proxy_wrapper.test_connection()
         self._initialize_http_client()
         self._test_connection()
@@ -197,13 +206,19 @@ class LLMClient:
             finally:
                 self._http_client = None
 
+    # ===================================================================
+    # REQUEST HELPERS
+    # ===================================================================
+
     def _get_endpoint_and_input_key(self) -> tuple[str, str]:
+        """Declarative normalization for endpoint and payload key."""
         model_config = self.current_model_config
         endpoint = model_config.get("endpoint", "/chat/completions")
         input_key = model_config.get("input_key", "messages")
         return endpoint.rstrip("/"), input_key
 
     def _get_request_url_and_headers(self) -> tuple[str, dict]:
+        """Now supports per-model endpoint (OpenCode-style)."""
         endpoint, _ = self._get_endpoint_and_input_key()
         base = self.api_base_url
         url = f"{base}{endpoint}"
@@ -216,6 +231,7 @@ class LLMClient:
     def _build_request_params(
         self, messages: list, max_tokens: int = 0, *, stream: bool = False
     ):
+        """Build request payload. For DeepSeek, full messages list is used → prefix caching benefits from stable early turns."""
         model_config = self.current_model_config
         _, input_key = self._get_endpoint_and_input_key()
 
@@ -223,7 +239,7 @@ class LLMClient:
             "model": model_config.get("model", self.current_model),
         }
 
-        if input_key == "input":
+        if input_key == "input":  # currently, this path is only used by qwen
             last_user_content = next(
                 (m["content"] for m in reversed(messages) if m.get("role") == "user"),
                 messages[-1]["content"] if messages else "",
@@ -241,21 +257,19 @@ class LLMClient:
 
         if stream:
             request_params["stream"] = True
+            # stream_options.include_usage is a /chat/completions feature.
+            # The DashScope /responses API (input_key == "input") always
+            # includes usage in its final event, so skip it there.
             if input_key != "input":
                 request_params["stream_options"] = {"include_usage": True}
 
         return request_params
 
     def _extract_response_content(self, raw_response: dict) -> str:
-        """Extract assistant text from OpenAI /chat/completions and DashScope /responses.
-
-        vLLM Qwen reasoning parsers often return ``content: null`` and put the
-        tokens in ``reasoning_content``. Treat that as valid text so the
-        connection test and non-stream path do not crash on ``None.strip()``.
-        Other OpenAI-compatible endpoints are unchanged: they only set
-        ``content``.
-        """
+        """Extract final assistant text from both OpenAI /chat/completions and DashScope /responses formats."""
+        # === DashScope Responses API (/responses) ===
         if "output" in raw_response and isinstance(raw_response.get("output"), list):
+            # Walk backwards to find the final "message" item (after all reasoning/tool calls)
             for item in reversed(raw_response["output"]):
                 if item.get("type") == "message" and isinstance(
                     item.get("content"), list
@@ -267,6 +281,7 @@ class LLMClient:
                     ]
                     return "\n".join(texts).strip()
 
+        # === Standard OpenAI /chat/completions fallback ===
         try:
             msg = raw_response["choices"][0]["message"]
             content = msg.get("content")
@@ -283,6 +298,7 @@ class LLMClient:
             )
 
     def _test_connection(self):
+        """Validate API key with a minimal request + detailed error reporting."""
         payload = self._build_request_params(
             messages=[{"role": "user", "content": "Hi"}],
             max_tokens=10,
@@ -292,6 +308,7 @@ class LLMClient:
             response = self._http_client.post(url, json=payload, headers=headers)
             response.raise_for_status()
             data = response.json()
+            # Use same extractor so test passes for both endpoint types
             content = self._extract_response_content(data)
             logger.info(
                 f"{self.current_model} API key validated successfully! Sample reply: {content[:60]}..."
@@ -317,7 +334,22 @@ class LLMClient:
             print(t("errors.unexpected_connection_error", error=e))
             raise
 
+    # ===================================================================
+    # MESSAGE SENDING & CONVERSATION MANAGEMENT
+    # ===================================================================
+
     def _extract_stream_chunk(self, chunk: dict) -> tuple[str, dict | None]:
+        """Extract (delta_text, usage) from a single streaming chunk.
+
+        Tolerant of both streaming shapes used by the configured endpoints:
+        - OpenAI-compatible /chat/completions: ``choices[0].delta.content``,
+          with ``usage`` on the final chunk (stream_options.include_usage).
+        - DashScope /responses (OpenAI Responses API events):
+          ``response.output_text.delta`` for content, ``response.completed``
+          for usage. Reasoning events are ignored (matching the non-streaming
+          extraction which skips non-message output items).
+        """
+        # === OpenAI Responses API events (DashScope /responses) ===
         if "type" in chunk:
             chunk_type = chunk.get("type")
             if chunk_type == "response.output_text.delta":
@@ -327,6 +359,7 @@ class LLMClient:
                 return "", response.get("usage") or None
             return "", None
 
+        # === OpenAI /chat/completions chunks ===
         delta = ""
         choices = chunk.get("choices") or []
         if choices:
@@ -339,6 +372,16 @@ class LLMClient:
         return delta, chunk.get("usage") or None
 
     def _send_message_via_httpx(self, on_progress=None) -> tuple[str, dict | None]:
+        """Stream a chat completion and return (text, usage_dict).
+
+        Uses ``stream=True`` so token-usage statistics can be refreshed live
+        through the optional *on_progress* callback: ``on_progress(text, usage)``
+        is invoked with the accumulated text and any usage seen so far.
+
+        A live "Time to First Token" (TTF) counter is shown on the same line
+        as the "Thinking..." message; it ticks up until the first content
+        chunk arrives, then freezes there.
+        """
         thinking_line = t("info.request_sending")
         print(thinking_line, end="", flush=True)
         ttf_start_ns = time.perf_counter_ns()
@@ -427,7 +470,15 @@ class LLMClient:
                 _write_ttf_line(end_with_newline=True)
 
     def send_message(self, message: str, on_progress=None) -> tuple[str, dict | None]:
+        """
+        Send a message and return (response_text, usage_dict).
+        usage_dict contient les vrais tokens de l'API (prompt_tokens, completion_tokens, etc.)
+
+        *on_progress* (optional) is called as ``on_progress(text, usage)`` on
+        every streamed content chunk, allowing live token statistics.
+        """
         try:
+            # Append user message
             self.conversation_history.append(
                 {
                     "role": "user",
@@ -437,7 +488,11 @@ class LLMClient:
             )
             if self.session_logger:
                 self.session_logger.save_session(self.conversation_history)
+
+            # Get response + usage from API
             response_text, usage = self._send_message_via_httpx(on_progress=on_progress)
+
+            # Append assistant response
             self.conversation_history.append(
                 {
                     "role": "assistant",
@@ -467,6 +522,12 @@ class LLMClient:
             )
 
     def generate(self, instruction: str) -> str | None:
+        """Send a one-off instruction appended to the full conversation history.
+
+        Unlike :meth:`send_message`, this never mutates ``conversation_history``
+        nor persists anything; it only returns the extracted response text.
+        Returns ``None`` on API error. Raises ``KeyboardInterrupt`` on cancel.
+        """
         print(t("info.request_sending"))
         messages = [
             {"role": msg["role"], "content": msg["content"]}
@@ -487,15 +548,19 @@ class LLMClient:
             return None
 
     def clear_conversation(self):
+        """Clear conversation history. The old session stays saved on disk."""
         self.conversation_history = []
 
     def load_conversation(self, conversation_history: list):
+        """Load a saved conversation history."""
         self.conversation_history = conversation_history
         if self.session_logger:
             self.session_logger.save_session(self.conversation_history)
 
     def get_current_model(self) -> str | None:
+        """Return currently active model name."""
         return self.current_model
 
     def __del__(self):
+        """Ensure HTTP client is cleaned up when object is destroyed."""
         self._cleanup_http_client()
