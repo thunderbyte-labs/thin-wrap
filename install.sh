@@ -2,40 +2,48 @@
 # Universal installer for thin-wrap (Linux & macOS)
 # XDG mode only (modern default)
 # POSIX-compliant, no bash required
-# Usage: curl -fsSL .../install.sh | sh
+# Usage:
+#   curl -fsSL .../install.sh | sh
+#   curl -fsSL .../install.sh | sh -s -- --force
+#   THIN_WRAP_VERSION=v0.1.6 curl -fsSL .../install.sh | sh
 #
 # On macOS, Homebrew is the recommended install path:
 #   brew install thunderbyte-labs/tap/thin-wrap
+#   brew upgrade thin-wrap
+#
+# This script tracks the latest *stable* GitHub release (pre-releases are
+# ignored). Pin a tag with THIN_WRAP_VERSION or --tag=vX.Y.Z.
 
 set -e
 
 REPO="thunderbyte-labs/thin-wrap"
-API_URL="https://api.github.com/repos/${REPO}/releases/latest"
+API_BASE="https://api.github.com/repos/${REPO}"
 
-# Helper: Fetch latest version and download URL
-fetch_latest_info() {
-    if command -v curl >/dev/null 2>&1; then
-        JSON=$(curl -fsSL "$API_URL" 2>/dev/null) || true
-    elif command -v wget >/dev/null 2>&1; then
-        JSON=$(wget -qO- "$API_URL" 2>/dev/null) || true
-    fi
+FORCE=0
+PINNED_TAG="${THIN_WRAP_VERSION:-}"
 
-    if [ -z "$JSON" ]; then
-        echo "ERROR: Failed to fetch release info from GitHub API."
-        echo "This may be due to API rate limits (60 requests/hour per IP)."
-        echo "Please try again later or download manually from:"
-        echo "  https://github.com/${REPO}/releases"
-        exit 1
-    fi
+for arg in "$@"; do
+    case "$arg" in
+        --force|-f) FORCE=1 ;;
+        --tag=*) PINNED_TAG="${arg#--tag=}" ;;
+        --help|-h)
+            echo "Usage: install.sh [--force] [--tag=vX.Y.Z]"
+            echo "  --force          Reinstall even if this version is already present"
+            echo "  --tag=vX.Y.Z     Install a specific release instead of latest stable"
+            echo "Env: FORCE=1, THIN_WRAP_VERSION=vX.Y.Z"
+            exit 0
+            ;;
+        *)
+            echo "ERROR: Unknown argument: $arg"
+            echo "Usage: install.sh [--force] [--tag=vX.Y.Z]"
+            exit 1
+            ;;
+    esac
+done
 
-    VERSION=$(echo "$JSON" | grep '"tag_name":' | sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
-    DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${ARCHIVE}"
-
-    if [ -z "$VERSION" ]; then
-        echo "ERROR: Could not parse latest version from GitHub API."
-        exit 1
-    fi
-}
+if [ "${FORCE}" = "1" ] || [ "${FORCE}" = "true" ]; then
+    FORCE=1
+fi
 
 # Block root execution
 if [ "$(id -u)" -eq 0 ]; then
@@ -93,89 +101,251 @@ LIBDIR="${PREFIX}/lib"
 BINDIR="${PREFIX}/bin"
 CONFIG_DIR_XDG="${XDG_CONFIG_HOME:-${HOME}/.config}/thin-wrap"
 APP_DIR="${LIBDIR}/thin-wrap"
+BACKUP_DIR="${APP_DIR}.bak"
+CONFIG_MODE="xdg"
+CONFIG_TARGET="$CONFIG_DIR_XDG"
 
-# Create necessary directories early
-mkdir -p "$LIBDIR"
-mkdir -p "$BINDIR"
+http_get() {
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$1"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO- "$1"
+    else
+        echo "ERROR: Neither curl nor wget found. Please install one of them." >&2
+        return 1
+    fi
+}
 
-# Fetch latest version info
-fetch_latest_info
+http_download() {
+    DEST="$1"
+    URL="$2"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsL -o "$DEST" "$URL"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q -O "$DEST" "$URL"
+    else
+        echo "ERROR: Neither curl nor wget found. Please install one of them."
+        return 1
+    fi
+}
 
-mkdir -p "$TMPDIR"
-cd "$TMPDIR"
+parse_release_json() {
+    ARCHIVE_NAME="$1"
+    if command -v python3 >/dev/null 2>&1; then
+        printf '%s' "$JSON" | ARCHIVE_NAME="$ARCHIVE_NAME" python3 -c '
+import json, os, sys
+r = json.load(sys.stdin)
+tag = r.get("tag_name") or ""
+want = os.environ["ARCHIVE_NAME"]
+digest = ""
+url = ""
+for asset in r.get("assets") or []:
+    if asset.get("name") == want:
+        raw = asset.get("digest") or ""
+        if raw.startswith("sha256:"):
+            digest = raw.split(":", 1)[1]
+        url = asset.get("browser_download_url") or ""
+        break
+sys.stdout.write(tag + "\n" + digest + "\n" + url + "\n")
+'
+        return
+    fi
+    echo "$JSON" | grep '"tag_name":' | sed -E 's/.*"tag_name": "([^"]+)".*/\1/' | head -n 1
+    echo "$JSON" | grep -F "\"name\": \"${ARCHIVE_NAME}\"" >/dev/null 2>&1 || true
+    echo "$JSON" | grep '"digest":' | head -n 1 | sed -E 's/.*sha256:([0-9a-f]+).*/\1/'
+    echo "https://github.com/${REPO}/releases/download/PLACEHOLDER/${ARCHIVE_NAME}"
+}
 
-# Determine if running interactively
-if [ -t 0 ]; then
-    INTERACTIVE=1
+file_sha256() {
+    FILE="$1"
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$FILE" | awk '{print $1}'
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$FILE" | awk '{print $1}'
+    else
+        echo ""
+    fi
+}
+
+restore_backup() {
+    echo "Update failed, restoring the previous installation..."
+    if [ -d "$BACKUP_DIR" ]; then
+        rm -rf "$APP_DIR"
+        mv "$BACKUP_DIR" "$APP_DIR"
+        echo "Restored ${APP_DIR} from ${BACKUP_DIR}"
+    else
+        echo "ERROR: No backup found at ${BACKUP_DIR}"
+    fi
+}
+
+# Fetch release metadata (latest stable, or a pinned tag)
+if [ -n "$PINNED_TAG" ]; then
+    case "$PINNED_TAG" in
+        v*) TAG_PATH="$PINNED_TAG" ;;
+        *)  TAG_PATH="v${PINNED_TAG}" ;;
+    esac
+    API_URL="${API_BASE}/releases/tags/${TAG_PATH}"
 else
-    INTERACTIVE=0
+    API_URL="${API_BASE}/releases/latest"
+fi
+
+JSON=$(http_get "$API_URL" 2>/dev/null) || JSON=""
+if [ -z "$JSON" ]; then
+    echo "ERROR: Failed to fetch release info from GitHub API."
+    echo "This may be due to API rate limits (60 requests/hour per IP)."
+    echo "Please try again later or download manually from:"
+    echo "  https://github.com/${REPO}/releases"
+    exit 1
+fi
+
+PARSE_OUT=$(parse_release_json "$ARCHIVE") || true
+VERSION=$(printf '%s\n' "$PARSE_OUT" | sed -n '1p')
+EXPECTED_SHA=$(printf '%s\n' "$PARSE_OUT" | sed -n '2p')
+DOWNLOAD_URL=$(printf '%s\n' "$PARSE_OUT" | sed -n '3p')
+
+if [ -z "$VERSION" ]; then
+    echo "ERROR: Could not parse release tag from GitHub API."
+    exit 1
+fi
+
+if [ -z "$DOWNLOAD_URL" ] || echo "$DOWNLOAD_URL" | grep -q PLACEHOLDER; then
+    DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${ARCHIVE}"
+fi
+
+CURRENT_VERSION="unknown"
+if [ -f "${APP_DIR}/.version" ]; then
+    CURRENT_VERSION=$(cat "${APP_DIR}/.version" 2>/dev/null || echo "unknown")
+fi
+
+EXISTING=0
+if [ -d "$APP_DIR" ] && [ -f "${APP_DIR}/thin-wrap" ]; then
+    EXISTING=1
 fi
 
 echo "=== thin-wrap ${VERSION} Installer (${PLATFORM}/${ARCH}) ==="
 
-# Check for existing installation (update mode)
-if [ -d "$APP_DIR" ] && [ -f "${APP_DIR}/thin-wrap" ]; then
-    UPDATE_MODE=1
-else
-    UPDATE_MODE=0
+if [ "$EXISTING" -eq 1 ] && [ "$CURRENT_VERSION" = "$VERSION" ] && [ "$FORCE" -eq 0 ]; then
+    echo "thin-wrap ${VERSION} is already installed and up to date."
+    echo "Re-run with --force (or FORCE=1) to reinstall."
+    exit 0
 fi
 
-# === XDG mode only (new default) ===
-CONFIG_MODE="xdg"
-CONFIG_TARGET="$CONFIG_DIR_XDG"
-
-# Download
-if command -v curl >/dev/null 2>&1; then
-    curl -fsL -o "${ARCHIVE}" "${DOWNLOAD_URL}" || {
-        echo "ERROR: Download failed (curl exited $?)"
-        echo "URL: ${DOWNLOAD_URL}"
-        exit 1
-    }
-elif command -v wget >/dev/null 2>&1; then
-    wget -q -O "${ARCHIVE}" "${DOWNLOAD_URL}" || {
-        echo "ERROR: Download failed (wget exited $?)"
-        echo "URL: ${DOWNLOAD_URL}"
-        exit 1
-    }
+if [ "$EXISTING" -eq 1 ]; then
+    echo "Updating: ${CURRENT_VERSION} -> ${VERSION}"
 else
-    echo "ERROR: Neither curl nor wget found. Please install one of them."
+    echo "Installing ${VERSION}"
+fi
+
+if command -v pgrep >/dev/null 2>&1; then
+    if pgrep -f "${APP_DIR}/thin-wrap" >/dev/null 2>&1; then
+        echo "WARNING: thin-wrap appears to be running."
+        echo "Quit it before continuing if the file replacement fails."
+    fi
+fi
+
+mkdir -p "$LIBDIR" "$BINDIR" "$TMPDIR"
+cd "$TMPDIR"
+
+# Download (current install is still intact)
+if ! http_download "${ARCHIVE}" "${DOWNLOAD_URL}"; then
+    echo "ERROR: Download failed"
+    echo "URL: ${DOWNLOAD_URL}"
+    rm -rf "$TMPDIR"
     exit 1
 fi
 
-# Extract quietly
-if command -v unzip >/dev/null 2>&1; then
-    unzip -qq -o "${ARCHIVE}"
+ARCHIVE_SIZE=$(wc -c < "${ARCHIVE}" | tr -d ' ')
+if [ "${ARCHIVE_SIZE:-0}" -lt 1048576 ]; then
+    echo "ERROR: Downloaded archive is too small (${ARCHIVE_SIZE} bytes)."
+    rm -rf "$TMPDIR"
+    exit 1
+fi
+
+if [ -n "$EXPECTED_SHA" ]; then
+    ACTUAL_SHA=$(file_sha256 "${ARCHIVE}")
+    if [ -z "$ACTUAL_SHA" ]; then
+        echo "WARNING: No sha256 tool found; skipping checksum verification."
+    elif [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+        echo "ERROR: Checksum mismatch for ${ARCHIVE}"
+        echo "  expected: ${EXPECTED_SHA}"
+        echo "  actual:   ${ACTUAL_SHA}"
+        rm -rf "$TMPDIR"
+        exit 1
+    fi
 else
+    echo "WARNING: GitHub release did not publish a digest for ${ARCHIVE}; skipping checksum."
+fi
+
+if ! command -v unzip >/dev/null 2>&1; then
     echo "ERROR: unzip command not found. Please install unzip."
+    rm -rf "$TMPDIR"
     exit 1
 fi
-rm -f "${ARCHIVE}"
 
-# Handle PyInstaller one-directory structure
-if [ -d "thin-wrap" ] && [ -f "thin-wrap/thin-wrap" ]; then
-    rm -rf "$APP_DIR"
-    mkdir -p "$(dirname "$APP_DIR")"
-    mv thin-wrap "$APP_DIR"
-elif [ -f "thin-wrap" ]; then
-    mkdir -p "$APP_DIR"
-    mv thin-wrap "$APP_DIR/"
-else
-    echo "ERROR: Cannot find thin-wrap binary after extraction"
+EXTRACT_DIR="${TMPDIR}/extract"
+mkdir -p "$EXTRACT_DIR"
+if ! unzip -qq -o "${ARCHIVE}" -d "$EXTRACT_DIR"; then
+    echo "ERROR: Extraction failed; existing installation was not changed."
+    rm -rf "$TMPDIR"
     exit 1
+fi
+
+NEW_DIR=""
+if [ -d "${EXTRACT_DIR}/thin-wrap" ] && [ -f "${EXTRACT_DIR}/thin-wrap/thin-wrap" ]; then
+    NEW_DIR="${EXTRACT_DIR}/thin-wrap"
+elif [ -f "${EXTRACT_DIR}/thin-wrap" ]; then
+    NEW_DIR="${EXTRACT_DIR}"
+else
+    echo "ERROR: Cannot find thin-wrap binary after extraction."
+    echo "Existing installation was not changed."
+    rm -rf "$TMPDIR"
+    exit 1
+fi
+
+chmod +x "${NEW_DIR}/thin-wrap"
+if [ ! -x "${NEW_DIR}/thin-wrap" ]; then
+    echo "ERROR: Extracted binary is not executable."
+    rm -rf "$TMPDIR"
+    exit 1
+fi
+
+# Swap: move current aside, then move the new tree into place.
+# Not POSIX-atomic across filesystems, but $APP_DIR is never left empty
+# by an rm -rf that happens before the new tree is ready.
+if [ "$EXISTING" -eq 1 ]; then
+    rm -rf "$BACKUP_DIR"
+    if ! mv "$APP_DIR" "$BACKUP_DIR"; then
+        echo "ERROR: Could not move the current install aside."
+        rm -rf "$TMPDIR"
+        exit 1
+    fi
+    if ! mv "$NEW_DIR" "$APP_DIR"; then
+        echo "ERROR: Could not move the new version into place."
+        restore_backup
+        rm -rf "$TMPDIR"
+        exit 1
+    fi
+else
+    if ! mv "$NEW_DIR" "$APP_DIR"; then
+        echo "ERROR: Could not install thin-wrap to ${APP_DIR}"
+        rm -rf "$TMPDIR"
+        exit 1
+    fi
 fi
 
 chmod +x "${APP_DIR}/thin-wrap"
-
-# Verify binary
 if [ ! -x "${APP_DIR}/thin-wrap" ]; then
-    echo "ERROR: Binary not executable after extraction: ${APP_DIR}/thin-wrap"
+    echo "ERROR: Installed binary is not executable."
+    if [ "$EXISTING" -eq 1 ]; then
+        restore_backup
+    fi
+    rm -rf "$TMPDIR"
     exit 1
 fi
 
-# Store config mode marker (useful for uninstaller)
+printf '%s\n' "$VERSION" > "${APP_DIR}/.version"
 echo "$CONFIG_MODE" > "${APP_DIR}/.config_location"
 
-# Create wrapper script
 cat > "${BINDIR}/thin-wrap" << EOF
 #!/bin/sh
 # thin-wrap wrapper – provides environment variables for consistent path reporting
@@ -185,7 +355,7 @@ exec "${APP_DIR}/thin-wrap" "\$@"
 EOF
 chmod +x "${BINDIR}/thin-wrap"
 
-# Copy default config if missing (XDG location)
+# Never overwrite an existing user config
 if [ ! -f "${CONFIG_TARGET}/config.json" ]; then
     mkdir -p "${CONFIG_TARGET}"
     if [ -f "${APP_DIR}/config.json" ]; then
@@ -193,7 +363,6 @@ if [ ! -f "${CONFIG_TARGET}/config.json" ]; then
     fi
 fi
 
-# macOS: drop Gatekeeper quarantine inherited from the GitHub download
 if [ "$PLATFORM" = "Darwin" ]; then
     if command -v xattr >/dev/null 2>&1; then
         xattr -cr "$APP_DIR" 2>/dev/null || true
@@ -201,11 +370,11 @@ if [ "$PLATFORM" = "Darwin" ]; then
     fi
 fi
 
-# Cleanup temp dir
+# Success: drop the single previous backup
+rm -rf "$BACKUP_DIR"
 cd - >/dev/null 2>&1 || true
 rm -rf "$TMPDIR"
 
-# ---- PATH configuration ----
 add_path_to_file() {
     FILE="$1"
     PATH_LINE="export PATH=\"${BINDIR}:\$PATH\""
@@ -230,10 +399,10 @@ elif [ "$PLATFORM" = "Darwin" ]; then
     fi
 fi
 
-if [ $UPDATE_MODE -eq 1 ]; then
-    echo "Update complete! (${VERSION})"
+if [ "$EXISTING" -eq 1 ]; then
+    echo "Update complete: ${CURRENT_VERSION} -> ${VERSION}"
 else
-    echo "Installation complete!"
+    echo "Installation complete: ${VERSION}"
 fi
 
 echo "Run: thin-wrap --help"
