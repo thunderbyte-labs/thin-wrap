@@ -19,6 +19,13 @@ curl -fsSL https://raw.githubusercontent.com/thunderbyte-labs/thin-wrap/main/ins
 ```
 Installs to `~/.local/bin` / `~/.local/lib/thin-wrap/`, config at `~/.config/thin-wrap/`, and updates `PATH` (including `~/.zshrc` on macOS). On macOS the script also clears `com.apple.quarantine` so Gatekeeper does not block the first launch.
 
+Re-running the installer is safe: if the same stable release is already installed it exits without touching files. To force a reinstall or pin a tag:
+```bash
+curl -fsSL https://raw.githubusercontent.com/thunderbyte-labs/thin-wrap/main/install.sh | sh -s -- --force
+THIN_WRAP_VERSION=v0.1.6 curl -fsSL https://raw.githubusercontent.com/thunderbyte-labs/thin-wrap/main/install.sh | sh
+```
+User `config.json` is never overwritten. Pre-releases are ignored unless you pass `--tag` / `THIN_WRAP_VERSION`.
+
 If a downloaded Mac binary still shows "developer cannot be verified":
 ```bash
 xattr -cr ~/.local/lib/thin-wrap
