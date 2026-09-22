@@ -283,9 +283,14 @@ class LLMClient:
 
         # === Standard OpenAI /chat/completions fallback ===
         try:
-            return raw_response["choices"][0]["message"]["content"].strip()
-        except (KeyError, IndexError, TypeError):
-            # Fallback for debugging
+            msg = raw_response["choices"][0]["message"]
+            content = msg.get("content")
+            reasoning = msg.get("reasoning_content")
+            text = content if content not in (None, "") else (reasoning or "")
+            if text in (None, ""):
+                text = ""
+            return str(text).strip()
+        except (KeyError, IndexError, TypeError, AttributeError):
             return (
                 f"[RAW RESPONSE] {str(raw_response)[:500]}..."
                 if len(str(raw_response)) > 500
@@ -298,9 +303,7 @@ class LLMClient:
             messages=[{"role": "user", "content": "Hi"}],
             max_tokens=10,
         )
-
         url, headers = self._get_request_url_and_headers()
-
         try:
             response = self._http_client.post(url, json=payload, headers=headers)
             response.raise_for_status()
@@ -363,7 +366,9 @@ class LLMClient:
             delta_obj = (
                 (choices[0].get("delta") or {}) if isinstance(choices[0], dict) else {}
             )
-            delta = delta_obj.get("content") or ""
+            reasoning = delta_obj.get("reasoning_content") or ""
+            content = delta_obj.get("content") or ""
+            delta = reasoning + content
         return delta, chunk.get("usage") or None
 
     def _send_message_via_httpx(self, on_progress=None) -> tuple[str, dict | None]:
@@ -453,9 +458,6 @@ class LLMClient:
         try:
             return _stream(payload)
         except httpx.HTTPStatusError as e:
-            # Some OpenAI-compatible providers (e.g. Gemini) reject
-            # stream_options. Retry once without it, falling back to
-            # estimated token counts.
             if payload.get("stream_options") and e.response.status_code in (400, 422):
                 return _stream(
                     {k: v for k, v in payload.items() if k != "stream_options"}
@@ -484,7 +486,6 @@ class LLMClient:
                     "timestamp": datetime.now().isoformat(),
                 }
             )
-
             if self.session_logger:
                 self.session_logger.save_session(self.conversation_history)
 
@@ -499,12 +500,9 @@ class LLMClient:
                     "timestamp": datetime.now().isoformat(),
                 }
             )
-
             if self.session_logger:
                 self.session_logger.save_session(self.conversation_history)
-
             return response_text, usage
-
         except KeyboardInterrupt:
             print(f"\n{t('info.request_interrupted')}")
             if (
@@ -515,7 +513,6 @@ class LLMClient:
                 if self.session_logger:
                     self.session_logger.save_session(self.conversation_history)
             return "", None
-
         except Exception as e:
             if self.session_logger:
                 self.session_logger.save_session(self.conversation_history)
@@ -532,16 +529,13 @@ class LLMClient:
         Returns ``None`` on API error. Raises ``KeyboardInterrupt`` on cancel.
         """
         print(t("info.request_sending"))
-
         messages = [
             {"role": msg["role"], "content": msg["content"]}
             for msg in self.conversation_history
         ]
         messages.append({"role": "user", "content": instruction})
-
         payload = self._build_request_params(messages=messages)
         url, headers = self._get_request_url_and_headers()
-
         try:
             response = self._http_client.post(url, json=payload, headers=headers)
             response.raise_for_status()
