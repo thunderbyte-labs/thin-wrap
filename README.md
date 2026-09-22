@@ -2,6 +2,9 @@
 
 A terminal chat for any LLM API endpoint -- bridging pure coding and vibe-coding.
 
+## Live Demo
+At Hong-Kong Open-Source Conference 2026 ("[HKOSCon 2026](https://hkoscon.org/2026/topic/thin-wrap-my-python-version-of-opencode/)")  
+[![Thin-Wrap Demo: Python CLI Connecting to Any LLM API](https://markdown-videos-api.jorgenkh.no/youtube/j3pqtV_p4xQ)](https://youtu.be/j3pqtV_p4xQ)
 ## Installation
 
 **Linux/macOS** (curl/wget + unzip required):
@@ -21,9 +24,10 @@ curl -fsSL https://raw.githubusercontent.com/thunderbyte-labs/thin-wrap/main/uni
 
 - **Multi-LLM:** Switch providers via `/model` (DeepSeek, Gemini, OpenRouter, custom endpoints).
 - **File Context:** `Ctrl+B` opens a 3-column browser (editable / readable / navigator). `r`/`e`/`d` moves files; `Ctrl+D` clears all.
+- **Directory Tree Context:** In `Ctrl+B`, press `t` to send a smart project tree above the file context — gitignore-aware, binary-heavy dirs auto-summarized (`name/ → N files`), with `−`/`+` depth control and a live character count. Off by default.
 - **Proxy:** Use any SOCKS5/HTTP proxy (`--proxy` or `/proxy`). Per-model proxy hints via `"proxy": true` in config.
 - **Intelligent Editing:** LLM-recommended edits get timestamped backups (`file.thin-wrap.20250130.py`) with Python-native diff stats. Backup can be disabled entirely via `backup.enabled` (see Configuration).
-- **Session Logging:** Conversations auto-saved as `.toml.zip` with metadata (message count, preview). Reload with `/reload`.
+- **Session Logging:** Conversations auto-saved as `.toml.zip` with metadata (message count, preview). Reload with `/reload`; name the current conversation with `/nameconv` (shown in the reload list). `/reload` shows your past conversations and can optionally search them by keywords (ranked by relevance with content snippets).
 - **Free Chat:** Choose "No root directory" at startup to chat without file context.
 - **History:** `PageUp`/`PageDown` navigates sent messages and temporary drafts.
 
@@ -126,7 +130,8 @@ When `"enabled": true`, the three fields `timestamp_format`, `extra_string` and 
 | `/clear` | Clear conversation |
 | `/bye` | Exit (saves session) |
 | `/model` | Switch model (interactive or `name`) |
-| `/reload` | Load a previous session |
+| `/reload` | Load a previous session (optionally search by keywords) |
+| `/nameconv` | Name the current conversation (manual or AI-suggested; shown in `/reload`) |
 | `/rootdir` | Change root directory (option 0 = free chat) |
 | `/files` | Open file context menu |
 | `/proxy` | Configure proxy (`off` to disable) |
@@ -142,6 +147,7 @@ When `"enabled": true`, the three fields `timestamp_format`, `extra_string` and 
 | `input_handler.py` | Multi-line input, history, command completion |
 | `command_handler.py` | Slash command dispatch |
 | `menu.py` | Textual-based file browser |
+| `directory_tree.py` | Smart gitignore-aware tree generation (binary-dir summarization) |
 | `proxy_wrapper.py` | Proxy validation, SOCKS/HTTP |
 | `session_logger.py` | TOML+ZIP session persistence |
 | `tags.py` | XML tag utilities |

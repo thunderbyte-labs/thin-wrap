@@ -1,12 +1,18 @@
-from prompt_toolkit import PromptSession
-from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
-from prompt_toolkit.document import Document
-from prompt_toolkit.styles import Style
-from prompt_toolkit.formatted_text import FormattedText
-from prompt_toolkit.completion import Completer
-from prompt_toolkit.completion import WordCompleter
-import shutil
 import os
+import shutil
+
+from prompt_toolkit.application import Application
+from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.completion import Completer, WordCompleter
+from prompt_toolkit.document import Document
+from prompt_toolkit.filters import has_focus
+from prompt_toolkit.formatted_text import ANSI
+from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
+from prompt_toolkit.layout import Float, FloatContainer, HSplit, Layout, Window
+from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
+from prompt_toolkit.layout.menus import CompletionsMenu
+from prompt_toolkit.styles import Style
+
 import config
 
 
@@ -30,10 +36,7 @@ class CommandCompleter(Completer):
             # If we're completing a command (word starts with '/')
             if word_before and word_before.startswith("/"):
                 # Delegate to WordCompleter for command completion
-                for completion in self.word_completer.get_completions(
-                    document, complete_event
-                ):
-                    yield completion
+                yield from self.word_completer.get_completions(document, complete_event)
         # Don't trigger for other text (non-command input)
 
 
@@ -110,8 +113,13 @@ class InputHandler:
         """Get total count of items in combined navigation."""
         return len(self.draft_stack) + len(self.history)
 
-    def get_input_with_editing(self, default: str = ""):
-        """Get input with editing capabilities, replicating original behavior."""
+    def get_input_with_editing(self, default: str = "", context_provider=None):
+        """Get input with editing capabilities, replicating original behavior.
+
+        *context_provider* (optional) is called on every render to return the
+        files-context block (ANSI string) rendered in a window directly below
+        the input, so it stays one line under the message being typed.
+        """
         kb = KeyBindings()
 
         @kb.add("enter")
@@ -122,7 +130,7 @@ class InputHandler:
         @kb.add("escape", "enter")
         def submit_input(event: KeyPressEvent) -> None:
             """Submit on Alt+Enter."""
-            event.current_buffer.validate_and_handle()
+            event.app.exit(result=event.current_buffer.text)
 
         @kb.add("c-b")
         def handle_ctrl_b(event: KeyPressEvent) -> None:
@@ -169,7 +177,6 @@ class InputHandler:
         @kb.add("pagedown")
         def navigate_history_down(event: KeyPressEvent) -> None:
             """Navigate to next message or save current text as temporary draft."""
-            total_items = self._get_combined_count()
             current_text = event.current_buffer.text
 
             if self.history_index == -1:
@@ -199,32 +206,66 @@ class InputHandler:
 
             event.current_buffer.cursor_position = len(event.current_buffer.text)
 
-        prompt_message = FormattedText(
-            [
-                (
-                    "bold fg:ansidefault",
-                    "Alt+Enter to send. Ctrl+B for files. Page Up/Down: history:\n",
-                ),
-            ]
-        )
-
         style = Style.from_dict(
             {
                 "": "bold #ffd700",
             }
         )
 
-        session = PromptSession(
+        # The "Message" separator is rendered by the app before this prompt, so
+        # the input uses an empty message. The files context is rendered below
+        # the input (one line gap) so it follows the message being typed.
+        buffer = Buffer(
             multiline=True,
-            key_bindings=kb,
-            message=prompt_message,
-            style=style,
-            mouse_support=False,
             completer=self.command_completer,
             complete_while_typing=True,
         )
 
+        def context_text():
+            if context_provider:
+                return ANSI(context_provider())
+            return ""
+
+        input_window = Window(
+            BufferControl(buffer=buffer),
+            wrap_lines=True,
+            dont_extend_height=True,
+        )
+        context_window = Window(
+            FormattedTextControl(context_text),
+            wrap_lines=False,
+            dont_extend_height=True,
+        )
+        layout = Layout(
+            FloatContainer(
+                HSplit([input_window, context_window]),
+                floats=[
+                    Float(
+                        xcursor=True,
+                        ycursor=True,
+                        transparent=True,
+                        content=CompletionsMenu(
+                            max_height=16,
+                            scroll_offset=1,
+                            extra_filter=has_focus(buffer),
+                        ),
+                    ),
+                ],
+            )
+        )
+
+        app = Application(
+            layout=layout,
+            key_bindings=kb,
+            style=style,
+            mouse_support=False,
+            erase_when_done=True,
+        )
+        app.layout.focus(input_window)
+        buffer.text = default
+        buffer.cursor_position = len(default)
+
         try:
-            return session.prompt(default=default)
+            return app.run()
         except (KeyboardInterrupt, EOFError):
             return None

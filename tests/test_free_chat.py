@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Test free chat mode functionality."""
 
-import sys
 import os
-import tempfile
 import shutil
+import sys
+import tempfile
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 

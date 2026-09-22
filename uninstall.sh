@@ -41,10 +41,10 @@ echo "  • Config        : ${CONFIG_LABEL}"
 echo ""
 
 printf "Also delete configuration? [y/N]: "
-read -r DELETE_CONFIG
+read -r DELETE_CONFIG < /dev/tty
 
 printf "Proceed with uninstall? [y/N]: "
-read -r CONFIRM
+read -r CONFIRM < /dev/tty
 
 if [ "$CONFIRM" != "y" ] && [ "$CONFIRM" != "Y" ]; then
     echo "Uninstall cancelled."

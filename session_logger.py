@@ -1,12 +1,41 @@
 """Session logging functionality with TOML format and automatic zipped saving"""
 
 import os
-import zipfile
-import tomlkit
-from datetime import datetime
-from pathlib import Path
-import config
 import re
+import zipfile
+from datetime import datetime, timedelta
+from pathlib import Path
+
+import tomlkit
+
+import config
+from strings import t
+
+CONVERSATION_NAME_MAX_WORDS = 12
+
+
+def sanitize_conversation_name(raw: str) -> tuple[str | None, str | None]:
+    """Validate and normalize a conversation name.
+
+    Returns ``(error_key, slug)``. On failure *error_key* is one of
+    ``nameconv_empty``, ``nameconv_invalid_chars`` or
+    ``nameconv_too_many_words`` and *slug* is ``None``.
+    """
+    candidate = raw.strip().lower()
+    if not candidate:
+        return "nameconv_empty", None
+    if not re.fullmatch(r"[a-z0-9 -]+", candidate):
+        return "nameconv_invalid_chars", None
+    # Split on whitespace, then on hyphens: "wesh-alors", "wesh - alors" and
+    # "wesh--alors" all normalize to "wesh-alors". Empty fragments are dropped.
+    tokens = []
+    for token in candidate.split():
+        tokens.extend(frag for frag in token.strip("-").split("-") if frag)
+    if not tokens:
+        return "nameconv_invalid_chars", None
+    if len(tokens) > CONVERSATION_NAME_MAX_WORDS:
+        return "nameconv_too_many_words", None
+    return None, "-".join(tokens)
 
 
 class SessionLogger:
@@ -19,9 +48,14 @@ class SessionLogger:
         os.makedirs(self.conversation_dir, exist_ok=True)
 
         self.session_start_time = datetime.now()
-        self.session_filename = (
-            f"session_{self.session_start_time.strftime('%Y%m%d_%H%M%S')}.toml.zip"
-        )
+        self.session_name = None
+        self._ts_str = self.session_start_time.strftime("%Y%m%d_%H%M%S")
+        while os.path.exists(
+            os.path.join(self.conversation_dir, f"session_{self._ts_str}.toml.zip")
+        ):
+            self.session_start_time += timedelta(seconds=1)
+            self._ts_str = self.session_start_time.strftime("%Y%m%d_%H%M%S")
+        self.session_filename = f"session_{self._ts_str}.toml.zip"
         self.session_path = os.path.join(self.conversation_dir, self.session_filename)
 
     def _get_conversation_dir(self):
@@ -44,10 +78,26 @@ class SessionLogger:
 
         return os.path.join(config.CONVERSATIONS_DIR, safe_name)
 
+    def set_name(self, name: str):
+        """Set a display name for the current session and rename the file.
+
+        All subsequent saves write to the renamed file.
+        """
+        old_path = self.session_path
+        self.session_name = name
+        self.session_filename = f"session_{self._ts_str}_{name}.toml.zip"
+        self.session_path = os.path.join(self.conversation_dir, self.session_filename)
+        if os.path.exists(old_path) and old_path != self.session_path:
+            os.replace(old_path, self.session_path)
+        return self.session_path
+
     def save_session(self, conversation_history):
         """
         Save conversation history to a zipped TOML file with multi-line literal strings for readable content.
+        Empty conversations are never persisted.
         """
+        if not conversation_history:
+            return None
         try:
             doc = tomlkit.document()
 
@@ -70,6 +120,7 @@ class SessionLogger:
             metadata.add(
                 "root_dir", self.root_dir if self.root_dir is not None else "free_chat"
             )
+            metadata.add("name", self.session_name or "")
             doc.add("metadata", metadata)
 
             conv_array = tomlkit.aot()
@@ -98,7 +149,7 @@ class SessionLogger:
             return self.session_path
 
         except Exception as e:
-            print(f"⚠️  Error saving session: {e}")
+            print(t("errors.error_saving_session", error=e))
             return None
 
     def load_session(self, zip_path):
@@ -106,18 +157,17 @@ class SessionLogger:
         Load session from a zipped TOML file.
         """
         try:
-            with zipfile.ZipFile(zip_path, "r") as zipf:
-                with zipf.open("session.toml") as f:
-                    toml_bytes = f.read()
-                    session_data = tomlkit.loads(toml_bytes.decode("utf-8"))
+            with zipfile.ZipFile(zip_path, "r") as zipf, zipf.open("session.toml") as f:
+                toml_bytes = f.read()
+                session_data = tomlkit.loads(toml_bytes.decode("utf-8"))
 
             return session_data
 
         except FileNotFoundError:
-            print(f"⚠️  Session file not found: {zip_path}")
+            print(t("errors.session_file_not_found", path=zip_path))
             return None
         except Exception as e:
-            print(f"⚠️  Error loading session: {e}")
+            print(t("errors.error_loading_session", error=e))
             return None
 
     def load_session_metadata(self, zip_path):
@@ -138,6 +188,7 @@ class SessionLogger:
             result["interaction_count"] = metadata.get("interaction_count", 0)
             result["preview"] = metadata.get("preview", "")
             result["root_dir"] = metadata.get("root_dir", "")
+            result["name"] = metadata.get("name", "")
         except (KeyError, TypeError, AttributeError):
             # If metadata is malformed, return partial data
             pass

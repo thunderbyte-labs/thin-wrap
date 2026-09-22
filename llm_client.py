@@ -7,15 +7,20 @@ This class provides a clean abstraction over raw HTTP calls while preserving:
 - Session persistence through session_logger
 """
 
-import os
-from typing import Optional
-import config
-import text_utils
+import contextlib
+import json
 import logging
-from ui import UI
-from proxy_wrapper import ProxyWrapper
+import os
+import sys
+import threading
+import time
 from datetime import datetime
+
 import httpx
+
+import config
+from proxy_wrapper import ProxyWrapper
+from strings import t
 
 logger = logging.getLogger(__name__)
 
@@ -24,17 +29,16 @@ class LLMClient:
     """Main client for all LLM interactions in Thin Wrap."""
 
     def __init__(
-        self, proxy_wrapper: Optional[ProxyWrapper] = None, session_logger=None
+        self, proxy_wrapper: ProxyWrapper | None = None, session_logger=None
     ) -> None:
         self.conversation_history: list[dict[str, str]] = []
-        self.proxy_wrapper: Optional[ProxyWrapper] = proxy_wrapper
-        self._http_client: Optional[httpx.Client] = None
-        self._proxy_context = None  # for proxy_connection() context manager
+        self.proxy_wrapper: ProxyWrapper | None = proxy_wrapper
+        self._http_client: httpx.Client | None = None
         self.current_model = None
         self.current_model_config = None
         self.session_logger = session_logger
-        self.api_key: Optional[str] = None
-        self.api_base_url: Optional[str] = None
+        self.api_key: str | None = None
+        self.api_base_url: str | None = None
 
     # ===================================================================
     # PUBLIC API
@@ -54,8 +58,8 @@ class LLMClient:
         self.api_base_url = model_config["api_base_url"].rstrip("/")
 
         if not self.api_key:
-            print(f"{model_config['api_key']} not found.")
-            self.api_key = input(f"Please enter your {model} API key: ").strip()
+            print(t("errors.api_key_not_found", env_key=model_config["api_key"]))
+            self.api_key = input(t("prompts.api_key_prompt", model=model)).strip()
             if not self.api_key:
                 raise ValueError("No API key provided")
 
@@ -66,55 +70,46 @@ class LLMClient:
                 logger.info("Proxy-enabled API connection established successfully!")
             except Exception as e:
                 logger.error(f"Proxy configuration failed: {e}")
-                print("Attempting direct connection without proxy...")
-                # Fully disconnect proxy: clean up context + clear wrapper
-                self._cleanup_proxy_context()
+                print(t("info.direct_without_proxy"))
+                self._cleanup_http_client()
                 self.proxy_wrapper = None
                 self._initialize_http_client()  # direct mode (no proxy)
                 try:
                     self._test_connection()
-                    print("✓ Direct connection established successfully!")
+                    print(t("info.direct_connected"))
                 except Exception as e2:
-                    print(
-                        f"\n{UI.colorize('Warning:', 'BRIGHT_YELLOW')} "
-                        f"Direct connection also failed: {e2}"
-                    )
-                    print("You can continue and try sending messages - errors may occur.")
+                    raise RuntimeError(
+                        t("errors.api_connection_failed", model=self.current_model)
+                    ) from e2
         else:
             self._initialize_http_client()
             try:
                 self._test_connection()
             except Exception as e:
-                print(
-                    f"\n{UI.colorize('Warning:', 'BRIGHT_YELLOW')} "
-                    f"API connection test failed: {e}"
-                )
-                print("You can continue and try sending messages - errors may occur.")
+                raise RuntimeError(
+                    t("errors.api_connection_failed", model=self.current_model)
+                ) from e
 
     def choose_model(self):
         """Display interactive model selection menu and return selected model key."""
         models = config.get_models()
-        print("Available LLM Models:")
+        print(t("menus.available_models"))
 
         for i, (model_key, details) in enumerate(models.items(), 1):
             endpoint = details.get("api_base_url", "")
             endpoint = (
                 endpoint.removeprefix("https://").removeprefix("http://").rstrip("/")
             )
-            print(f"{i}. {UI.colorize(model_key, 'BRIGHT_GREEN')}@{endpoint}")
+            print(f"{i}. {t('menus.model_entry', value=model_key)}@{endpoint}")
 
         while True:
             try:
-                choice = input(f"\nChoose model (1-{len(models)}): ").strip()
+                choice = input(t("prompts.model_choose", count=len(models))).strip()
             except KeyboardInterrupt:
                 if self.current_model is not None:
                     print()
-                    print(
-                        f"{UI.colorize('Model selection cancelled.', 'BRIGHT_YELLOW')}"
-                    )
-                    print(
-                        f"{UI.colorize('Keeping current model:', 'BRIGHT_CYAN')} {self.current_model}"
-                    )
+                    print(t("warnings.model_selection_cancelled"))
+                    print(f"{t('info.keeping_current_model')} {self.current_model}")
                     return None
                 else:
                     raise
@@ -125,31 +120,33 @@ class LLMClient:
                     return list(models.keys())[choice_idx]
             except ValueError:
                 pass
-            print(f"Please enter a number between 1 and {len(models)}")
+            print(t("prompts.model_range_error", count=len(models)))
 
     def switch_model(self, new_model: str) -> bool:
         """Switch to a different model while preserving conversation history."""
         models = config.get_models()
         if new_model not in models:
             print(
-                f"Error: Unknown model '{new_model}'. Available: {', '.join(models.keys())}"
+                t(
+                    "errors.unknown_model",
+                    model=new_model,
+                    available=", ".join(models.keys()),
+                )
             )
             return False
 
         if new_model == self.current_model:
-            print(f"Already using {new_model}")
+            print(t("info.already_using", model=new_model))
             return True
 
-        print(f"Switching from {self.current_model} to {new_model}...")
+        print(t("info.switching_model", current=self.current_model, new=new_model))
 
         try:
             self.setup_api_key(new_model)
-            print(
-                f"✓ Successfully switched to {new_model}. Conversation history preserved."
-            )
+            print(t("info.switched_model", model=new_model))
             return True
         except Exception as e:
-            print(f"✗ Failed to switch to {new_model}: {e}")
+            print(t("errors.failed_to_switch_model", model=new_model, error=e))
             return False
 
     def update_proxy(self, proxy_wrapper: ProxyWrapper) -> bool:
@@ -160,7 +157,7 @@ class LLMClient:
                 self.setup_api_key(self.current_model)
                 return True
             except Exception as e:
-                print(f"✗ Failed to update proxy: {e}")
+                print(t("errors.failed_to_update_proxy", error=e))
                 return False
         return True
 
@@ -169,15 +166,12 @@ class LLMClient:
     # ===================================================================
 
     def _initialize_client_with_proxy(self):
-        """Initialize proxy context manager and HTTP client inside it (exact original behaviour)."""
-        try:
-            self._proxy_context = self.proxy_wrapper.proxy_connection()
-            self._proxy_context.__enter__()
-            self._initialize_http_client()
-            self._test_connection()
-        except Exception as e:
-            self._cleanup_proxy_context()
-            raise
+        """Test proxy setup, then initialise HTTP client and API connection."""
+        with contextlib.suppress(Exception):
+            # test_connection warned; continue
+            self.proxy_wrapper.test_connection()
+        self._initialize_http_client()
+        self._test_connection()
 
     def _initialize_http_client(self):
         """Create (or recreate) the httpx client."""
@@ -212,18 +206,6 @@ class LLMClient:
             finally:
                 self._http_client = None
 
-    def _cleanup_proxy_context(self):
-        """Clean up both HTTP client and proxy context manager."""
-        self._cleanup_http_client()
-
-        if self._proxy_context:
-            try:
-                self._proxy_context.__exit__(None, None, None)
-            except Exception as e:
-                logger.debug(f"Error exiting proxy context: {e}")
-            finally:
-                self._proxy_context = None
-
     # ===================================================================
     # REQUEST HELPERS
     # ===================================================================
@@ -246,7 +228,9 @@ class LLMClient:
         }
         return url, headers
 
-    def _build_request_params(self, messages: list, max_tokens: int = 0):
+    def _build_request_params(
+        self, messages: list, max_tokens: int = 0, *, stream: bool = False
+    ):
         """Build request payload. For DeepSeek, full messages list is used → prefix caching benefits from stable early turns."""
         model_config = self.current_model_config
         _, input_key = self._get_endpoint_and_input_key()
@@ -271,6 +255,14 @@ class LLMClient:
         if extra_arguments and isinstance(extra_arguments, dict):
             request_params.update(extra_arguments)
 
+        if stream:
+            request_params["stream"] = True
+            # stream_options.include_usage is a /chat/completions feature.
+            # The DashScope /responses API (input_key == "input") always
+            # includes usage in its final event, so skip it there.
+            if input_key != "input":
+                request_params["stream_options"] = {"include_usage": True}
+
         return request_params
 
     def _extract_response_content(self, raw_response: dict) -> str:
@@ -291,9 +283,14 @@ class LLMClient:
 
         # === Standard OpenAI /chat/completions fallback ===
         try:
-            return raw_response["choices"][0]["message"]["content"].strip()
-        except (KeyError, IndexError, TypeError):
-            # Fallback for debugging
+            msg = raw_response["choices"][0]["message"]
+            content = msg.get("content")
+            reasoning = msg.get("reasoning_content")
+            text = content if content not in (None, "") else (reasoning or "")
+            if text in (None, ""):
+                text = ""
+            return str(text).strip()
+        except (KeyError, IndexError, TypeError, AttributeError):
             return (
                 f"[RAW RESPONSE] {str(raw_response)[:500]}..."
                 if len(str(raw_response)) > 500
@@ -306,9 +303,7 @@ class LLMClient:
             messages=[{"role": "user", "content": "Hi"}],
             max_tokens=10,
         )
-
         url, headers = self._get_request_url_and_headers()
-
         try:
             response = self._http_client.post(url, json=payload, headers=headers)
             response.raise_for_status()
@@ -319,54 +314,168 @@ class LLMClient:
                 f"{self.current_model} API key validated successfully! Sample reply: {content[:60]}..."
             )
         except httpx.HTTPStatusError as e:
-            print(f"\n❌ API Error {e.response.status_code} from {self.current_model}")
-            print(f"URL: {url}")
+            print(
+                t(
+                    "errors.api_error",
+                    status=e.response.status_code,
+                    model=self.current_model,
+                )
+            )
+            print(t("errors.api_error_url", url=url))
             try:
                 error_detail = e.response.json()
-                print("Error details returned by the provider:")
-                import json
-
+                print(t("errors.api_error_details"))
                 print(json.dumps(error_detail, indent=2))
             except Exception:
-                print("Raw error body:")
+                print(t("errors.api_error_raw"))
                 print(e.response.text)
             raise
         except Exception as e:
-            print(f"Unexpected error during connection test: {e}")
+            print(t("errors.unexpected_connection_error", error=e))
             raise
 
     # ===================================================================
     # MESSAGE SENDING & CONVERSATION MANAGEMENT
     # ===================================================================
 
-    def _send_message_via_httpx(self) -> tuple[str, Optional[dict]]:
-        """Send to LLM and return (text, usage_dict)."""
-        print("⏳ Sending request to LLM client... (Press Ctrl+C to interrupt)")
+    def _extract_stream_chunk(self, chunk: dict) -> tuple[str, dict | None]:
+        """Extract (delta_text, usage) from a single streaming chunk.
+
+        Tolerant of both streaming shapes used by the configured endpoints:
+        - OpenAI-compatible /chat/completions: ``choices[0].delta.content``,
+          with ``usage`` on the final chunk (stream_options.include_usage).
+        - DashScope /responses (OpenAI Responses API events):
+          ``response.output_text.delta`` for content, ``response.completed``
+          for usage. Reasoning events are ignored (matching the non-streaming
+          extraction which skips non-message output items).
+        """
+        # === OpenAI Responses API events (DashScope /responses) ===
+        if "type" in chunk:
+            chunk_type = chunk.get("type")
+            if chunk_type == "response.output_text.delta":
+                return chunk.get("delta", "") or "", None
+            if chunk_type == "response.completed":
+                response = chunk.get("response") or {}
+                return "", response.get("usage") or None
+            return "", None
+
+        # === OpenAI /chat/completions chunks ===
+        delta = ""
+        choices = chunk.get("choices") or []
+        if choices:
+            delta_obj = (
+                (choices[0].get("delta") or {}) if isinstance(choices[0], dict) else {}
+            )
+            reasoning = delta_obj.get("reasoning_content") or ""
+            content = delta_obj.get("content") or ""
+            delta = reasoning + content
+        return delta, chunk.get("usage") or None
+
+    def _send_message_via_httpx(self, on_progress=None) -> tuple[str, dict | None]:
+        """Stream a chat completion and return (text, usage_dict).
+
+        Uses ``stream=True`` so token-usage statistics can be refreshed live
+        through the optional *on_progress* callback: ``on_progress(text, usage)``
+        is invoked with the accumulated text and any usage seen so far.
+
+        A live "Time to First Token" (TTF) counter is shown on the same line
+        as the "Thinking..." message; it ticks up until the first content
+        chunk arrives, then freezes there.
+        """
+        thinking_line = t("info.request_sending")
+        print(thinking_line, end="", flush=True)
+        ttf_start_ns = time.perf_counter_ns()
+        stop_event = threading.Event()
+        first_token_seen = threading.Event()
+
+        def _ttf_tick():
+            while not stop_event.is_set():
+                elapsed = (time.perf_counter_ns() - ttf_start_ns) / 1_000_000_000.0
+                sys.stdout.write(
+                    f"\r\x1b[2K{thinking_line} "
+                    + t("info.ttf", elapsed=f"{elapsed:.1f}")
+                )
+                sys.stdout.flush()
+                stop_event.wait(0.1)
+
+        def _write_ttf_line(end_with_newline: bool) -> None:
+            elapsed = (time.perf_counter_ns() - ttf_start_ns) / 1_000_000_000.0
+            sys.stdout.write(
+                f"\r\x1b[2K{thinking_line} " + t("info.ttf", elapsed=f"{elapsed:.1f}")
+            )
+            if end_with_newline:
+                sys.stdout.write("\n")
+            sys.stdout.flush()
+
+        def _freeze_ttf():
+            stop_event.set()
+            ticker.join(timeout=1.0)
+            _write_ttf_line(end_with_newline=True)
+
+        ticker = threading.Thread(target=_ttf_tick, daemon=True)
+        ticker.start()
 
         messages = [
             {"role": msg["role"], "content": msg["content"]}
             for msg in self.conversation_history
         ]
 
-        payload = self._build_request_params(messages=messages)
+        payload = self._build_request_params(messages=messages, stream=True)
         url, headers = self._get_request_url_and_headers()
 
-        response = self._http_client.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        data = response.json()
+        def _stream(request_params):
+            text_parts: list[str] = []
+            usage = None
+            with self._http_client.stream(
+                "POST", url, json=request_params, headers=headers
+            ) as response:
+                response.raise_for_status()
+                for line in response.iter_lines():
+                    if not line:
+                        continue
+                    line = line.strip()
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[len("data:") :].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data)
+                    except (ValueError, TypeError):
+                        continue
+                    delta, chunk_usage = self._extract_stream_chunk(chunk)
+                    if chunk_usage:
+                        usage = chunk_usage
+                    if delta:
+                        if not first_token_seen.is_set():
+                            first_token_seen.set()
+                            _freeze_ttf()
+                        text_parts.append(delta)
+                        if on_progress:
+                            on_progress("".join(text_parts), usage)
+            return "".join(text_parts).strip(), usage
 
-        # Extract usage if present (DeepSeek, OpenAI, OpenRouter, DashScope, Gemini, etc.)
-        usage = data.get("usage")
+        try:
+            return _stream(payload)
+        except httpx.HTTPStatusError as e:
+            if payload.get("stream_options") and e.response.status_code in (400, 422):
+                return _stream(
+                    {k: v for k, v in payload.items() if k != "stream_options"}
+                )
+            raise
+        finally:
+            stop_event.set()
+            if not first_token_seen.is_set():
+                ticker.join(timeout=1.0)
+                _write_ttf_line(end_with_newline=True)
 
-        # Extract response text
-        text = self._extract_response_content(data)
-
-        return text, usage
-
-    def send_message(self, message: str) -> tuple[str, Optional[dict]]:
+    def send_message(self, message: str, on_progress=None) -> tuple[str, dict | None]:
         """
         Send a message and return (response_text, usage_dict).
         usage_dict contient les vrais tokens de l'API (prompt_tokens, completion_tokens, etc.)
+
+        *on_progress* (optional) is called as ``on_progress(text, usage)`` on
+        every streamed content chunk, allowing live token statistics.
         """
         try:
             # Append user message
@@ -377,12 +486,11 @@ class LLMClient:
                     "timestamp": datetime.now().isoformat(),
                 }
             )
-
             if self.session_logger:
                 self.session_logger.save_session(self.conversation_history)
 
             # Get response + usage from API
-            response_text, usage = self._send_message_via_httpx()
+            response_text, usage = self._send_message_via_httpx(on_progress=on_progress)
 
             # Append assistant response
             self.conversation_history.append(
@@ -392,16 +500,11 @@ class LLMClient:
                     "timestamp": datetime.now().isoformat(),
                 }
             )
-
             if self.session_logger:
                 self.session_logger.save_session(self.conversation_history)
-
             return response_text, usage
-
         except KeyboardInterrupt:
-            print(
-                f"\n{UI.colorize('Request interrupted by user (Ctrl+C)', 'BRIGHT_YELLOW')}"
-            )
+            print(f"\n{t('info.request_interrupted')}")
             if (
                 self.conversation_history
                 and self.conversation_history[-1]["role"] == "user"
@@ -410,17 +513,43 @@ class LLMClient:
                 if self.session_logger:
                     self.session_logger.save_session(self.conversation_history)
             return "", None
-
         except Exception as e:
             if self.session_logger:
                 self.session_logger.save_session(self.conversation_history)
-            return f"Error communicating with {self.current_model}: {e}", None
+            return (
+                t("errors.error_communicating", model=self.current_model, error=e),
+                None,
+            )
+
+    def generate(self, instruction: str) -> str | None:
+        """Send a one-off instruction appended to the full conversation history.
+
+        Unlike :meth:`send_message`, this never mutates ``conversation_history``
+        nor persists anything; it only returns the extracted response text.
+        Returns ``None`` on API error. Raises ``KeyboardInterrupt`` on cancel.
+        """
+        print(t("info.request_sending"))
+        messages = [
+            {"role": msg["role"], "content": msg["content"]}
+            for msg in self.conversation_history
+        ]
+        messages.append({"role": "user", "content": instruction})
+        payload = self._build_request_params(messages=messages)
+        url, headers = self._get_request_url_and_headers()
+        try:
+            response = self._http_client.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            return self._extract_response_content(data)
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:
+            print(t("errors.error_communicating", model=self.current_model, error=e))
+            return None
 
     def clear_conversation(self):
-        """Clear conversation history and save empty session."""
+        """Clear conversation history. The old session stays saved on disk."""
         self.conversation_history = []
-        if self.session_logger:
-            self.session_logger.save_session(self.conversation_history)
 
     def load_conversation(self, conversation_history: list):
         """Load a saved conversation history."""
@@ -428,11 +557,10 @@ class LLMClient:
         if self.session_logger:
             self.session_logger.save_session(self.conversation_history)
 
-    def get_current_model(self) -> Optional[str]:
+    def get_current_model(self) -> str | None:
         """Return currently active model name."""
         return self.current_model
 
     def __del__(self):
-        """Ensure resources are cleaned up when object is destroyed."""
-        self._cleanup_proxy_context()
-
+        """Ensure HTTP client is cleaned up when object is destroyed."""
+        self._cleanup_http_client()

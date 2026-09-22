@@ -1,43 +1,25 @@
-import os
-import config
 import datetime
+import difflib
 import logging
+import os
 import re
 import shutil
 import tempfile
-import difflib
-from typing import Optional
-from tags import Xml
 from pathlib import Path
 
+import config
+from path_utils import resolve_path
+from strings import t
+from tags import Xml
+
 logger = logging.getLogger(__name__)
-
-
-def _resolve_file_path(path: str, root_dir: str) -> str:
-    """
-    Resolve a file path to absolute path.
-
-    Args:
-        path: File path (can be absolute or relative)
-        root_dir: Root directory for resolving relative paths
-
-    Returns:
-        Absolute file path
-    """
-    path_obj = Path(path)
-    if path_obj.is_absolute():
-        return str(path_obj)
-    else:
-        # Resolve relative to root directory
-        resolved = (Path(root_dir) / path).resolve()
-        return str(resolved)
 
 
 def _read_file_content(full_path: str, root_dir: str) -> str:
     """Read file content with robust error handling and path resolution."""
     try:
         # Resolve the path first
-        resolved_path = _resolve_file_path(full_path, root_dir)
+        resolved_path = resolve_path(full_path, root_dir)
         path = Path(resolved_path)
 
         if not path.exists():
@@ -47,11 +29,15 @@ def _read_file_content(full_path: str, root_dir: str) -> str:
 
         return path.read_text(encoding="utf-8")
     except PermissionError:
-        raise PermissionError(f"Cannot read file due to permissions: {full_path}")
+        raise PermissionError(
+            f"Cannot read file due to permissions: {full_path}"
+        ) from None
     except UnicodeDecodeError:
-        raise UnicodeDecodeError(f"Cannot decode file with UTF-8: {full_path}")
+        raise UnicodeDecodeError(
+            "utf-8", b"", 0, 0, f"Cannot decode file with UTF-8: {full_path}"
+        ) from None
     except Exception as e:
-        raise Exception(f"Error reading file {full_path}: {str(e)}")
+        raise Exception(f"Error reading file {full_path}: {str(e)}") from e
 
 
 def generate_file_query(
@@ -59,12 +45,33 @@ def generate_file_query(
     readable_files: list[str],
     writable_files: list[str],
     user_request: str,
+    directory_tree: str | None = None,
 ) -> str:
     """
     Generate the LLM query in the requested XML format using absolute paths.
     Minimal whitespace and no unnecessary blank lines.
+
+    Args:
+        directory_tree: Optional smart tree of the project root. When set, a
+            <prompt_engineering_query_directory_tree> section is emitted above
+            the source code files block; when None/empty, nothing is added.
     """
-    query = (
+    query = ""
+
+    if directory_tree:
+        query += (
+            Xml.o(
+                Xml.DIRECTORY_TREE,
+                'guidance="DIRECTORY TREE CONTEXT OF THE PROJECT ROOT (RESPECTS GITIGNORE AND SUMMARIZES BINARY-HEAVY DIRECTORIES)"',
+            )
+            + "\n"
+            + directory_tree.strip()
+            + "\n"
+            + Xml.c(Xml.DIRECTORY_TREE)
+            + "\n\n"
+        )
+
+    query += (
         Xml.o(
             Xml.SOURCE_CODE_FILES,
             'guidance="USER\'S REQUEST SOURCE CODE FILES CONTEXT FOR THIS SOLE REQUEST (THIS CONTEXT SHALL PREVAIL ON ANY PAST CONTEXT)"',
@@ -232,15 +239,34 @@ def _secure_path(full_path: Path, should_exist: bool) -> None:
 
 
 def _write_file(
-    full_path: Path, content: str, src_for_perms: Path | None = None
+    target_path: Path,
+    new_content: str,
+    *,
+    preserve_permissions_from: Path | None = None,
+    encoding: str = "utf-8",
 ) -> None:
-    full_path.parent.mkdir(parents=True, exist_ok=True)
-    full_path.write_text(content, encoding="utf-8")
+    target_path = Path(target_path)
+    parent_dir = target_path.parent
+    parent_dir.mkdir(parents=True, exist_ok=True)
 
-    if src_for_perms and src_for_perms.exists():
-        shutil.copymode(src_for_perms, full_path)
-    else:
-        full_path.chmod(0o644)
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding=encoding,
+        dir=parent_dir,
+        delete=False,
+        prefix=".thinwrap-",
+        suffix=".tmp",
+    ) as tmp_file:
+        tmp_path = Path(tmp_file.name)
+        tmp_file.write(new_content)
+
+    try:
+        if preserve_permissions_from and preserve_permissions_from.exists():
+            shutil.copymode(preserve_permissions_from, tmp_path)
+        os.replace(tmp_path, target_path)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
 
 
 def _compute_git_stat_diff(old_content: str, new_content: str) -> tuple[int, int]:
@@ -276,80 +302,33 @@ def _compute_git_stat_diff(old_content: str, new_content: str) -> tuple[int, int
     return insertions, deletions
 
 
-def _diff_report(old_path: str | None, new_path: str) -> None:
-    """Display concise git-style diff summary without relying on git subprocess."""
-    filename = Path(new_path).name
-
+def _report_diff(old_content: str | None, new_content: str, filename: str) -> None:
+    """Display concise git-style diff summary from in-memory content."""
     try:
-        if old_path is None or old_path == "/dev/null":
-            # New file
-            insertions = sum(1 for _ in open(new_path, "r", encoding="utf-8"))
+        if old_content is None:
+            insertions = len(new_content.splitlines())
             deletions = 0
         else:
-            # Read both files and compute diff
-            with open(old_path, "r", encoding="utf-8") as f:
-                old_content = f.read()
-            with open(new_path, "r", encoding="utf-8") as f:
-                new_content = f.read()
-
             insertions, deletions = _compute_git_stat_diff(old_content, new_content)
 
-        # Format output similar to git diff --stat
         if insertions == 0 and deletions == 0:
-            print(f"{filename}: no changes")
+            print(t("files.no_changes", filename=filename))
         elif deletions == 0:
-            print(f"{filename}: {insertions} insertions(+)")
+            print(t("files.insertions", filename=filename, count=insertions))
         elif insertions == 0:
-            print(f"{filename}: {deletions} deletions(-)")
+            print(t("files.deletions", filename=filename, count=deletions))
         else:
-            print(f"{filename}: {insertions} insertions(+), {deletions} deletions(-)")
-
+            print(
+                t(
+                    "files.insertions_deletions",
+                    filename=filename,
+                    insertions=insertions,
+                    deletions=deletions,
+                )
+            )
     except Exception as e:
         logger.error(f"Error computing diff for {filename}: {e}")
-        print(f"{filename}: error computing diff")
-
-
-def _safe_atomic_write(
-    target_path: Path,
-    new_content: str,
-    *,
-    preserve_permissions_from: Optional[Path] = None,
-    encoding: str = "utf-8",
-) -> None:
-    """
-    Écrit de façon atomique dans target_path.
-    - Crée un fichier temporaire dans le même répertoire.
-    - Copie les permissions si demandé.
-    - Remplace atomiquement le fichier cible (os.replace).
-    - Nettoie le temporaire en cas d'erreur.
-    """
-    target_path = Path(target_path)
-    parent_dir = target_path.parent
-
-    # Création du fichier temporaire dans le même dossier (important pour l'atomicité)
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding=encoding,
-        dir=parent_dir,
-        delete=False,
-        prefix=".thinwrap-",
-        suffix=".tmp",
-    ) as tmp_file:
-        tmp_path = Path(tmp_file.name)
-        tmp_file.write(new_content)
-
-    try:
-        # Préservation des permissions (mode)
-        if preserve_permissions_from and preserve_permissions_from.exists():
-            shutil.copymode(preserve_permissions_from, tmp_path)
-
-        # Remplacement atomique (Linux, macOS, Windows)
-        os.replace(tmp_path, target_path)
-
-    except Exception:
-        # Nettoyage en cas d'échec
-        tmp_path.unlink(missing_ok=True)
-        raise
+        print(t("errors.error_computing_diff", filename=filename))
 
 
 def parse_plain_response(llm_response: str) -> str:
@@ -390,29 +369,12 @@ def parse_xml_response(llm_response: str) -> str:
             if not backup_enabled:
                 # No backup: direct atomic overwrite with permission preservation
                 old_content = path.read_text(encoding="utf-8")
-
-                _safe_atomic_write(
-                    target_path=path,
-                    new_content=content,
-                    preserve_permissions_from=path,
-                )
-
-                print(f"Edited: {path}")
-
-                insertions, deletions = _compute_git_stat_diff(old_content, content)
-                if insertions == 0 and deletions == 0:
-                    print(f"{path.name}: no changes")
-                elif deletions == 0:
-                    print(f"{path.name}: {insertions} insertions(+)")
-                elif insertions == 0:
-                    print(f"{path.name}: {deletions} deletions(-)")
-                else:
-                    print(
-                        f"{path.name}: {insertions} insertions(+), {deletions} deletions(-)"
-                    )
+                _write_file(path, content, preserve_permissions_from=path)
+                print(t("files.edited", path=path))
+                _report_diff(old_content, content, path.name)
 
                 logger.info(
-                    f"Edited (no backup): {path}: {insertions} insertions(+), {deletions} deletions(-)"
+                    f"Edited (no backup): {path}: {len(content.splitlines())} lines"
                 )
                 continue
 
@@ -427,32 +389,32 @@ def parse_xml_response(llm_response: str) -> str:
                 backup = path.with_name(f"{path.stem}.{timestamp}{path.suffix}")
 
             if overwrite_original:
-                # Rename original to backup, then write new content to original path
+                old_content = path.read_text(encoding="utf-8")
                 os.replace(path, backup)
-                _write_file(path, content, src_for_perms=backup)
-                print(f"Edited: {path}")
-                _diff_report(str(backup), str(path))
+                _write_file(path, content, preserve_permissions_from=backup)
+                print(t("files.edited", path=path))
+                _report_diff(old_content, content, path.name)
             else:
-                # Write new content to timestamped file, leave original unchanged
-                _write_file(backup, content, src_for_perms=path)
-                print(f"Created timestamped version: {backup}")
-                _diff_report(str(path), str(backup))
+                old_content = path.read_text(encoding="utf-8")
+                _write_file(backup, content, preserve_permissions_from=path)
+                print(t("files.created_timestamped", path=backup))
+                _report_diff(old_content, content, backup.name)
 
         except Exception as e:
             logger.error(f"Failed to edit {path_str}: {e}")
-            print(f"ERROR editing {path_str}: {e}")
+            print(t("files.error_editing", path=path_str, error=e))
 
     for path_str, content in _extract_files(new_section, Xml.NEW_FILE):
         try:
             path = Path(path_str)
             _secure_path(path, should_exist=False)
 
-            _write_file(path, content, src_for_perms=None)
-            print(f"Created: {path}")
-            _diff_report(None, str(path))
+            _write_file(path, content, preserve_permissions_from=None)
+            print(t("files.created", path=path))
+            _report_diff(None, content, path.name)
         except Exception as e:
             logger.error(f"Failed to create {path_str}: {e}")
-            print(f"ERROR creating {path_str}: {e}")
+            print(t("files.error_creating", path=path_str, error=e))
 
     clean = llm_response
     for tag in [Xml.EDITED_FILES, Xml.NEW_FILES, Xml.COMMENTS]:
@@ -472,50 +434,36 @@ def parse_xml_response(llm_response: str) -> str:
     return comments.strip()
 
 
-def should_generate_plain_query(
+def _prompt_send_plain_or_insert(
     readable_files: list[str], writable_files: list[str]
-) -> tuple[str, bool]:
+) -> str:
     """
-    Determine if a plain query (without XML formatting) should be generated.
-
-    Args:
-        readable_files: List of readable file paths
-        writable_files: List of writable file paths
+    Prompt the user when no files are in context.
 
     Returns:
-        Tuple of (action, should_generate_plain) where:
-        - action: 'send_plain', 'send_with_files', or 'insert_files'
-        - should_generate_plain: True for plain message, False for file context
+        'send_plain', 'send_with_files', or 'insert_files'
     """
     if len(readable_files) + len(writable_files) > 0:
-        return ("send_with_files", False)
+        return "send_with_files"
 
-    print(
-        "No files are currently included in the context. "
-        "What would you like to do?\n"
-        "  [Y] - Send a plain message (without file context and file creation)\n"
-        "  [n] - Send with file context (allow thin-wrap to create files)\n"
-        "  [i] - Insert a file into the context (returns to text editor)\n"
-    )
+    print(t("prompts.no_files_in_context"))
 
     while True:
         try:
-            response = input("[Y/n/i]: ").strip().lower()
+            response = input(t("prompts.yni_prompt")).strip().lower()
         except KeyboardInterrupt:
             # Ctrl+C should behave like choosing 'i' to insert files
             print()  # Add a newline after ^C
-            return ("insert_files", False)
+            return "insert_files"
 
         if response == "" or response in {"y", "yes"}:
-            return ("send_plain", True)
+            return "send_plain"
         if response in {"n", "no"}:
-            return ("send_with_files", False)
+            return "send_with_files"
         if response in {"i", "insert"}:
-            return ("insert_files", False)
+            return "insert_files"
 
-        print(
-            "Invalid input. Please enter 'y', 'n', or 'i' (or press Enter for default 'y')."
-        )
+        print(t("errors.invalid_input_yni"))
 
 
 def generate_plain_query(user_request: str) -> str:
@@ -536,27 +484,41 @@ def generate_query(
     readable_files: list[str],
     writable_files: list[str],
     user_request: str,
+    *,
+    force_plain: bool = False,
+    directory_tree: str | None = None,
 ) -> tuple[str, callable]:
     """
     Generate the query and return the appropriate parser function.
+
+    Args:
+        force_plain: If True (free-chat mode), skip file context entirely.
+        directory_tree: Optional smart tree of the project root to include as
+            context in the generated file query. When set, the empty-context
+            prompt is skipped (the tree itself provides context).
 
     Returns:
         (query_string, parser_function) or (None, None) if user chose to insert files
         where parser_function is either parse_xml_response or parse_plain_response
     """
-    action, should_generate_plain = should_generate_plain_query(
-        readable_files, writable_files
-    )
+    if force_plain:
+        return generate_plain_query(user_request), parse_plain_response
 
-    if action == "insert_files":
-        # User chose to insert files - abort send and return to text editor
-        print("Returning to text editor. Use Ctrl+B to add files before sending.")
-        return None, None
-    elif should_generate_plain:
-        query = generate_plain_query(user_request)
-        return query, parse_plain_response
-    else:
-        query = generate_file_query(
-            root_dir, readable_files, writable_files, user_request
-        )
-        return query, parse_xml_response
+    if not readable_files and not writable_files and not directory_tree:
+        action = _prompt_send_plain_or_insert(readable_files, writable_files)
+        if action == "insert_files":
+            print(t("prompts.returning_to_editor"))
+            return None, None
+        if action == "send_plain":
+            return generate_plain_query(user_request), parse_plain_response
+
+    return (
+        generate_file_query(
+            root_dir,
+            readable_files,
+            writable_files,
+            user_request,
+            directory_tree=directory_tree,
+        ),
+        parse_xml_response,
+    )

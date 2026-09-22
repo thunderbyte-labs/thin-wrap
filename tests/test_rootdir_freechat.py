@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """Test root directory switching with free chat mode option."""
 
-import sys
 import os
-import tempfile
 import shutil
+import sys
+import tempfile
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import config
 from thin_wrap import LLMChat
 
 
@@ -46,19 +45,19 @@ def test_set_root_dir_free_chat():
         # Create LLMChat with a root directory (not free chat mode)
         chat = LLMChat(root_dir=dummy_root, config_path=config_path)
         assert chat.root_dir == dummy_root
-        assert chat.free_chat_mode == False
+        assert not chat.free_chat_mode
 
         # Test switching to free chat mode
         chat.set_root_dir(chat.FREE_CHAT_MODE)
         assert chat.root_dir is None
-        assert chat.free_chat_mode == True
+        assert chat.free_chat_mode
         assert chat.editable_files == []
         assert chat.readable_files == []
 
         # Test switching back to a directory
         chat.set_root_dir(dummy_root)
         assert chat.root_dir == dummy_root
-        assert chat.free_chat_mode == False
+        assert not chat.free_chat_mode
 
         print("set_root_dir free chat mode switching test passed")
     finally:

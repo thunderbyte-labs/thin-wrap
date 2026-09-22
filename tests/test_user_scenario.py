@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """Test the exact user scenario: switching roots with files in context."""
 
-import sys
 import os
-import tempfile
 import shutil
+import sys
+import tempfile
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import config
 from thin_wrap import LLMChat
 
 

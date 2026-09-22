@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """Test that file lists are cleared when switching root directories."""
 
-import sys
 import os
-import tempfile
 import shutil
+import sys
+import tempfile
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import config
 from thin_wrap import LLMChat
 
 
@@ -54,7 +53,7 @@ def test_rootdir_file_clearing():
         # Create LLMChat with project1 as root
         chat = LLMChat(root_dir=project1, config_path=config_path)
         assert chat.root_dir == project1
-        assert chat.free_chat_mode == False
+        assert not chat.free_chat_mode
 
         # Add some files to context (simulate via menu)
         chat.editable_files = [os.path.join(project1, "file1.txt")]

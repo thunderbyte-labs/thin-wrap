@@ -1,4 +1,5 @@
-"""
+"""Configuration constants and settings for LLM Terminal Chat.
+
 CROSS-PLATFORM COMPATIBILITY NOTES:
 - This configuration is designed to work on Windows, macOS, and Linux
 - Editor selection prioritizes cross-platform options first (notepad on Windows, nano/vim on Unix)
@@ -7,24 +8,27 @@ CROSS-PLATFORM COMPATIBILITY NOTES:
 - Logging and temp file handling use cross-platform Python stdlib
 """
 
-"""Configuration constants and settings for LLM Terminal Chat"""
-import os
-import logging
-from rich.logging import RichHandler
-from platformdirs import user_data_dir
 import json
-from pathlib import Path
+import logging
+import os
 import sys
+from pathlib import Path
+
+from platformdirs import user_config_dir, user_data_dir
+from rich.logging import RichHandler
+
+from strings import t
 
 # Application Configuration
 APP_NAME = "thin-wrap"
 
-# Session Storage
-SESSION_BASE_DIR = user_data_dir(APP_NAME, appauthor=False, ensure_exists=True)
-CONVERSATIONS_DIR = os.path.join(SESSION_BASE_DIR, "conversations")
+# App directories (appauthor=False for consistent cross-platform paths)
+CONFIG_DIR = user_config_dir(APP_NAME, appauthor=False)
+DATA_DIR = user_data_dir(APP_NAME, appauthor=False, ensure_exists=True)
+CONVERSATIONS_DIR = os.path.join(DATA_DIR, "conversations")
 
 # Logging Configuration
-LOG_LEVEL = logging.INFO
+LOG_LEVEL = logging.WARNING
 
 # LOG_FORMAT = '%(asctime)s|%(levelname)s|%(filename)s:%(lineno)d|%(message)s' #for non rich.logging.RichHandler's handler
 LOG_FORMAT = "%(message)s"  # for RichHandler
@@ -58,7 +62,10 @@ def setup_logging():
 # Use get_models() instead of accessing SUPPORTED_MODELS directly
 
 # Global variable to store config file path once determined
-_CONFIG_PATH = None
+_CONFIG_PATH: str | None = None
+
+# Cache keyed by (path, st_mtime_ns) → validated config dict
+_CONFIG_CACHE: dict[tuple[str, int], dict] = {}
 
 
 def set_config_path(config_path: str | None = None) -> None:
@@ -70,6 +77,13 @@ def set_config_path(config_path: str | None = None) -> None:
     """
     global _CONFIG_PATH
     _CONFIG_PATH = config_path
+    invalidate()
+
+
+def invalidate() -> None:
+    """Clear the config cache so the next call to get_models/backup re-reads disk."""
+    global _CONFIG_CACHE
+    _CONFIG_CACHE.clear()
 
 
 def _get_script_dir() -> Path:
@@ -119,21 +133,22 @@ def _load_config_internal(config_path: str | None = None) -> dict:
             try:
                 from ui import UI
 
-                print(f"{UI.colorize('Config file not found.', 'BRIGHT_YELLOW')}")
-                print(f"Searched in:")
+                print(t("errors.config_not_found"))
+                print(t("errors.searched_in"))
                 print(f"  - {script_dir / 'config.json'}")
                 print(f"  - {Path.cwd() / 'config.json'}")
 
                 config_file_path = UI.interactive_selection(
-                    prompt_title="Config file selection:",
-                    prompt_message="Enter path to config.json file (Tab for completion, ~ for home):",
-                    no_items_message="No config file found.",
+                    prompt_title=t("prompts.config_selection_title"),
+                    prompt_message=t("prompts.config_selection_prompt"),
+                    no_items_message=t("prompts.no_config_found"),
                     items=[],
                     item_formatter=lambda x: x,
                     allow_new=True,
-                    new_item_validator=lambda p: p.is_file()
-                    and p.name == "config.json",
-                    new_item_error="Not a valid config.json file",
+                    new_item_validator=lambda p: (
+                        p.is_file() and p.name == "config.json"
+                    ),
+                    new_item_error=t("prompts.config_new_item_error"),
                 )
 
                 if not config_file_path:
@@ -146,17 +161,24 @@ def _load_config_internal(config_path: str | None = None) -> dict:
                     f"  - {script_dir / 'config.json'}\n"
                     f"  - {Path.cwd() / 'config.json'}\n"
                     f"Please create config.json or specify path with --config"
-                )
+                ) from None
 
     _CONFIG_PATH = str(config_file)
 
+    cache_key = (
+        str(config_file),
+        os.stat(config_file).st_mtime_ns,
+    )
+    if cache_key in _CONFIG_CACHE:
+        return _CONFIG_CACHE[cache_key]
+
     try:
-        with open(config_file, "r", encoding="utf-8") as f:
+        with open(config_file, encoding="utf-8") as f:
             config_data = json.load(f)
     except json.JSONDecodeError as e:
         raise json.JSONDecodeError(
             f"Invalid JSON in {config_file}: {e.msg}", e.doc, e.pos
-        )
+        ) from None
 
     if "models" not in config_data:
         raise ValueError(f"Config file {config_file} must have 'models' section")
@@ -225,6 +247,7 @@ def _load_config_internal(config_path: str | None = None) -> dict:
             )
         backup_config["overwrite_original"] = backup_config.pop("backup_old_file")
 
+    _CONFIG_CACHE[cache_key] = config_data
     return config_data
 
 
@@ -284,13 +307,13 @@ TERMINAL_WIDTH_FALLBACK = 120
 
 # Commands
 COMMANDS = {
-    "/clear": "Clear session context",
-    "/bye": "Exit (auto-saves session log)",
-    "/?": "Help for a command",
-    "/help": "Help for a command",
-    "/model": "Switch AI model",
-    "/reload": "Reload a previous conversation",
-    "/rootdir": "Show or set project root directory (option 0 for free chat mode)",
-    "/files": "Handle Ctrl+B file context menu",
-    "/proxy": "Manage proxy (off to disable, number for previous, or new URL like socks5://127.0.0.1:1080)",
+    "/clear": t("commands.descriptions.clear"),
+    "/bye": t("commands.descriptions.bye"),
+    "/help": t("commands.descriptions.help"),
+    "/model": t("commands.descriptions.model"),
+    "/reload": t("commands.descriptions.reload"),
+    "/rootdir": t("commands.descriptions.rootdir"),
+    "/files": t("commands.descriptions.files"),
+    "/proxy": t("commands.descriptions.proxy"),
+    "/nameconv": t("commands.descriptions.nameconv"),
 }
