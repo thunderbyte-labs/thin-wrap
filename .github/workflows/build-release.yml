@@ -28,7 +28,10 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller --console --name thin-wrap --collect-submodules rich._unicode_data thin_wrap.py
+          pyinstaller --console --name thin-wrap \
+            --add-data "strings.json:." \
+            --collect-submodules rich._unicode_data \
+            thin_wrap.py
 
       - name: Include sample config.json
         run: |
@@ -65,7 +68,10 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller --console --name thin-wrap --collect-submodules rich._unicode_data thin_wrap.py
+          pyinstaller --console --name thin-wrap \
+            --add-data "strings.json:." \
+            --collect-submodules rich._unicode_data \
+            thin_wrap.py
 
       - name: Include sample config.json
         run: |
@@ -102,7 +108,10 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller --console --name thin-wrap --collect-submodules rich._unicode_data thin_wrap.py
+          pyinstaller --console --name thin-wrap \
+            --add-data "strings.json:." \
+            --collect-submodules rich._unicode_data \
+            thin_wrap.py
 
       - name: Include sample config.json
         run: |
@@ -139,7 +148,7 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller --console --name thin-wrap --collect-submodules rich._unicode_data thin_wrap.py
+          pyinstaller --console --name thin-wrap --add-data "strings.json;." --collect-submodules rich._unicode_data thin_wrap.py
 
       - name: Include sample config.json
         shell: powershell
