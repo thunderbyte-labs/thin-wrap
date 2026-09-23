@@ -97,7 +97,8 @@ def test_unchanged_file_is_not_re_sent_after_commit(tmp_path):
         str(tmp_path), [path], [], "again", file_hash_cache=cache
     )
     assert "print('hello')" not in query2
-    assert "DEDUPLICATION" in query2
+    assert "FILE DEDUPLICATION NOTICE" in query2
+    assert "THIN-WRAP FILE DEDUPLICATION" not in query2
 
 
 def test_changed_file_is_re_sent_after_commit(tmp_path):
@@ -150,4 +151,5 @@ def test_editable_file_is_deduped_too(tmp_path):
         str(tmp_path), [], [path], "again", file_hash_cache=cache
     )
     assert "print('hello')" not in query
-    assert "DEDUPLICATION" in query
+    assert "FILE DEDUPLICATION NOTICE" in query
+    assert "THIN-WRAP FILE DEDUPLICATION" not in query
