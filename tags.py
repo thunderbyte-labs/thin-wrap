@@ -48,3 +48,17 @@ class Xml:
     def removal_pattern(tag: str) -> str:
         """Regex pattern to remove an entire section (including its content) for extraneous content cleanup."""
         return rf"<{tag}\b[^>]*>[\s\S]*?</{tag}>"
+
+    @staticmethod
+    def opening_pattern(tag: str) -> str:
+        """Regex pattern matching an opening tag, including optional attributes."""
+        return rf"<{tag}\b[^>]*>"
+
+    @staticmethod
+    def closing_pattern(tag: str) -> str:
+        """Regex pattern matching a closing tag."""
+        return rf"</{tag}>"
+
+    # Any prompt-engineering answer tag. Used to bound an unclosed comments body
+    # so a later edited/new-files block is not swallowed as display text.
+    ANSWER_OPENING_PATTERN = r"<prompt_engineering_answer_[a-z_]+\b[^>]*>"

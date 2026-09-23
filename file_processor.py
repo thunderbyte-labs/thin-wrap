@@ -16,7 +16,7 @@ from tags import Xml
 logger = logging.getLogger(__name__)
 
 _FILE_UNCHANGED_NOTICE = (
-    "[THIN-WRAP FILE DEDUPLICATION NOTICE: the content of this file is "
+    "[FILE DEDUPLICATION NOTICE: the content of this file is "
     "byte-for-byte identical (md5 {digest}) to the copy of this file already "
     "sent to you earlier in this conversation. Do NOT request its content "
     "again. Reuse the exact copy you already received.]"
@@ -235,6 +235,79 @@ def _extract_section_content(response: str, section_tag: str) -> str:
     return match.group(1).strip() if match else ""
 
 
+def _recover_unclosed_section(response: str, section_tag: str) -> str:
+    """Return the body after an opening tag that has no matching close.
+
+    File edits are never recovered this way: only display text should be
+    salvaged from a truncated or non-compliant LLM reply. If a later
+    prompt_engineering_answer_* opening tag appears, the body stops there
+    so a subsequent files block is not treated as comments.
+    """
+    open_match = re.search(Xml.opening_pattern(section_tag), response, re.IGNORECASE)
+    if not open_match:
+        return ""
+
+    rest = response[open_match.end() :]
+    if re.search(Xml.closing_pattern(section_tag), rest, re.IGNORECASE):
+        # A matching close exists; the closed-section extractor already
+        # handled this tag.
+        return ""
+
+    next_tag = re.search(Xml.ANSWER_OPENING_PATTERN, rest, re.IGNORECASE)
+    if next_tag:
+        rest = rest[: next_tag.start()]
+    return rest.strip()
+
+
+def _remove_unclosed_section(text: str, section_tag: str) -> str:
+    """Strip an unclosed section (opening tag through end of *text*)."""
+    pattern = rf"{Xml.opening_pattern(section_tag)}[\s\S]*$"
+    return re.sub(pattern, "", text, count=1, flags=re.IGNORECASE).strip()
+
+
+def _is_markdown_fence_noise(text: str) -> bool:
+    """True when *text* is only markdown fence markers (``` / ```xml)."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return bool(lines) and all(re.fullmatch(r"```[\w-]*", line) for line in lines)
+
+
+def _recover_display_text(
+    raw_response: str, comments: str, leftover: str
+) -> tuple[str, str]:
+    """Recover user-visible text when the LLM skipped or broke XML comments.
+
+    Returns:
+        (display_text, unused_leftover). unused_leftover is empty when the
+        leftover was consumed as display text; otherwise it is the residue
+        that should still be logged as a warning.
+    """
+    display = comments.strip()
+    remainder = leftover
+
+    if not display:
+        recovered = _recover_unclosed_section(raw_response, Xml.COMMENTS)
+        if recovered:
+            display = recovered
+            remainder = _remove_unclosed_section(remainder, Xml.COMMENTS)
+            logger.info("Recovered display text from an unclosed comments tag")
+
+    remainder = remainder.strip()
+    # Drop leftover that is only a markdown fence wrapping already-extracted
+    # XML (``` / ```xml). Those markers are not part of the answer.
+    if remainder and _is_markdown_fence_noise(remainder):
+        remainder = ""
+    if remainder:
+        if display:
+            display = display + "\n\n" + remainder
+            logger.info("Appended unformatted leftover text to comments")
+        else:
+            display = remainder
+            logger.info("Recovered unformatted LLM response as comments")
+        remainder = ""
+
+    return display, remainder
+
+
 def _extract_files(section_content: str, file_tag: str) -> list[tuple[str, str]]:
     """Extract (path, content) pairs; tolerant to malformed entries."""
     if not section_content:
@@ -377,6 +450,10 @@ def parse_xml_response(llm_response: str) -> str:
     - Missing or empty sections are treated as no action.
     - Malformed file entries are skipped with warnings.
     - Extraneous text is logged but does not halt processing.
+    - When comments tags are missing, unclosed, or the model ignores the
+      XML schema, the leftover text is returned as the user-visible answer
+      instead of an empty string. File writes still require a closed,
+      well-formed edited/new file tag.
     """
     logger.debug("Starting parse_response")
 
@@ -452,7 +529,9 @@ def parse_xml_response(llm_response: str) -> str:
             Xml.removal_pattern(tag), "", clean, flags=re.DOTALL | re.IGNORECASE
         )
 
-    extraneous = re.sub(r"\s+", " ", clean).strip()
+    comments, leftover = _recover_display_text(llm_response, comments, clean)
+
+    extraneous = re.sub(r"\s+", " ", leftover).strip()
     if extraneous:
         logger.warning(f"Extraneous content in response:\n{extraneous[:500]}")
 
