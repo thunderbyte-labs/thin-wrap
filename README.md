@@ -7,40 +7,33 @@ At Hong-Kong Open-Source Conference 2026 ("[HKOSCon 2026](https://hkoscon.org/20
 [![Thin-Wrap Demo: Python CLI Connecting to Any LLM API](https://markdown-videos-api.jorgenkh.no/youtube/j3pqtV_p4xQ)](https://youtu.be/j3pqtV_p4xQ)
 ## Installation
 
-**macOS (Homebrew, recommended):**
+**macOS (Homebrew)**
 ```bash
 brew install thunderbyte-labs/tap/thin-wrap
 ```
-Homebrew places `thin-wrap` on your `PATH` and removes the Gatekeeper quarantine attribute. Upgrade with `brew upgrade thin-wrap`.
 
-**Linux, or macOS without Homebrew** (`curl`/`wget` and `unzip` required):
+**Linux** (`curl` and `unzip` required)
 ```bash
 curl -fsSL https://raw.githubusercontent.com/thunderbyte-labs/thin-wrap/main/install.sh | sh
 ```
-Installs to `~/.local/bin` / `~/.local/lib/thin-wrap/`, config at `~/.config/thin-wrap/`, and updates `PATH` (including `~/.zshrc` on macOS). On macOS the script also clears `com.apple.quarantine` so Gatekeeper does not block the first launch.
 
-Re-running the installer is safe: if the same stable release is already installed it exits without touching files. To force a reinstall or pin a tag:
+**Windows**  
+Download the `.zip` from [Releases](https://github.com/thunderbyte-labs/thin-wrap/releases), extract it, and add the directory to `PATH`.
+
+## Uninstall
+
+**macOS**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/thunderbyte-labs/thin-wrap/main/install.sh | sh -s -- --force
-THIN_WRAP_VERSION=v0.1.6 curl -fsSL https://raw.githubusercontent.com/thunderbyte-labs/thin-wrap/main/install.sh | sh
-```
-User `config.json` is never overwritten. Pre-releases are ignored unless you pass `--tag` / `THIN_WRAP_VERSION`.
-
-If a downloaded Mac binary still shows "developer cannot be verified":
-```bash
-xattr -cr ~/.local/lib/thin-wrap
-```
-
-**Windows:** Download `.zip` from [Releases](https://github.com/thunderbyte-labs/thin-wrap/releases), extract, add to PATH manually.
-
-**Uninstall:**
-```bash
-# Homebrew
 brew uninstall thin-wrap
+```
 
-# install.sh
+**Linux**
+```bash
 curl -fsSL https://raw.githubusercontent.com/thunderbyte-labs/thin-wrap/main/uninstall.sh | sh
 ```
+
+**Windows**  
+Delete the extracted folder and remove it from `PATH`.
 
 ## Features
 
